@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchIclockJson } from "@/lib/iclock-api";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 type IclockEmployee = {
   id?: number | string;
@@ -27,61 +29,32 @@ export async function GET(request: NextRequest) {
   const iclockEmployeesUrl = process.env.ICLOCK_EMPLOYEES_URL;
   const iclockApiToken = process.env.ICLOCK_API_TOKEN;
 
-  if (!iclockEmployeesUrl || !iclockApiToken) {
-    return NextResponse.json(
-      {
-        success: false,
-        data: [],
-        message: "iClock employees API is not configured.",
-      },
-      { status: 500 },
-    );
-  }
-
   const { searchParams } = request.nextUrl;
-  const upstreamUrl = new URL(iclockEmployeesUrl);
+  const result = await fetchIclockJson({
+    apiUrl: iclockEmployeesUrl,
+    apiToken: iclockApiToken,
+    label: "iClock employees",
+    searchParams: {
+      page_size: searchParams.get("page_size") || "10000",
+    },
+  });
 
-  upstreamUrl.searchParams.set("page_size", searchParams.get("page_size") || "10000");
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const response = await fetch(upstreamUrl, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Token ${iclockApiToken}`,
-      },
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    const payload = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: [],
-          message: `iClock employees API returned ${response.status}`,
-        },
-        { status: response.status },
-      );
-    }
-
+  if (result.success) {
     return NextResponse.json({
       success: true,
-      data: getEmployees(payload),
-      meta: payload && typeof payload === "object" ? {
-        count: (payload as Record<string, unknown>).count,
-        next: (payload as Record<string, unknown>).next,
-        previous: (payload as Record<string, unknown>).previous,
+      data: getEmployees(result.payload),
+      meta: result.payload && typeof result.payload === "object" ? {
+        count: (result.payload as Record<string, unknown>).count,
+        next: (result.payload as Record<string, unknown>).next,
+        previous: (result.payload as Record<string, unknown>).previous,
       } : undefined,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to connect to iClock employees API";
-    return NextResponse.json({ success: false, data: [], message }, { status: 502 });
-  } finally {
-    clearTimeout(timeout);
   }
+
+  return NextResponse.json({
+    success: false,
+    data: [],
+    message: result.message || "Unable to load iClock employees.",
+    upstreamStatus: result.upstreamStatus,
+  });
 }

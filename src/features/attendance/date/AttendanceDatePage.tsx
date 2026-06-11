@@ -294,16 +294,16 @@ export default function AttendanceByDatePage() {
           deviceResponse.json(),
         ]);
 
-        if (!employeeApiResponse.ok || !Array.isArray(employeePayload.data)) {
+        if (!employeeApiResponse.ok || employeePayload.success === false || !Array.isArray(employeePayload.data)) {
           showToast(employeePayload.message || "Could not load biometric employees", "error");
         }
 
-        const personnelEmployees = employeeApiResponse.ok && Array.isArray(employeePayload.data)
+        const personnelEmployees = employeeApiResponse.ok && employeePayload.success !== false && Array.isArray(employeePayload.data)
           ? buildPersonnelEmployeeOptions(employeePayload.data as IclockEmployee[])
           : [];
         deviceEmployees = personnelEmployees;
 
-        if (deviceResponse.ok && Array.isArray(devicePayload.data)) {
+        if (deviceResponse.ok && devicePayload.success !== false && Array.isArray(devicePayload.data)) {
           const deviceTransactions = devicePayload.data as IclockTransaction[];
           const fallbackEmployees = buildIclockEmployeeOptions(deviceTransactions, personnelEmployees);
           deviceEmployees = [...personnelEmployees, ...fallbackEmployees];
