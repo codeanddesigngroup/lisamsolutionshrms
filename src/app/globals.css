@@ -1,0 +1,374 @@
+@import url('https://fonts.googleapis.com/css?family=Montserrat:300,400,500,600,700,800&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Exact Legacy Values - LISAM SOLUTIONS HR / IT PRODIGY */
+  --primary: #03a9f3;
+  --primary-rgb: 3 169 243;
+  --secondary: #041731;
+  --background: #f6f7f9;
+  --foreground: #041731;
+  --border-color: #e4e7ea;
+  --app-radius: 8px;
+  --control-height: 42px;
+  --control-padding: 10px 12px;
+  
+  /* Status Colors (Exact from custom-new.css) */
+  --status-success-bg: #edf9f7;
+  --status-success-text: #53af9a;
+  --status-info-bg: #eef6fe;
+  --status-info-text: #3594fa;
+  --status-danger-bg: #fcf2ed;
+  --status-danger-text: #e15931;
+  --status-warning-bg: #fff3d0;
+  --status-warning-text: #f9bc03;
+  --status-primary-bg: #faeefd;
+  --status-primary-text: #cf55e9;
+
+  --sidebar-text: #a6b0cf;
+  --sidebar-bg: #041731;
+  --sidebar-footer-bg: rgba(4, 23, 49, 0.8);
+  --sidebar-muted: #a6b0cf;
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.1);
+  --sidebar-hover-text: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-user-button-bg: rgba(255, 255, 255, 0.12);
+  --sidebar-user-icon: #ffffff;
+  --sidebar-active-bg: #09203a;
+  --navbar-bg: #ffffff;
+  --navbar-text: #1f2937;
+  --navbar-border: #f2f2f3;
+}
+
+@theme inline {
+  --font-montserrat: "Montserrat", sans-serif;
+  
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-text: var(--status-success-text);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-text: var(--status-info-text);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-text: var(--status-danger-text);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-text: var(--status-warning-text);
+  --color-status-primary-bg: var(--status-primary-bg);
+  --color-status-primary-text: var(--status-primary-text);
+
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-active: var(--sidebar-active-bg);
+}
+
+/* Base Styles (Exact Parity) */
+@layer base {
+  * {
+    @apply border-gray-600;
+    outline: none !important;
+  }
+
+  html {
+    background: var(--background);
+  }
+
+  body {
+    @apply font-montserrat antialiased;
+    color: var(--foreground);
+    background: var(--background);
+    font-size: 13px; /* Exact from custom-new.css */
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-light text-[#2b2b2b] uppercase;
+    margin: 10px 0;
+  }
+
+  h1 { font-size: 36px; line-height: 48px; }
+  h2 { font-size: 24px; line-height: 36px; }
+  h3 { font-size: 21px; line-height: 30px; }
+  h4 { font-size: 18px; line-height: 22px; font-weight: 400; }
+  h5 { font-size: 13px; font-weight: 700; }
+  h6 { font-size: 12px; font-weight: 800; }
+
+  a {
+    @apply transition-all duration-200;
+    text-decoration: none !important;
+  }
+
+  /* Form Controls */
+  input:not([type]),
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  select,
+  textarea {
+    width: 100%;
+    min-height: var(--control-height);
+    padding: var(--control-padding);
+    border: 1px solid #d7dde5 !important;
+    border-radius: var(--app-radius);
+    background-color: #ffffff;
+    color: #263238;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    box-shadow: 0 1px 1px rgba(4, 23, 49, 0.03);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  }
+
+  select {
+    padding-right: 36px;
+  }
+
+  textarea {
+    min-height: 96px;
+    resize: vertical;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9aa7b5;
+    opacity: 1;
+  }
+
+  input:hover,
+  select:hover,
+  textarea:hover {
+    border-color: #b8c2cc !important;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 0.14) !important;
+    background-color: #ffffff;
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    background-color: #f3f5f7;
+    color: #98a4b0;
+    cursor: not-allowed;
+  }
+
+  input[aria-invalid="true"],
+  select[aria-invalid="true"],
+  textarea[aria-invalid="true"],
+  input.is-invalid,
+  select.is-invalid,
+  textarea.is-invalid {
+    border-color: #e15931 !important;
+    box-shadow: 0 0 0 3px rgba(225, 89, 49, 0.12) !important;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 16px;
+    min-height: 16px;
+    height: 16px;
+    padding: 0;
+    border-radius: 4px;
+    box-shadow: none;
+  }
+
+  .login-glass-field {
+    --login-field-bg: rgb(255, 255, 255) !important;
+    min-height: 36px;
+    overflow: hidden;
+    background: var(--login-field-bg) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.62),
+      0 10px 28px rgba(0, 77, 170, 0.08);
+  }
+
+  .login-glass-field:focus-within {
+    background: var(--login-field-bg) !important;
+  }
+
+  .login-glass-input {
+    width: 100% !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    outline: none !important;
+    caret-color: #0f172a;
+    color-scheme: light;
+  }
+
+  .login-glass-input:hover,
+  .login-glass-input:focus {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .login-glass-input::placeholder {
+    color: rgba(71, 85, 105, 0.58) !important;
+  }
+
+  .login-glass-input:-webkit-autofill,
+  .login-glass-input:-webkit-autofill:hover,
+  .login-glass-input:-webkit-autofill:focus,
+  .login-glass-input:-webkit-autofill:active {
+    border: 0 !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+    box-shadow: 0 0 0 1000px #b1b1b1 inset !important;
+    transition: background-color 9999s ease-in-out 0s;
+    background: #f6fbff !important;
+  }
+
+  .login-glass-checkbox {
+    width: 16px !important;
+    min-height: 16px !important;
+    height: 16px !important;
+    padding: 0 !important;
+    border: 1px solid rgba(15, 23, 42, 0.18) !important;
+    border-radius: 4px !important;
+    background: rgba(255, 255, 255, 0.78) !important;
+    box-shadow: none !important;
+  }
+
+  /* Table Parity */
+  table {
+    @apply w-full border-t border-[#eeeeee5b] mb-[10px];
+  }
+
+  thead th {
+    @apply text-[#8d8d8d] uppercase px-2 py-2 border-b border-t border-[#f2f2f380] text-left;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  tbody td {
+    @apply px-2 py-2 border-t border-[#f2f2f35d] text-left;
+    font-size: 12px;
+    color: inherit;
+  }
+
+  tbody tr:hover {
+    @apply bg-white;
+  }
+}
+
+/* Component Parity */
+@layer components {
+  .white-box {
+    @apply bg-white p-[25px] mb-[13px];
+    border-radius: var(--app-radius);
+  }
+
+  .btn {
+    @apply inline-block text-center cursor-pointer px-[12px] py-[8px];
+    border-radius: calc(var(--app-radius) * 0.5);
+    font-size: inherit;
+    transition: all 0.5s;
+  }
+
+  .btn-info {
+    background: var(--primary);
+    color: #ffffff;
+    border: 1px solid var(--primary);
+  }
+  .btn-success { @apply bg-[#00c292] text-white border border-[#00c292]; }
+  .btn-danger { @apply bg-[#fb9678] text-white border border-[#fb9678]; }
+  .btn-warning { @apply bg-[#fec107] text-white border border-[#fec107]; }
+
+  .form-control {
+    width: 100%;
+    min-height: var(--control-height);
+    padding: var(--control-padding);
+    border: 1px solid #263238 !important;
+    border-radius: var(--app-radius);
+    color: #263238;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    box-shadow: 0 1px 1px rgba(4, 23, 49, 0.03);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  }
+
+  .form-control:hover {
+    border-color: #b8c2cc !important;
+  }
+
+  .form-control:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 0.14) !important;
+  }
+
+  .app-sidebar {
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+  }
+
+  .app-sidebar-footer {
+    background: var(--sidebar-footer-bg);
+  }
+
+  .app-sidebar-border {
+    border-color: var(--sidebar-border);
+  }
+
+  .app-sidebar-muted {
+    color: var(--sidebar-muted);
+  }
+
+  .app-sidebar-hover:hover {
+    background: var(--sidebar-hover-bg);
+    color: var(--sidebar-hover-text);
+  }
+
+  .app-sidebar-user-button {
+    background: var(--sidebar-user-button-bg);
+    color: var(--sidebar-user-icon);
+  }
+
+  .app-sidebar-user-icon {
+    color: var(--sidebar-user-icon);
+  }
+
+  .app-navbar {
+    background: var(--navbar-bg);
+    color: var(--navbar-text);
+    border-color: var(--navbar-border);
+  }
+  
+  .label {
+    @apply px-[12px] py-[4px] font-medium tracking-[.05em] inline-block;
+    border-radius: 60px;
+  }
+
+  /* Status Badges - Exact from custom-new.css */
+  .label-success { @apply bg-[#edf9f7] text-[#53af9a]; }
+  .label-info { @apply bg-[#eef6fe] text-[#3594fa]; }
+  .label-danger { @apply bg-[#fcf2ed] text-[#e15931]; }
+  .label-warning { @apply bg-[#fff3d0] text-[#f9bc03]; }
+  .label-primary { @apply bg-[#faeefd] text-[#cf55e9]; }
+}
+
+/* Custom Scrollbar (Legacy style) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track { background: #041731; }
+::-webkit-scrollbar-thumb { background: #88888865; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
