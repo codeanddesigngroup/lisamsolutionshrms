@@ -6,7 +6,6 @@ import {
   Settings as SettingsIcon, 
   Clock, 
   CreditCard,
-  Cpu,
   ShieldCheck,
   Palette,
   FileText,
@@ -15,7 +14,6 @@ import {
   Tags,
   GitPullRequest,
   DollarSign,
-  Ticket,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,7 +39,6 @@ const settingsGroups: Array<{ title: string; items: SettingsItem[] }> = [
     title: "HR Configuration",
     items: [
       { label: "Attendance Settings", href: "/attendance-settings", icon: Clock, module: "Attendance", description: "Office hours, clock-in limits, open days, radius, IP, and reminders." },
-      { label: "Attendance Devices", href: "/settings/attendance-devices", icon: Cpu, module: "Attendance", description: "Biometric device registration and sync status." },
       { label: "Shift Settings", href: "/attendance/settings/shifts", icon: Calendar, module: "Shifts", description: "Shift timings, break windows, grace minutes, and attendance rules." },
       { label: "Leave Types", href: "/leave-type", icon: Calendar, module: "Leaves", description: "Leave balances and colors used by leave requests and reports." },
       { label: "Holiday Calendar", href: "/holidays", icon: Calendar, module: "Holidays", description: "Company holidays, weekly offs, and calendar/list views." },
@@ -62,12 +59,6 @@ const settingsGroups: Array<{ title: string; items: SettingsItem[] }> = [
       { label: "Payroll Settings", href: "/payroll/settings", icon: DollarSign, module: "Payroll", description: "Salary components, groups, employee payroll setup, TDS, and payments." },
       { label: "Currency Settings", href: "/currencies", icon: CreditCard, module: "Finance", description: "Currency records and exchange rates used by finance screens." },
       { label: "Lead Settings", href: "/lead-settings", icon: FileText, module: "Leads", description: "Lead sources, statuses, and categories used by CRM workflows." },
-    ]
-  },
-  {
-    title: "Support",
-    items: [
-      { label: "Ticket Form", href: "/ticket-form", icon: Ticket, module: "Tickets", description: "Public ticket form fields, status behavior, and sorting." },
     ]
   },
 ];

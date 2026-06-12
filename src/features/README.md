@@ -34,21 +34,20 @@ This makes modules easier to test, replace with real backend APIs, and scale wit
 ## Migrated Modules
 
 - `super-admin`: dashboard, companies, company create, admins, packages, invoices, settings
-- `dashboard`: main, client, finance, HR, project, ticket
+- `dashboard`: main, client, finance, HR, project
 - `leads`: list, create, detail, edit, kanban
 - `clients`: list, create, detail, edit
 - `employees`: list, create, detail, edit, FAQ, FAQ categories
 - `tasks`: list, create, detail, edit
 - `projects`: list, create, detail, edit, and project detail submodules
-- `tickets`: list, create, detail
 - `invoices`: list, create, detail
 - `payments`: list, create, detail
 - `expenses`: list, create, detail
-- `attendance`: list, create, bulk, date view, live feed, logs, roster, summary, deduction report, settings
+- `attendance`: list, create, bulk, date view, logs, summary, deduction report, settings
 - `recruitment`: dashboard, jobs, applications, interviews, onboarding, archive, settings, and setup modules
 - `payroll`: payroll list and payroll settings
 - `reports`: overview, attendance, expense, finance, income/expense, leave, payroll, tasks, time-log
-- `settings`: overview, account, app, attendance, devices, company, finance, language, leave, notifications, profile, roles
+- `settings`: overview, account, app, attendance, company, finance, language, leave, notifications, profile, roles
 - Remaining operational modules: member, events, leaves, holidays, notices, products, contracts, billing, time logs, currencies, estimates, credit notes, proposals, discussions, teams, designations, taxes, FAQ, profile, auth, notifications, project/task/lead/client settings, and other setup/config pages
 
 All application `page.tsx` route files under `src/app` are now routing wrappers. Feature UI and page logic live under `src/features`.

@@ -349,7 +349,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [officeOpenDays, setOfficeOpenDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [date, setDate] = useState(() => (isDateWise && isValidDateParam(queryDate) ? String(queryDate) : DEFAULT_ATTENDANCE_DATE));
-  const [search, setSearch] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [editingRow, setEditingRow] = useState<DailyAttendanceRow | null>(null);
@@ -496,14 +496,13 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const filteredRows = useMemo(() => {
     if (isSelfServiceAttendance) return dailyRows;
 
-    const searchTerm = search.trim().toLowerCase();
     return dailyRows.filter((row) => {
-      const employeeMatch = !searchTerm || JSON.stringify(row.employee).toLowerCase().includes(searchTerm);
+      const employeeMatch = employeeFilter === "all" || getEmployeeMatchCodes(row.employee).includes(employeeFilter);
       const statusMatch = statusFilter === "all" || row.status === statusFilter;
       const exceptionMatch = !exceptionsOnly || row.isException;
       return employeeMatch && statusMatch && exceptionMatch;
     });
-  }, [dailyRows, exceptionsOnly, isSelfServiceAttendance, search, statusFilter]);
+  }, [dailyRows, employeeFilter, exceptionsOnly, isSelfServiceAttendance, statusFilter]);
 
   const stats = useMemo(() => {
     const present = dailyRows.filter((row) => row.status === "present").length;
@@ -516,7 +515,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
 
   const resetFilters = () => {
     if (isDateWise) setDate(DEFAULT_ATTENDANCE_DATE);
-    setSearch("");
+    setEmployeeFilter("all");
     setStatusFilter("all");
     setExceptionsOnly(false);
   };
@@ -563,7 +562,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         </div>
 
         <div className="white-box">
-          <div className={`grid grid-cols-1 gap-4 md:items-end ${canManageAttendance ? "md:grid-cols-6" : "md:grid-cols-3"}`}>
+          <div className={`grid grid-cols-1 gap-4 md:items-end ${canManageAttendance ? "md:grid-cols-5" : "md:grid-cols-1"}`}>
             {isDateWise ? (
               <div>
                 <label className="mb-2 block text-[12px] font-bold text-gray-600">Attendance Date</label>
@@ -577,9 +576,19 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             )}
             {canManageAttendance && (
               <>
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-[12px] font-bold text-gray-600">Search Employee</label>
-                  <input type="search" className="form-control" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, department" />
+                <div>
+                  <label className="mb-2 block text-[12px] font-bold text-gray-600">Employee</label>
+                  <select className="form-control" value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)}>
+                    <option value="all">All Employees</option>
+                    {employees.map((employee) => {
+                      const employeeCode = getEmployeeMatchCodes(employee)[0] || String(employee.id);
+                      return (
+                        <option key={String(employee.id)} value={employeeCode}>
+                          {employee.name}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-2 block text-[12px] font-bold text-gray-600">Status</label>
@@ -601,16 +610,13 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                 </div>
               </>
             )}
-            <div className="flex gap-2">
-              <Button onClick={fetchAttendance} className="btn-success btn-block h-[34px]">
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> {canManageAttendance ? "Apply" : "Refresh"}
-              </Button>
-              {canManageAttendance && (
+            {canManageAttendance && (
+              <div className="flex gap-2">
                 <Button onClick={resetFilters} className="btn-default btn-block h-[34px]">
                   Reset
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

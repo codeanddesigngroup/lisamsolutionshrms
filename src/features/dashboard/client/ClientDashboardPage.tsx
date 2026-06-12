@@ -102,7 +102,7 @@ export default function ClientDashboard() {
                     {i !== 3 && <div className="absolute left-[11px] top-6 w-[2px] h-10 bg-gray-100"></div>}
                     <div className="h-6 w-6 rounded-full bg-blue-500 border-4 border-white shadow-sm z-10 flex-shrink-0"></div>
                     <div className="flex-1">
-                      <p className="text-xs font-bold text-gray-800">Acme Corp created a new ticket</p>
+                      <p className="text-xs font-bold text-gray-800">Acme Corp posted a new project update</p>
                       <p className="text-[10px] text-gray-400 flex items-center mt-1">
                         <Calendar className="h-3 w-3 mr-1" /> 2 hours ago
                       </p>

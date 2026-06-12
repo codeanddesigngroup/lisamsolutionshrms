@@ -32,7 +32,6 @@ const permissionModules: PermissionModule[] = [
   { key: "tasks", label: "Tasks", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "finance", label: "Finance", actions: ["view", "create", "edit", "delete", "export"] },
   { key: "payroll", label: "Payroll", actions: ["view", "create", "edit", "approve", "export"] },
-  { key: "tickets", label: "Tickets", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "recruitment", label: "Recruitment", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "reports", label: "Reports", actions: ["view", "export"] },
   { key: "settings", label: "Settings", actions: ["view", "edit", "manage"] },

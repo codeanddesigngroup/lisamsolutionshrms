@@ -9,7 +9,6 @@ import Card from "@/components/ui/Card";
 import StableResponsiveContainer from "@/components/charts/StableResponsiveContainer";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
-import BiometricRealtimeWidgets from "@/components/attendance/dashboard/BiometricRealtimeWidgets";
 
 type ShiftSummary = {
   id?: number | string;
@@ -427,8 +426,6 @@ export default function HRDashboard() {
             </ol>
           </div>
         </div>
-
-        <BiometricRealtimeWidgets />
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {statCards.map((stat) => (

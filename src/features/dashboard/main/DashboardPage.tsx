@@ -10,11 +10,9 @@ import {
   Receipt, 
   CheckSquare,
   Clock,
-  Ticket,
   AlertCircle,
   PhoneCall,
   Calendar as CalendarIcon,
-  CheckCircle,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 
@@ -39,8 +37,6 @@ export default function DashboardPage() {
     hoursLogged: "156 hrs",
     completedTasks: 89,
     todayAttendance: "16/18",
-    resolvedTickets: 65,
-    unresolvedTickets: 12,
   };
 
   const stats = [
@@ -52,14 +48,6 @@ export default function DashboardPage() {
     { label: "Hours Logged", value: statsData.hoursLogged, icon: Clock, color: "text-indigo-500", bg: "bg-indigo-50", href: "/time-logs" },
     { label: "Completed Tasks", value: statsData.completedTasks, icon: CheckSquare, color: "text-green-500", bg: "bg-green-50", href: "/tasks" },
     { label: "Today Attendance", value: statsData.todayAttendance, icon: UserSquare2, color: "text-pink-500", bg: "bg-pink-50", href: "/attendance" },
-    { label: "Resolved Tickets", value: statsData.resolvedTickets, icon: CheckCircle, color: "text-emerald-500", bg: "bg-emerald-50", href: "/tickets" },
-    { label: "Unresolved Tickets", value: statsData.unresolvedTickets, icon: Ticket, color: "text-rose-500", bg: "bg-rose-50", href: "/tickets" },
-  ];
-
-  const newTickets = [
-    { id: 1, title: "Cannot access the server via SSH", time: "2 hours ago" },
-    { id: 2, title: "Update billing information", time: "5 hours ago" },
-    { id: 3, title: "Feature request: Dark mode", time: "1 day ago" },
   ];
 
   const overdueTasks = [
@@ -184,26 +172,6 @@ export default function DashboardPage() {
                <div className="text-center pt-2">
                  <Link href="/leaves" className="text-[10px] font-black text-primary uppercase hover:underline tracking-widest">View Full Calendar</Link>
                </div>
-            </div>
-          </Card>
-
-          {/* New Tickets */}
-          <Card className="p-0 border-none shadow-sm overflow-hidden bg-white">
-            <div className="px-6 py-5 border-b border-gray-50 bg-gray-50/30">
-               <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-[0.2em]">New Tickets</h3>
-            </div>
-            <div className="p-0">
-               <ul className="divide-y divide-gray-50">
-                 {newTickets.map((ticket, i) => (
-                   <li key={i} className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between">
-                     <div className="flex items-center space-x-3">
-                       <span className="text-[10px] font-black text-gray-400">{i + 1}.</span>
-                       <Link href="/tickets" className="text-xs font-bold text-primary hover:underline">{ticket.title}</Link>
-                     </div>
-                     <span className="text-[10px] text-gray-400 font-medium italic">{ticket.time}</span>
-                   </li>
-                 ))}
-               </ul>
             </div>
           </Card>
 

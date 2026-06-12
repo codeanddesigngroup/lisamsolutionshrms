@@ -18,7 +18,6 @@ import {
   Layers,
   DollarSign,
   ShoppingBag,
-  Ticket,
   MessageSquare,
   Calendar,
   LayoutPanelLeft,
@@ -70,7 +69,6 @@ const menuItems: MenuItem[] = [
       { label: "Project Dashboard", href: "/dashboard/project" },
       { label: "Client Dashboard", href: "/dashboard/client" },
       { label: "HR Dashboard", href: "/dashboard/hr" },
-      { label: "Ticket Dashboard", href: "/dashboard/ticket" },
       { label: "Finance Dashboard", href: "/dashboard/finance" },
     ],
   },
@@ -104,12 +102,9 @@ const menuItems: MenuItem[] = [
       { label: "Department", href: "/teams" },
       { label: "Designation", href: "/designation" },
       { label: "Attendance", href: "/attendance" },
-      { label: "Live Feed", href: "/attendance/live-feed" },
-      { label: "Workforce Roster", href: "/attendance/roster" },
       { label: "Attendance Policies", href: "/attendance/settings/policies" },
       { label: "Deduction Report", href: "/attendance/reports/deductions" },
       { label: "Shift Settings", href: "/attendance/settings/shifts" },
-      { label: "Device Settings", href: "/settings/attendance-devices" },
       { label: "Holidays", href: "/holidays" },
       { label: "Leaves", href: "/leaves" },
     ],
@@ -177,17 +172,6 @@ const menuItems: MenuItem[] = [
     ],
   },
   // { icon: ShoppingBag, label: "Products", href: "/products" },
-  {
-    icon: Ticket,
-    label: "Tickets",
-    href: "/tickets",
-    submenu: [
-      { label: "Tickets", href: "/tickets" },
-      { label: "Support Tickets", href: "/support-tickets" },
-      { label: "Ticket Form", href: "/ticket-form" },
-      { label: "Ticket Settings", href: "/ticket-settings" },
-    ],
-  },
   { icon: MessageSquare, label: "Messages", href: "/user-chat" },
   {
     icon: Calendar,
@@ -254,7 +238,7 @@ const roleMenuAccess: Record<UserRole, string[]> = {
   super_admin: superAdminMenuItems.map((item) => item.label),
   admin: menuItems.filter((item) => item.label !== "Super Admin").map((item) => item.label),
   employee: menuItems.filter((item) => item.label !== "Super Admin").map((item) => item.label),
-  client: ["Dashboard", "Work", "Finance", "Tickets", "Messages", "Events", "Notice Board"],
+  client: ["Dashboard", "Work", "Finance", "Messages", "Events", "Notice Board"],
 };
 
 const roleSubmenuAccess: Partial<Record<UserRole, Record<string, string[]>>> = {
@@ -266,10 +250,9 @@ const roleSubmenuAccess: Partial<Record<UserRole, Record<string, string[]>>> = {
     Payroll: ["My Payslips"],
   },
   client: {
-    Dashboard: ["Client Dashboard", "Project Dashboard", "Ticket Dashboard"],
+    Dashboard: ["Client Dashboard", "Project Dashboard"],
     Work: ["Projects", "Tasks", "Task Board", "Task Calendar", "Discussion"],
     Finance: ["Estimates", "Invoices", "Payments", "Credit Notes"],
-    Tickets: ["Tickets", "Support Tickets"],
   },
 };
 

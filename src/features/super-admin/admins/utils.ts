@@ -32,7 +32,6 @@ const permissionTemplates: Array<{ id: string; label: string; permissions: Permi
       "clients.view",
       "projects.*",
       "tasks.*",
-      "tickets.*",
       "reports.view",
       "messages.*",
       "events.view",

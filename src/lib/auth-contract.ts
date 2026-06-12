@@ -20,7 +20,6 @@ export type PermissionModuleKey =
   | "tasks"
   | "finance"
   | "payroll"
-  | "tickets"
   | "recruitment"
   | "reports"
   | "messages"
@@ -63,7 +62,6 @@ const basePermissionModules: PermissionModuleDefinition[] = [
   // { key: "products", label: "Products", group: "finance", actions: ["view", "create", "edit", "delete", "export"] },
   { key: "finance", label: "Finance", group: "finance", actions: ["view", "create", "edit", "delete", "approve", "export", "manage"] },
   { key: "payroll", label: "Payroll", group: "finance", actions: ["view", "create", "edit", "approve", "export", "manage"] },
-  { key: "tickets", label: "Tickets", group: "communication", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "recruitment", label: "Recruitment", group: "hr", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "reports", label: "Reports", group: "core", actions: ["view", "export"] },
   { key: "messages", label: "Messages", group: "communication", actions: ["view", "create", "edit", "delete", "manage"] },
@@ -146,14 +144,14 @@ export const roleDefinitions: Record<UserRole, RoleDefinition> = {
     label: "Employee",
     panel: "employee",
     defaultRoute: "/employee/dashboard",
-    description: "Internal employee portal for attendance, leaves, holidays, payslips, assigned projects, tasks, tickets, notices, and profile.",
+    description: "Internal employee portal for attendance, leaves, holidays, payslips, assigned projects, tasks, notices, and profile.",
     scope: "Company scoped and generally self/team scoped depending on assigned permissions.",
   },
   client: {
     label: "Client",
     panel: "client",
     defaultRoute: "/dashboard/client",
-    description: "Customer portal for assigned projects, invoices, estimates, payments, tickets, events, notices, and communication.",
+    description: "Customer portal for assigned projects, invoices, estimates, payments, events, notices, and communication.",
     scope: "Company scoped and limited to client-owned or shared records.",
   },
 };
@@ -183,7 +181,6 @@ export const rolePermissions: Record<UserRole, PermissionKey[]> = {
     "tasks.*",
     "finance.*",
     "payroll.*",
-    "tickets.*",
     "recruitment.*",
     "reports.*",
     "messages.*",
@@ -208,7 +205,6 @@ export const rolePermissions: Record<UserRole, PermissionKey[]> = {
     "payroll.view",
     "projects.view",
     "tasks.view",
-    "tickets.*",
     "messages.*",
     "events.view",
     "notices.view",
@@ -221,7 +217,6 @@ export const rolePermissions: Record<UserRole, PermissionKey[]> = {
     "tasks.view",
     "tasks.create",
     "finance.view",
-    "tickets.*",
     "messages.*",
     "events.view",
     "notices.view",
@@ -261,7 +256,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin"],
   },
   {
-    prefixes: ["/attendance/bulk", "/attendance/live-feed", "/attendance/roster", "/attendance/settings", "/attendance/reports"],
+    prefixes: ["/attendance/bulk", "/attendance/settings", "/attendance/reports"],
     roles: ["admin"],
   },
   {
@@ -301,7 +296,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["client"],
   },
   {
-    prefixes: ["/dashboard/hr", "/dashboard/finance", "/dashboard/project", "/dashboard/ticket"],
+    prefixes: ["/dashboard/hr", "/dashboard/finance", "/dashboard/project"],
     roles: ["admin"],
   },
   {
@@ -325,7 +320,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin", "employee"],
   },
   {
-    prefixes: ["/projects", "/tasks", "/taskboard", "/task-calendar", "/time-logs", "/discussion", "/tickets", "/support-tickets", "/user-chat", "/events", "/event-calendar", "/notices", "/faqs", "/search", "/profile"],
+    prefixes: ["/projects", "/tasks", "/taskboard", "/task-calendar", "/time-logs", "/discussion", "/user-chat", "/events", "/event-calendar", "/notices", "/faqs", "/search", "/profile"],
     roles: ["admin", "employee", "client"],
   },
   {
@@ -338,7 +333,6 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/dashboard/hr"], anyOf: ["dashboard.view", "hr.view", "employees.view", "attendance.view", "leaves.view", "holidays.view"] },
   { prefixes: ["/dashboard/finance"], anyOf: ["dashboard.view", "finance.view"] },
   { prefixes: ["/dashboard/project"], anyOf: ["dashboard.view", "projects.view", "tasks.view"] },
-  { prefixes: ["/dashboard/ticket"], anyOf: ["dashboard.view", "tickets.view"] },
   { prefixes: ["/dashboard"], anyOf: ["dashboard.view"] },
   { prefixes: ["/settings", "/account-setup", "/module-settings", "/custom-fields"], anyOf: ["settings.view", "settings.manage"] },
   { prefixes: ["/role-permission"], anyOf: ["roles.view", "roles.manage"] },
@@ -349,7 +343,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/teams", "/designation", "/attendance-settings"], anyOf: ["hr.view", "hr.manage"] },
   { prefixes: ["/attendance/settings/shifts"], anyOf: ["shifts.view", "shifts.manage"] },
   { prefixes: ["/leaves/all", "/leaves/settings", "/leave-type"], anyOf: ["leaves.view", "leaves.manage", "leaves.approve"] },
-  { prefixes: ["/attendance/bulk", "/attendance/live-feed", "/attendance/roster", "/attendance/settings", "/attendance/reports"], anyOf: ["attendance.manage"] },
+  { prefixes: ["/attendance/bulk", "/attendance/settings", "/attendance/reports"], anyOf: ["attendance.manage"] },
   { prefixes: ["/attendance"], anyOf: ["attendance.view", "attendance.manage"] },
   { prefixes: ["/leaves"], anyOf: ["leaves.view", "leaves.manage"] },
   { prefixes: ["/holidays/create"], anyOf: ["holidays.create", "holidays.manage"] },
@@ -366,7 +360,6 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/time-logs/active", "/time-logs/by-employee"], anyOf: ["tasks.manage", "projects.manage", "reports.view"] },
   { prefixes: ["/time-logs"], anyOf: ["tasks.view", "projects.view", "reports.view"] },
   { prefixes: ["/discussion", "/discussion-categories", "/discussion-reply"], anyOf: ["projects.view", "tasks.view"] },
-  { prefixes: ["/tickets", "/support-tickets", "/ticket-form", "/ticket-settings"], anyOf: ["tickets.view", "tickets.manage"] },
   { prefixes: ["/user-chat"], anyOf: ["messages.view", "messages.manage"] },
   { prefixes: ["/events/create", "/event-type"], anyOf: ["events.create", "events.manage"] },
   { prefixes: ["/events", "/event-calendar"], anyOf: ["events.view", "events.manage"] },

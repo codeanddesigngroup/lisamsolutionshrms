@@ -42,7 +42,6 @@ export type ApiResource =
   | "salary-tds"
   | "shift-types"
   | "tasks"
-  | "tickets"
   | "time-logs"
   | "employee-salaries"
   | "employee-salary-groups"
@@ -124,7 +123,6 @@ const singularResourceMap: Record<string, string> = {
   "task-label": "task-labels",
   "task-request": "task-requests",
   team: "teams",
-  ticket: "tickets",
   "time-log": "time-logs",
   "employee-salary": "employee-salaries",
   "employee-salary-group": "employee-salary-groups",

@@ -10,7 +10,7 @@ import { useState } from "react";
 export default function CustomFieldsPage() {
   const [activeTab, setActiveTab] = useState("Project");
 
-  const modules = ["Project", "Client", "Employee", "Task", "Lead", "Invoice", "Ticket"];
+  const modules = ["Project", "Client", "Employee", "Task", "Lead", "Invoice"];
 
   const customFields = [
     { id: 1, label: "VAT Number", type: "Text", module: "Client", required: "Yes" },

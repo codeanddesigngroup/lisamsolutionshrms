@@ -17,7 +17,6 @@ export default function ModuleSettingsPage() {
     { id: "tasks", name: "Tasks", description: "Task assignment and management." },
     { id: "leads", name: "Leads", description: "Sales lead management and CRM." },
     { id: "finance", name: "Finance", description: "Invoices, estimates, and payments." },
-    { id: "tickets", name: "Tickets", description: "Customer support and ticketing system." },
     { id: "attendance", name: "Attendance", description: "Track employee daily attendance." },
     { id: "leaves", name: "Leaves", description: "Manage employee leave requests." },
     { id: "messages", name: "Messages", description: "Internal communication system." },

@@ -69,10 +69,6 @@ const seedStore: MockStore = {
     //   created_at: now,
     // },
   ],
-  "attendance-devices": [
-    { id: 1, name: "Front Gate (MB460)", serial_number: "ZK-MB460-9901", ip_address: "192.168.1.50", status: "online", last_sync_at: now, location: "Main Entrance" },
-    { id: 2, name: "Production Floor", serial_number: "ZK-F22-8822", ip_address: "192.168.1.55", status: "offline", last_sync_at: new Date(Date.now() - 86400000).toISOString(), location: "Sector B" }
-  ],
   admins: [
     {
       id: 1,
@@ -127,13 +123,12 @@ const seedStore: MockStore = {
         "clients.view",
         "projects.*",
         "tasks.*",
-        "tickets.*",
         "reports.view",
         "messages.*",
         "events.view",
         "profile.*",
       ],
-      modules: ["dashboard", "clients", "projects", "tasks", "tickets", "reports", "messages", "events"],
+      modules: ["dashboard", "clients", "projects", "tasks", "reports", "messages", "events"],
       last_login_at: "2026-05-05T11:10:00+05:00",
       created_at: now,
     },
@@ -458,28 +453,6 @@ const seedStore: MockStore = {
       project: { id: 1, project_name: "HR Portal Migration" },
       users: [{ id: 3, name: "Mike Tyson" }],
       due_date: "2026-05-09",
-      created_at: now,
-    },
-  ],
-  tickets: [
-    {
-      id: 1,
-      subject: "Unable to download invoice",
-      status: "open",
-      priority: "high",
-      requester: { id: 1, name: "Sarah Client" },
-      agent: { id: 1, name: "John Doe" },
-      date: "2026-05-08",
-      created_at: now,
-    },
-    {
-      id: 2,
-      subject: "Login loop on mobile",
-      status: "pending",
-      priority: "urgent",
-      requester: { id: 2, name: "Robert Fox" },
-      agent: { id: 1, name: "John Doe" },
-      date: "2026-05-07",
       created_at: now,
     },
   ],
@@ -1964,23 +1937,6 @@ const makeTaskPayload = (store: MockStore, payload: Record<string, unknown>, id:
   };
 };
 
-const makeTicketPayload = (store: MockStore, payload: Record<string, unknown>, id: number): MockRecord => {
-  const requesterId = getNestedId(payload.requester) || payload.requester_id;
-  const requester = [...store.employees, ...store.clients].find((record) => String(record.id) === String(requesterId));
-
-  return {
-    id,
-    ...payload,
-    subject: String(payload.subject || `Ticket ${id}`),
-    status: String(payload.status || "open"),
-    priority: String(payload.priority || "medium"),
-    requester: requester ? { id: requester.id, name: requester.name } : payload.requester,
-    agent: payload.agent || { id: 1, name: "John Doe" },
-    date: new Date().toISOString().slice(0, 10),
-    created_at: new Date().toISOString(),
-  };
-};
-
 const makeAttendancePayload = (store: MockStore, payload: Record<string, unknown>, id: number | string, existing?: MockRecord): MockRecord => {
   const employeeId = payload.employee_id || payload.user_id || existing?.employee_id || existing?.user_id;
   const employee = store.employees.find((record) => String(record.id) === String(employeeId));
@@ -2245,7 +2201,6 @@ const makeGenericPayload = (store: MockStore, resource: string, payload: Record<
   if (normalizedResource === "leads") return makeLeadPayload(store, payload, id);
   if (normalizedResource === "projects") return makeProjectPayload(store, payload, id);
   if (normalizedResource === "tasks") return makeTaskPayload(store, payload, id);
-  if (normalizedResource === "tickets") return makeTicketPayload(store, payload, id);
   if (normalizedResource === "attendance") return makeAttendancePayload(store, payload, id);
   if (normalizedResource === "leaves") return makeLeavePayload(store, payload, id);
   if (normalizedResource === "salary-components") return makeSalaryComponentPayload(payload, id);
@@ -2553,16 +2508,6 @@ export const mockApiAdapter: AxiosAdapter = async (config) => {
   if (resource === "settings" && method === "post" && payload.type === "platform_admin") {
     if (!requireRole(config, "super_admin")) {
       return jsonResponse(config, 403, { success: false, message: "Only super admins can create platform admins." });
-    }
-  }
-
-  // Attendance Device Management
-  if (resource === "attendance-devices" || resource === "v1/attendance-devices") {
-    if (method === "get") {
-      return jsonResponse(config, 200, apiEnvelope(store["attendance-devices"] || []));
-    }
-    if (method === "post" && id) {
-      return jsonResponse(config, 200, apiEnvelope({ success: true }, "Device action executed"));
     }
   }
 

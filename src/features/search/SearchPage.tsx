@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Briefcase, FileText, RefreshCw, Search, Ticket, User, Users } from "lucide-react";
+import { Briefcase, FileText, RefreshCw, Search, User, Users } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -20,7 +20,7 @@ interface SearchGroup {
   label: string;
   endpoint: string;
   hrefBase: string;
-  icon: "client" | "employee" | "project" | "task" | "lead" | "ticket" | "invoice";
+  icon: "client" | "employee" | "project" | "task" | "lead" | "invoice";
   titleKeys: string[];
   subtitleKeys: string[];
 }
@@ -31,7 +31,6 @@ const groups: SearchGroup[] = [
   { key: "projects", label: "Projects", endpoint: "/project", hrefBase: "/projects", icon: "project", titleKeys: ["project_name"], subtitleKeys: ["status", "client.name"] },
   { key: "tasks", label: "Tasks", endpoint: "/task", hrefBase: "/tasks", icon: "task", titleKeys: ["heading", "title"], subtitleKeys: ["status", "project.project_name"] },
   { key: "leads", label: "Leads", endpoint: "/lead", hrefBase: "/leads", icon: "lead", titleKeys: ["client_name", "company_name"], subtitleKeys: ["client_email", "status.type"] },
-  { key: "tickets", label: "Tickets", endpoint: "/ticket", hrefBase: "/tickets", icon: "ticket", titleKeys: ["subject"], subtitleKeys: ["status", "priority"] },
   { key: "invoices", label: "Invoices", endpoint: "/invoice", hrefBase: "/invoices", icon: "invoice", titleKeys: ["invoice_number"], subtitleKeys: ["status", "client.name"] },
 ];
 
@@ -70,7 +69,6 @@ function iconFor(type: SearchGroup["icon"]) {
     case "project": return Briefcase;
     case "task": return FileText;
     case "lead": return FileText;
-    case "ticket": return Ticket;
     case "invoice": return FileText;
   }
 }
@@ -138,7 +136,7 @@ export default function SearchPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className="w-full rounded-2xl border-none bg-gray-50 py-4 pl-14 pr-5 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                placeholder="Search clients, employees, projects, tasks, leads, tickets, and invoices..."
+                placeholder="Search clients, employees, projects, tasks, leads, and invoices..."
               />
             </div>
             <Button type="submit" loading={loading} className="bg-primary text-white px-10 h-14 text-[10px] font-black uppercase tracking-widest">

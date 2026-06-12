@@ -198,7 +198,7 @@ export default function EmployeeFAQPage() {
            <div>
               <p className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-1">Knowledge Management</p>
               <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.1em] leading-relaxed">
-                 Employee FAQs are visible to all staff members in their respective dashboards. Ensure that technical and policy-related answers are kept up to date to reduce HR support tickets.
+                 Employee FAQs are visible to all staff members in their respective dashboards. Ensure that technical and policy-related answers are kept up to date to reduce HR support requests.
               </p>
            </div>
         </div>

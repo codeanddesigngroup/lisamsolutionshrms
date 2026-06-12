@@ -76,7 +76,7 @@ export default function SlackSettingsPage() {
                 <div className="pt-6 border-t border-gray-50 space-y-4">
                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Notification Events</h4>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {["Project Created", "Task Assigned", "Payment Received", "New Ticket", "Leave Request", "Attendance Alert"].map((event) => (
+                      {["Project Created", "Task Assigned", "Payment Received", "Leave Request", "Attendance Alert"].map((event) => (
                         <div key={event} className="flex items-center justify-between p-3 bg-gray-50/50 rounded border border-gray-50">
                           <span className="text-xs font-bold text-gray-700">{event}</span>
                           <label className="relative inline-flex items-center cursor-pointer scale-75">
