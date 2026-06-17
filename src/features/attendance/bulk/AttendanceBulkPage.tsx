@@ -195,7 +195,7 @@ export default function BulkAttendancePage() {
             </div>
             <div>
               <h1 className="text-sm md:text-base font-black text-gray-800 uppercase tracking-widest truncate">
-                Bulk Attendance Entry
+                Bulk Attendance Entr
               </h1>
               <p className="text-[9px] md:text-[10px] text-gray-400 font-bold mt-0.5 tracking-wider uppercase">HR / Attendance / Batch Entry</p>
             </div>
