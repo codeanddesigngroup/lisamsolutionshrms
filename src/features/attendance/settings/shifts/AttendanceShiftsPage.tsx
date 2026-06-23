@@ -43,7 +43,7 @@ export default function AttendanceShiftsPage() {
     try {
       setLoading(true);
 
-      const response = await fetch("http://localhost:5000/shifts");
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shifts`);
 
       const result = await response.json();
 

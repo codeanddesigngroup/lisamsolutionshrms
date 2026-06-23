@@ -31,7 +31,7 @@ export default function TeamsPage() {
     try {
       setLoading(true);
 
-      const res = await fetch("http://localhost:5000/departments");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/departments`);
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.message || "Failed to load");

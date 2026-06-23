@@ -59,7 +59,7 @@ export default function ShiftCreateModal({
       setLoading(true);
 
       const response = await fetch(
-        "http://localhost:5000/create-shift",
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/shifts`,
         {
           method: "POST",
           headers: {

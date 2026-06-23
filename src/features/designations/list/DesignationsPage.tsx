@@ -30,8 +30,7 @@ export default function DesignationPage() {
   const fetchDesignations = useCallback(async () => {
     try {
       setLoading(true);
-
-      const res = await fetch("http://localhost:5000/designations");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/designations`);
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.message || "Failed to load designations");

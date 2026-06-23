@@ -29,7 +29,7 @@ export default function CreateTeamPage() {
       setSaving(true);
       setError("");
 
-      const response = await fetch("http://localhost:5000/create-department", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/departments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

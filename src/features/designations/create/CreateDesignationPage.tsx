@@ -27,7 +27,7 @@ export default function CreateDesignationPage() {
       setSaving(true);
       setError("");
 
-      const res = await fetch("http://localhost:5000/create-designation", {
+      const res = await fetch( `${process.env.NEXT_PUBLIC_API_BASE_URL}/designations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
