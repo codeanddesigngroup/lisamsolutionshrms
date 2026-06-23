@@ -28,9 +28,6 @@ export default function ProjectMilestonesPage() {
           ],
         },
       ]}
-      initialRecords={[
-        { id: 1, milestone_title: "Discovery complete", due_date: "2026-05-15", cost: 0, status: "incomplete" },
-      ]}
       createEndpoint="/milestone"
       updateEndpoint="/milestone/{id}"
       deleteEndpoint="/milestone/{id}"

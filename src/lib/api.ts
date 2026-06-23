@@ -4,8 +4,6 @@ import axios from "axios";
 // js-cookie: A helper to read and write browser cookies (where we store the login token).
 import Cookies from "js-cookie";
 import { normalizeApiPath } from "./api-contract";
-// mock-api: Our fake local backend used for testing before the real PHP backend is ready.
-import { isMockApiEnabled, mockApiAdapter } from "./mock-api";
 
 // 2. SETTING THE BACKEND URL
 // We check if there's a URL set in our environment variables (.env file).
@@ -21,12 +19,11 @@ const API_URL =
 const api = axios.create({
   baseURL: API_URL, // All requests will start with this URL
   timeout: Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || 5000), // Cancel request if it takes longer than 5 seconds
-  adapter: isMockApiEnabled() ? mockApiAdapter : undefined, // Route to fake backend if mock is enabled
   headers: {
     "Content-Type": "application/json", // Tell backend we are sending JSON data
     Accept: "application/json", // Tell backend we expect JSON data back
     "X-Frontend-Client": "nextjs-ui", // Custom header just to identify who is making the request
-    "X-Api-Mode": isMockApiEnabled() ? "mock" : "live", // Custom header for debugging
+    "X-Api-Mode": "live", // Custom header for debugging
   },
 });
 

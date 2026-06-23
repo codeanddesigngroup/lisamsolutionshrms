@@ -39,9 +39,6 @@ export default function ProjectTasksPage() {
         },
         { name: "description", label: "Description", type: "textarea" },
       ]}
-      initialRecords={[
-        { id: 1, heading: "Project kickoff", due_date: "2026-05-15", priority: "medium", status: "incomplete" },
-      ]}
       createEndpoint="/task"
       updateEndpoint="/task/{id}"
       deleteEndpoint="/task/{id}"

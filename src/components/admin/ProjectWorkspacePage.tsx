@@ -72,7 +72,6 @@ interface ProjectWorkspacePageProps {
   columns: ProjectWorkspaceColumn[];
   fields?: ProjectWorkspaceField[];
   projectDataKeys?: string[];
-  initialRecords?: ProjectWorkspaceRecord[];
   createEndpoint?: string;
   updateEndpoint?: string;
   deleteEndpoint?: string;
@@ -246,7 +245,6 @@ export default function ProjectWorkspacePage({
   columns,
   fields = [],
   projectDataKeys = [],
-  initialRecords = [],
   createEndpoint,
   updateEndpoint,
   deleteEndpoint,
@@ -265,7 +263,7 @@ export default function ProjectWorkspacePage({
   const { user, hasPermission } = useAuth();
   const projectId = String(params.id ?? "");
   const [project, setProject] = useState<Project | null>(null);
-  const [records, setRecords] = useState<ProjectWorkspaceRecord[]>(initialRecords);
+  const [records, setRecords] = useState<ProjectWorkspaceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewingRecord, setViewingRecord] = useState<ProjectWorkspaceRecord | null>(null);
@@ -329,7 +327,7 @@ export default function ProjectWorkspacePage({
       try {
         const response = await api.get(endpoint, { timeout: PROJECT_API_TIMEOUT_MS });
         const nextRecords = extractRecords(response.data);
-        setRecords(nextRecords.length > 0 ? nextRecords : projectRecords.length > 0 ? projectRecords : initialRecords);
+        setRecords(nextRecords.length > 0 ? nextRecords : projectRecords);
         setLoading(false);
         return;
       } catch {
@@ -337,9 +335,9 @@ export default function ProjectWorkspacePage({
       }
     }
 
-    setRecords(projectRecords.length > 0 ? projectRecords : initialRecords);
+    setRecords(projectRecords);
     setLoading(false);
-  }, [initialRecords, projectDataKeys, projectId, resolvedEndpoints]);
+  }, [projectDataKeys, projectId, resolvedEndpoints]);
 
   useEffect(() => {
     void loadWorkspace();
@@ -406,13 +404,7 @@ export default function ProjectWorkspacePage({
         showToast(`${section} created successfully.`);
       }
     } catch (error) {
-      const localRecord = { id: recordId ?? Date.now(), ...editingRecord, ...payload };
-      if (editingRecord && recordId !== undefined) {
-        setRecords((current) => current.map((record) => (getRecordId(record) === recordId ? localRecord : record)));
-      } else {
-        setRecords((current) => [localRecord, ...current]);
-      }
-      showToast(getErrorMessage(error, "Saved locally because the matching project API is not ready."), "error");
+      showToast(getErrorMessage(error, "The matching project API is not ready."), "error");
     } finally {
       setIsFormOpen(false);
     }
@@ -432,11 +424,11 @@ export default function ProjectWorkspacePage({
     try {
       const endpoint = buildPath(deleteEndpoint ?? `${primaryEndpoint}/{id}`, projectId, recordId);
       await api.delete(endpoint);
+      setRecords((current) => current.filter((record) => getRecordId(record) !== recordId));
       showToast(`${section} deleted successfully.`);
     } catch (error) {
-      showToast(getErrorMessage(error, "Removed locally because the matching project API is not ready."), "error");
+      showToast(getErrorMessage(error, "The matching project API is not ready."), "error");
     } finally {
-      setRecords((current) => current.filter((record) => getRecordId(record) !== recordId));
       setDeletingRecord(null);
     }
   };
@@ -456,13 +448,12 @@ export default function ProjectWorkspacePage({
         method: action.method ?? "post",
         data: { status: action.value, project_id: projectId },
       });
-      showToast(`${action.label} completed.`);
-    } catch (error) {
-      showToast(getErrorMessage(error, `${action.label} was applied locally.`), "error");
-    } finally {
       setRecords((current) =>
         current.map((item) => (getRecordId(item) === recordId ? { ...item, status: action.value } : item))
       );
+      showToast(`${action.label} completed.`);
+    } catch (error) {
+      showToast(getErrorMessage(error, "The matching project API is not ready."), "error");
     }
   };
 
@@ -562,8 +553,14 @@ export default function ProjectWorkspacePage({
 
   const renderGantt = () => (
     <Card className="border-none bg-white p-6 shadow-sm">
-      <div className="space-y-4">
-        {(filteredRecords.length > 0 ? filteredRecords : initialRecords).map((record, index) => {
+      {filteredRecords.length === 0 ? (
+        <div className="py-12 text-center">
+          <Layers className="mx-auto mb-3 h-10 w-10 text-gray-200" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">No records found</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredRecords.map((record, index) => {
           const title = valueToText(readByPath(record, "heading") ?? readByPath(record, "title") ?? readByPath(record, "milestone_title"));
           const status = valueToText(readByPath(record, "status"));
           const offset = Math.min(index * 8, 48);
@@ -586,13 +583,14 @@ export default function ProjectWorkspacePage({
               </div>
             </div>
           );
-        })}
-      </div>
+          })}
+        </div>
+      )}
     </Card>
   );
 
   const renderBurndown = () => {
-    const source = filteredRecords.length > 0 ? filteredRecords : initialRecords;
+    const source = filteredRecords;
     const total = source.length;
     const completed = source.filter((record) => {
       const status = valueToText(readByPath(record, "status")).toLowerCase();

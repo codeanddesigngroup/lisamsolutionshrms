@@ -58,19 +58,7 @@ export default function EmployeesPage() {
     setLoading(true);
     try {
       const response = await api.get("/employee?include=employeeDetail,employeeDetail.designation,employeeDetail.department,role");
-      let empList = (response.data.data || []) as EmployeeRecord[];
-      
-      // Mock fallback if API is empty
-      if (empList.length === 0) {
-        empList = [
-          { id: 1, name: "John Doe", email: "john@example.com", status: "active", employee_detail: { designation: { name: "Senior Developer" }, department: { team_name: "Engineering" }, joining_date: "2023-01-15" } },
-          { id: 2, name: "Jane Smith", email: "jane@example.com", status: "active", employee_detail: { designation: { name: "UI Designer" }, department: { team_name: "Design" }, joining_date: "2023-03-20" } },
-          { id: 3, name: "Mike Tyson", email: "mike@example.com", status: "deactive", employee_detail: { designation: { name: "HR Manager" }, department: { team_name: "HR" }, joining_date: "2022-11-01" } },
-          { id: 4, name: "Sarah Wilson", email: "sarah@example.com", status: "active", employee_detail: { designation: { name: "Full Stack" }, department: { team_name: "Engineering" }, joining_date: "2023-05-10" } },
-          { id: 5, name: "Robert Fox", email: "robert@example.com", status: "active", employee_detail: { designation: { name: "Sales Lead" }, department: { team_name: "Sales" }, joining_date: "2024-01-05" } }
-        ];
-      }
-      setEmployees(empList);
+      setEmployees(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (err) {
       console.error("Fetch Employees Error:", err);
     } finally {
@@ -255,7 +243,6 @@ export default function EmployeesPage() {
                 className="form-control"
               >
                 <option value="all">All Roles</option>
-                <option value="admin">Admin</option>
                 <option value="employee">Employee</option>
               </select>
             </div>

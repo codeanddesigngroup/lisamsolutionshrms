@@ -5,14 +5,26 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/context/ToastContext";
 
+export type ShiftTypeOption = {
+  id: number | string;
+  type: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  late_grace_minutes: number;
+  shift_hours: number;
+};
+
 type ShiftCreateModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  onCreated?: (shift: ShiftTypeOption) => void;
 };
 
 export default function ShiftCreateModal({
   isOpen,
   onClose,
+  onCreated,
 }: ShiftCreateModalProps) {
   const { showToast } = useToast();
 
@@ -75,10 +87,23 @@ export default function ShiftCreateModal({
         throw new Error(result.message || "Failed to create shift");
       }
 
+      const createdShift = result.data || result.shift || result;
+      if (createdShift?.id !== undefined && createdShift?.id !== null) {
+        onCreated?.({
+          id: createdShift.id,
+          type: String(createdShift.type ?? formData.type),
+          start_time: String(createdShift.start_time ?? formData.start_time),
+          end_time: String(createdShift.end_time ?? formData.end_time),
+          break_minutes: Number(createdShift.break_minutes ?? formData.break_minutes),
+          late_grace_minutes: Number(createdShift.late_grace_minutes ?? formData.late_grace_minutes),
+          shift_hours: Number(createdShift.shift_hours ?? formData.shift_hours),
+        });
+      }
+
       showToast("Shift created successfully", "success");
       closeAndReset();
-    } catch (error: any) {
-      showToast(error.message, "error");
+    } catch (error: unknown) {
+      showToast(error instanceof Error ? error.message : "Failed to create shift", "error");
     } finally {
       setLoading(false);
     }

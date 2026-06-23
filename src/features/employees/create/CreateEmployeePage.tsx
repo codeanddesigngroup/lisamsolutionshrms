@@ -30,7 +30,7 @@ import api from "@/lib/api";
 import { getModulesFromPermissions, rolePermissions, type PermissionKey } from "@/lib/auth-contract";
 import { useToast } from "@/context/ToastContext";
 import { useRouter } from "next/navigation";
-import EmployeePermissionMatrix, { type EmployeeAssignableRole } from "@/features/employees/components/EmployeePermissionMatrix";
+import EmployeePermissionMatrix from "@/features/employees/components/EmployeePermissionMatrix";
 import ShiftCreateModal, { type ShiftTypeOption } from "@/features/attendance/settings/shifts/components/ShiftCreateModal";
 
 const PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
@@ -77,6 +77,7 @@ export default function CreateEmployeePage() {
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [designations, setDesignations] = useState<DesignationOption[]>([]);
   const [shiftTypes, setShiftTypes] = useState<ShiftTypeOption[]>([]);
+  const [permissionState, setPermissionState] = useState<PermissionKey[]>(rolePermissions.employee);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -96,8 +97,6 @@ export default function CreateEmployeePage() {
     phone_code: "+92",
     mobile: "",
     hourly_rate: "",
-    role: "employee" as EmployeeAssignableRole,
-    permissions: rolePermissions.employee as PermissionKey[],
     status: "active" as "active" | "deactive",
     login: "enable",
     email_notifications: "1",
@@ -121,32 +120,14 @@ export default function CreateEmployeePage() {
           api.get("/designation")
         ]);
         const shiftRes = await api.get("/shift-types");
-        setDepartments(deptRes.data.data || []);
-        setDesignations(desigRes.data.data || []);
-        setShiftTypes(shiftRes.data.data || []);
-        
-        // Mock fallback if empty
-        if (deptRes.data.data.length === 0) {
-          setDepartments([
-            { id: 1, team_name: "Engineering" },
-            { id: 2, team_name: "Marketing" },
-            { id: 3, team_name: "Sales" }
-          ]);
-        }
-        if (desigRes.data.data.length === 0) {
-          setDesignations([
-            { id: 1, name: "Junior Developer" },
-            { id: 2, name: "Senior Developer" },
-            { id: 3, name: "Team Lead" }
-          ]);
-        }
-        if ((shiftRes.data.data || []).length === 0) {
-          setShiftTypes([
-            { id: 1, type: "morning", start_time: "09:00", end_time: "18:00", break_minutes: 60, late_grace_minutes: 15, shift_hours: 8 },
-          ]);
-        }
+        setDepartments(Array.isArray(deptRes.data?.data) ? deptRes.data.data : []);
+        setDesignations(Array.isArray(desigRes.data?.data) ? desigRes.data.data : []);
+        setShiftTypes(Array.isArray(shiftRes.data?.data) ? shiftRes.data.data : []);
       } catch (err) {
         console.error("Fetch Options Error:", err);
+        setDepartments([]);
+        setDesignations([]);
+        setShiftTypes([]);
       }
     };
     fetchData();
@@ -194,10 +175,11 @@ export default function CreateEmployeePage() {
       const selectedDesignation = designations.find((designation) => String(designation.id) === String(formData.designation));
       const selectedDepartment = departments.find((department) => String(department.id) === String(formData.department));
       const selectedShift = shiftTypes.find((shift) => String(shift.id) === String(formData.shift_type_id));
-      const permissions = formData.permissions;
+      const permissions = permissionState;
       const modules = getModulesFromPermissions(permissions);
       const payload = {
         ...formData,
+        role: "employee",
         permissions,
         modules,
         designation_id: formData.designation,
@@ -226,18 +208,20 @@ export default function CreateEmployeePage() {
       if (createdEmployeeId) {
         await api.post("/employees/assignRole", {
           user_id: createdEmployeeId,
-          role: formData.role,
+          role: "employee",
           permissions,
           modules,
         });
       }
       showToast("Employee created successfully!", "success");
       router.push("/employees");
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Submit Error:", err);
-      // Fallback for demo if API fails
-      showToast("Employee record simulated successfully!", "success");
-      setTimeout(() => router.push("/employees"), 1500);
+      const errorMessage =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      showToast(errorMessage || "Failed to create employee.", "error");
     } finally {
       setLoading(false);
     }
@@ -502,42 +486,21 @@ export default function CreateEmployeePage() {
               </div>
            </Card>
 
-           <EmployeePermissionMatrix
-             role={formData.role}
-             permissions={formData.permissions}
-             onRoleChange={(role) =>
-               setFormData((prev) => ({
-                 ...prev,
-                 role,
-                 permissions: rolePermissions[role] as PermissionKey[],
-               }))
-             }
-             onPermissionsChange={(permissions) => setFormData((prev) => ({ ...prev, permissions }))}
-           />
+           <Card className="border-none shadow-sm p-0 bg-white rounded-2xl overflow-hidden">
+             <EmployeePermissionMatrix
+               permissions={permissionState}
+               onPermissionsChange={setPermissionState}
+             />
+           </Card>
 
            {/* Section 3: Extra Details */}
            <Card className="p-8 border-none shadow-sm bg-white rounded-2xl">
               <div className="flex items-center space-x-3 mb-8 border-l-4 border-orange-500 pl-4">
-                 <h2 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">Contact & Address</h2>
+                 <h2 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">Other Details</h2>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                 <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Office Address</label>
-                    <div className="relative">
-                       <MapPin className="absolute left-4 top-4 h-4 w-4 text-primary" />
-                       <textarea 
-                         name="address"
-                         value={formData.address}
-                         onChange={handleInputChange}
-                         rows={4}
-                         placeholder="STREET, CITY, ZIP CODE..."
-                         className="w-full bg-gray-50 border-none rounded-xl py-4 pl-12 pr-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none shadow-inner"
-                       />
-                    </div>
-                 </div>
-
-                 <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
+                 <div className="space-y-4">
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
                        <div className="flex items-center space-x-4">
                           <div className="h-10 w-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
@@ -554,27 +517,6 @@ export default function CreateEmployeePage() {
                             className="sr-only peer" 
                             checked={formData.login === 'enable'} 
                             onChange={(e) => setFormData(prev => ({ ...prev, login: e.target.checked ? 'enable' : 'disable' }))} 
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary shadow-inner"></div>
-                       </label>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                       <div className="flex items-center space-x-4">
-                          <div className="h-10 w-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
-                             <Mail className="h-5 w-5 text-blue-500" />
-                          </div>
-                          <div>
-                             <p className="text-[10px] font-black text-gray-800 uppercase tracking-widest">Email Alerts</p>
-                             <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Automated notifications</p>
-                          </div>
-                       </div>
-                       <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
-                            checked={formData.email_notifications === '1'} 
-                            onChange={(e) => setFormData(prev => ({ ...prev, email_notifications: e.target.checked ? '1' : '0' }))} 
                           />
                           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary shadow-inner"></div>
                        </label>

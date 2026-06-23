@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
+import { UserRound } from "lucide-react";
 import {
   adminAssignablePermissionModules,
   getModulesFromPermissions,
@@ -11,27 +11,7 @@ import {
   type PermissionModuleDefinition,
 } from "@/lib/auth-contract";
 
-export type EmployeeAssignableRole = "admin" | "employee";
-
-const roleOptions: Array<{
-  value: EmployeeAssignableRole;
-  label: string;
-  description: string;
-  icon: LucideIcon;
-}> = [
-  {
-    value: "employee",
-    label: "Employee",
-    description: "Self-service portal access",
-    icon: UserRound,
-  },
-  {
-    value: "admin",
-    label: "Admin",
-    description: "Company management access",
-    icon: ShieldCheck,
-  },
-];
+export type EmployeeAssignableRole = "employee";
 
 const normalizePermissions = (permissions: PermissionKey[]): PermissionKey[] =>
   Array.from(new Set<PermissionKey>(["dashboard.view", "profile.*", ...permissions]));
@@ -65,16 +45,12 @@ const setModulePermissions = (permissions: PermissionKey[], moduleItem: Permissi
 };
 
 type EmployeePermissionMatrixProps = {
-  role: EmployeeAssignableRole;
   permissions: PermissionKey[];
-  onRoleChange: (role: EmployeeAssignableRole) => void;
   onPermissionsChange: (permissions: PermissionKey[]) => void;
 };
 
 export default function EmployeePermissionMatrix({
-  role,
   permissions,
-  onRoleChange,
   onPermissionsChange,
 }: EmployeePermissionMatrixProps) {
   const normalizedPermissions = normalizePermissions(permissions);
@@ -83,40 +59,15 @@ export default function EmployeePermissionMatrix({
     <div className="rounded-2xl border border-gray-100 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-3">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-widest text-gray-700">Role & Module Permissions</h3>
+          <h3 className="text-xs font-black uppercase tracking-widest text-gray-700">Employee Module Permissions</h3>
           <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
             {getModulesFromPermissions(normalizedPermissions).length} modules selected
           </p>
         </div>
-        <span className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-gray-500">
-          {role === "admin" ? "Admin Access" : "Employee Access"}
+        <span className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-gray-500">
+          <UserRound className="h-3.5 w-3.5" />
+          Employee Access
         </span>
-      </div>
-      <div className="grid gap-3 border-b border-gray-100 bg-white p-4 sm:grid-cols-2">
-        {roleOptions.map((option) => {
-          const Icon = option.icon;
-          const selected = role === option.value;
-
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onRoleChange(option.value)}
-              aria-pressed={selected}
-              className={`flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left transition ${
-                selected ? "border-primary bg-primary/5 text-primary shadow-sm" : "border-gray-100 bg-gray-50 text-gray-500 hover:border-primary/30 hover:bg-white"
-              }`}
-            >
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${selected ? "bg-primary text-white" : "bg-white text-gray-400"}`}>
-                <Icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-xs font-black uppercase tracking-widest">{option.label}</span>
-                <span className="mt-1 block text-[10px] font-bold uppercase tracking-widest text-gray-400">{option.description}</span>
-              </span>
-            </button>
-          );
-        })}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">

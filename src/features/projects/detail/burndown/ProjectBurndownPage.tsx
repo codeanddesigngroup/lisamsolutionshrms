@@ -11,12 +11,6 @@ export default function ProjectBurndownPage() {
         { key: "heading", label: "Task" },
         { key: "status", label: "Status" },
       ]}
-      initialRecords={[
-        { id: 1, heading: "Kickoff", status: "completed" },
-        { id: 2, heading: "Design review", status: "completed" },
-        { id: 3, heading: "Implementation", status: "in progress" },
-        { id: 4, heading: "QA pass", status: "incomplete" },
-      ]}
       viewMode="burndown"
       allowCreate={false}
       allowEdit={false}

@@ -13,11 +13,6 @@ export default function ProjectGanttPage() {
         { key: "due_date", label: "Due" },
         { key: "status", label: "Status" },
       ]}
-      initialRecords={[
-        { id: 1, heading: "Kickoff", start_date: "2026-05-01", due_date: "2026-05-07", status: "completed" },
-        { id: 2, heading: "Build phase", start_date: "2026-05-08", due_date: "2026-05-20", status: "in progress" },
-        { id: 3, heading: "Launch", start_date: "2026-05-21", due_date: "2026-05-28", status: "incomplete" },
-      ]}
       viewMode="gantt"
       allowCreate={false}
       allowEdit={false}

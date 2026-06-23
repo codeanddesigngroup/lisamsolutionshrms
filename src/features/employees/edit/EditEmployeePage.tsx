@@ -13,7 +13,7 @@ import { useToast } from "@/context/ToastContext";
 import { RefreshCw, Save, ArrowLeft, AlertCircle, Clock, Eye, EyeOff, Plus, UserCheck, UserX } from "lucide-react";
 import { Employee } from "@/types";
 import { getModulesFromPermissions, rolePermissions, type PermissionKey } from "@/lib/auth-contract";
-import EmployeePermissionMatrix, { type EmployeeAssignableRole } from "@/features/employees/components/EmployeePermissionMatrix";
+import EmployeePermissionMatrix from "@/features/employees/components/EmployeePermissionMatrix";
 import ShiftCreateModal, { type ShiftTypeOption } from "@/features/attendance/settings/shifts/components/ShiftCreateModal";
 
 const employeeSchema = z.object({
@@ -29,7 +29,7 @@ const employeeSchema = z.object({
   department_id: z.string().min(1, "Please select a department"),
   designation_id: z.string().min(1, "Please select a designation"),
   shift_type_id: z.string().optional(),
-  role: z.enum(["admin", "employee"]),
+  role: z.literal("employee"),
   status: z.enum(["active", "deactive"]),
   mobile: z.string().optional(),
   address: z.string().optional(),
@@ -65,7 +65,7 @@ type DesignationOption = {
 type EmployeeUpdatePayload = {
   name: string;
   email: string;
-  role: EmployeeAssignableRole;
+  role: "employee";
   status: "active" | "deactive";
   password?: string;
   gender: string;
@@ -102,7 +102,6 @@ export default function EditEmployeePage() {
   const [shiftTypes, setShiftTypes] = useState<ShiftTypeOption[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [isShiftCreateOpen, setIsShiftCreateOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<EmployeeAssignableRole>("employee");
   const [permissionState, setPermissionState] = useState<PermissionKey[]>(rolePermissions.employee);
 
   const {
@@ -138,10 +137,8 @@ export default function EditEmployeePage() {
         ]);
 
         const data = empRes.data.data as EmployeeWithAccess;
-        const role = data.role === "admin" ? "admin" : "employee";
-        const permissions = Array.isArray(data.permissions) ? data.permissions : rolePermissions[role];
+        const permissions = Array.isArray(data.permissions) && data.role !== "admin" ? data.permissions : rolePermissions.employee;
         setEmployee(data);
-        setSelectedRole(role);
         setPermissionState(permissions);
         setDepartments(deptRes.data.data || []);
         setDesignations(desigRes.data.data || []);
@@ -156,7 +153,7 @@ export default function EditEmployeePage() {
           department_id: data.employee_detail?.department_id?.toString() || "",
           designation_id: data.employee_detail?.designation_id?.toString() || "",
           shift_type_id: data.employee_detail?.shift_type_id?.toString() || "",
-          role,
+          role: "employee",
           status: data.status === "deactive" ? "deactive" : "active",
           password: "",
           mobile: data.employee_detail?.mobile || "",
@@ -185,7 +182,7 @@ export default function EditEmployeePage() {
       const payload: EmployeeUpdatePayload = {
         name: data.name,
         email: data.email,
-        role: data.role,
+        role: "employee",
         status: data.status,
         gender: data.gender,
         permissions,
@@ -211,7 +208,7 @@ export default function EditEmployeePage() {
       await api.put(`/employee/${params.id}`, payload);
       await api.post("/employees/assignRole", {
         user_id: params.id,
-        role: data.role,
+        role: "employee",
         permissions,
         modules,
       });
@@ -408,13 +405,7 @@ export default function EditEmployeePage() {
 
               <Card className="border-none shadow-sm p-0 bg-white rounded-2xl overflow-hidden">
                  <EmployeePermissionMatrix
-                    role={selectedRole}
                     permissions={permissionState}
-                    onRoleChange={(role) => {
-                      setSelectedRole(role);
-                      setValue("role", role, { shouldDirty: true, shouldValidate: true });
-                      setPermissionState(rolePermissions[role]);
-                    }}
                     onPermissionsChange={setPermissionState}
                  />
               </Card>
@@ -483,7 +474,7 @@ export default function EditEmployeePage() {
                     </div>
                     <div className="flex items-center justify-between">
                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Account Type</p>
-                       <p className="text-xs font-black text-gray-800 uppercase">{employee.role || "employee"}</p>
+                       <p className="text-xs font-black text-gray-800 uppercase">employee</p>
                     </div>
                  </div>
               </Card>

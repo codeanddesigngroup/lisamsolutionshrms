@@ -127,14 +127,13 @@ export default function ResourceCrudPage({
   deleteEndpoint,
   columns,
   fields,
-  initialRecords = [],
   breadcrumbs = [],
   createButtonLabel,
   idKey = "id",
   statusActions = [],
 }: ResourceCrudPageProps) {
   const { showToast } = useToast();
-  const [records, setRecords] = useState<ResourceRecord[]>(initialRecords);
+  const [records, setRecords] = useState<ResourceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewingRecord, setViewingRecord] = useState<ResourceRecord | null>(null);
@@ -147,14 +146,14 @@ export default function ResourceCrudPage({
     try {
       const response = await api.get(endpoint);
       const nextRecords = extractRecords(response.data);
-      setRecords(nextRecords.length > 0 || initialRecords.length === 0 ? nextRecords : initialRecords);
+      setRecords(nextRecords);
     } catch (error) {
-      setRecords(initialRecords);
-      showToast(getErrorMessage(error, `${title} API is not available yet. Showing starter data.`), "error");
+      setRecords([]);
+      showToast(getErrorMessage(error, `${title} API is not available yet.`), "error");
     } finally {
       setLoading(false);
     }
-  }, [endpoint, initialRecords, showToast, title]);
+  }, [endpoint, showToast, title]);
 
   useEffect(() => {
     void loadRecords();
@@ -208,14 +207,7 @@ export default function ResourceCrudPage({
         showToast(`${title} created successfully.`);
       }
     } catch (error) {
-      if (editingRecord && normalizedId !== undefined) {
-        setRecords((current) =>
-          current.map((record) => (readByPath(record, idKey) === normalizedId ? { ...record, ...payload } : record))
-        );
-      } else {
-        setRecords((current) => [{ id: Date.now(), ...payload }, ...current]);
-      }
-      showToast(getErrorMessage(error, "Saved locally because the API endpoint is not ready."), "error");
+      showToast(getErrorMessage(error, "The API endpoint is not ready."), "error");
     } finally {
       setIsFormOpen(false);
     }
@@ -228,11 +220,11 @@ export default function ResourceCrudPage({
 
     try {
       await api.delete(buildEndpoint(deleteEndpoint, endpoint, deleteId));
+      setRecords((current) => current.filter((record) => readByPath(record, idKey) !== deleteId));
       showToast(`${title} deleted successfully.`);
     } catch (error) {
-      showToast(getErrorMessage(error, "Removed locally because the API endpoint is not ready."), "error");
+      showToast(getErrorMessage(error, "The API endpoint is not ready."), "error");
     } finally {
-      setRecords((current) => current.filter((record) => readByPath(record, idKey) !== deleteId));
       setDeletingRecord(null);
     }
   };
@@ -249,15 +241,14 @@ export default function ResourceCrudPage({
         method,
         data: { status: action.value },
       });
-      showToast(`${action.label} completed.`);
-    } catch (error) {
-      showToast(getErrorMessage(error, `${action.label} was applied locally.`), "error");
-    } finally {
       setRecords((current) =>
         current.map((item) =>
           readByPath(item, idKey) === recordId ? { ...item, status: action.value } : item
         )
       );
+      showToast(`${action.label} completed.`);
+    } catch (error) {
+      showToast(getErrorMessage(error, "The API endpoint is not ready."), "error");
     }
   };
 
