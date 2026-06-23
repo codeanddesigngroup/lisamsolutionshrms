@@ -496,7 +496,7 @@ export default function CreateEmployeePage() {
            {/* Section 3: Extra Details */}
            <Card className="p-8 border-none shadow-sm bg-white rounded-2xl">
               <div className="flex items-center space-x-3 mb-8 border-l-4 border-orange-500 pl-4">
-                 <h2 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">Other Detail</h2>
+                 <h2 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">Other Details</h2>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
