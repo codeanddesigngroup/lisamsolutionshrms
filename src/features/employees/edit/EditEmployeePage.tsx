@@ -389,7 +389,7 @@ export default function EditEmployeePage() {
                              <option value="">Select Shift</option>
                              {shiftTypes.map((shift) => (
                                <option key={shift.id} value={shift.id}>
-                                 {shift.shift_name} {shift.start_time && shift.end_time ? `(${shift.start_time}-${shift.end_time})` : ""}
+                                 {shift.type} {shift.start_time && shift.end_time ? `(${shift.start_time}-${shift.end_time})` : ""}
                                </option>
                              ))}
                           </select>

@@ -3,32 +3,53 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { ArrowLeft, Save, RefreshCw, Award } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  RefreshCw,
+  Award,
+} from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import api from "@/lib/api";
+import { useToast } from "@/context/ToastContext";
 
 export default function CreateDesignationPage() {
-  const router = useRouter();
+  const { showToast } = useToast();
+
+  const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [name, setName] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setError("");
+
     try {
-      if (localStorage.getItem("token") === "mock_token_12345") {
-        setTimeout(() => { router.push("/designation"); router.refresh(); }, 800);
-        return;
+      setSaving(true);
+      setError("");
+
+      const res = await fetch("http://localhost:5000/create-designation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Failed to create designation");
       }
-      await api.post("/designation", { name });
-      router.push("/designation");
-      router.refresh();
+
+      showToast("Designation created successfully", "success");
+
+      // reset form
+      setName("");
     } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data?.error || "Failed to create designation.");
+      setError(err.message || "Something went wrong");
+      showToast(err.message || "Error", "error");
     } finally {
       setSaving(false);
     }
@@ -37,48 +58,81 @@ export default function CreateDesignationPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between bg-white px-6 py-4 shadow-sm -mx-6 -mt-6 mb-6 border-b border-gray-100">
+
+        {/* HEADER */}
+        <div className="flex justify-between bg-white px-6 py-4 shadow-sm border-b">
           <div>
-            <h1 className="text-base font-semibold text-gray-700 uppercase tracking-widest font-black">Add Designation</h1>
-            <div className="text-xs text-gray-500 flex items-center space-x-1 mt-1">
-              <Link href="/dashboard" className="hover:text-primary transition-colors font-bold uppercase tracking-tighter">Home</Link>
-              <span>/</span>
-              <Link href="/designation" className="hover:text-primary transition-colors font-bold uppercase tracking-tighter">Designations</Link>
-              <span>/</span>
-              <span className="text-gray-700 font-bold uppercase tracking-tighter">Add</span>
-            </div>
+            <h1 className="text-base font-black uppercase">
+              Add Designation
+            </h1>
           </div>
+
           <Link href="/designation">
-            <Button className="bg-gray-100 text-gray-600 border-none text-[10px] font-black h-8 px-4 hover:bg-gray-200 uppercase tracking-widest">
-              <ArrowLeft className="h-3 w-3 mr-2" /><span>Back</span>
+            <Button className="bg-gray-100 text-gray-600 text-[10px] font-black h-8 px-4 uppercase">
+              <ArrowLeft className="h-3 w-3 mr-2" />
+              Back
             </Button>
           </Link>
         </div>
 
-        <Card className="p-8 max-w-2xl mx-auto shadow-sm border-gray-100">
+        {/* FORM */}
+        <Card className="p-8 max-w-2xl mx-auto">
+
           <form className="space-y-6" onSubmit={handleSubmit}>
+
             {error && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-lg text-sm font-bold border-l-4 border-red-500">{error}</div>
+              <div className="p-3 bg-red-50 text-red-600 text-sm font-bold border-l-4 border-red-500">
+                {error}
+              </div>
             )}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Designation Name <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <Award className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400" />
-                <input value={name} onChange={e => setName(e.target.value)}
-                  type="text" placeholder="e.g. Senior Developer"
-                  className="w-full border-gray-200 rounded p-2.5 pl-9 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all" required />
+
+            {/* INPUT */}
+            <div>
+              <label className="text-[10px] font-black text-gray-500 uppercase">
+                Designation Name
+              </label>
+
+              <div className="relative mt-2">
+                <Award className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  type="text"
+                  placeholder="e.g. Senior Developer"
+                  className="w-full border rounded px-3 py-2 pl-9 text-xs font-bold focus:ring-2 focus:ring-primary/20 outline-none"
+                  required
+                />
               </div>
             </div>
-            <div className="pt-4 border-t border-gray-50 flex items-center justify-end space-x-3">
+
+            {/* BUTTONS */}
+            <div className="flex justify-end gap-3 pt-4 border-t">
+
               <Link href="/designation">
-                <Button type="button" className="bg-white text-gray-500 border border-gray-200 text-[10px] font-black px-6 h-10 uppercase tracking-widest hover:bg-gray-50">Cancel</Button>
+                <Button
+                  type="button"
+                  className="bg-gray-100 text-gray-600 text-[10px] font-black px-6 h-10 uppercase"
+                >
+                  Cancel
+                </Button>
               </Link>
-              <Button type="submit" disabled={saving}
-                className="bg-primary text-white text-[10px] font-black px-8 h-10 uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center">
-                {saving ? <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-2" />}
+
+              <Button
+                type="submit"
+                disabled={saving}
+                className="bg-primary text-white text-[10px] font-black px-8 h-10 uppercase flex items-center"
+              >
+                {saving ? (
+                  <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5 mr-2" />
+                )}
+
                 {saving ? "Saving..." : "Save Designation"}
               </Button>
             </div>
+
           </form>
         </Card>
       </div>

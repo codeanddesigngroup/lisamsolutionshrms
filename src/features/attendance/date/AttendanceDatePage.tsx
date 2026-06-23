@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { calculateAttendanceStatus, ShiftDefinition } from "@/lib/hr-utils";
+import api from "@/lib/api";
 
 type ShiftSummary = {
   id?: number | string;
@@ -57,34 +58,6 @@ type AttendanceRecord = {
   attendance_device_id?: number | string;
 };
 
-type IclockTransaction = {
-  id?: number | string;
-  emp?: number | string;
-  emp_code?: number | string;
-  employee_id?: number | string;
-  first_name?: string | null;
-  last_name?: string | null;
-  department?: string | null;
-  position?: string | null;
-  punch_time?: string;
-  timestamp?: string;
-  terminal_sn?: string;
-  terminal_alias?: string;
-  terminal_id?: number | string;
-  area_alias?: string;
-};
-
-type IclockEmployee = {
-  id?: number | string;
-  emp_code?: number | string;
-  employee_id?: number | string;
-  first_name?: string | null;
-  last_name?: string | null;
-  nickname?: string | null;
-  department?: unknown;
-  position?: unknown;
-};
-
 const getShiftForRow = (row: AttendanceRecord, employees: EmployeeOption[]): ShiftDefinition | undefined => {
   const employeeId = String(row.employee_id || row.user_id || row.employee?.id || "");
   const shift = (
@@ -103,75 +76,6 @@ const getStatusClass = (status: string) => {
 
 const DEFAULT_ATTENDANCE_DATE = new Date().toISOString().slice(0, 10);
 
-const normalizePunchDateTime = (value?: string) => {
-  if (!value) return null;
-  const normalized = value.replace(" ", "T");
-  const [datePart, timePart = ""] = normalized.split("T");
-  if (!datePart || !timePart) return null;
-  return {
-    date: datePart.slice(0, 10),
-    time: timePart.slice(0, 8),
-    sortable: `${datePart.slice(0, 10)}T${timePart.slice(0, 8)}`,
-  };
-};
-
-const getTransactionEmployeeCode = (transaction: IclockTransaction) =>
-  String(transaction.emp_code ?? transaction.employee_id ?? transaction.emp ?? "").trim();
-
-const getEmployeeMatchCodes = (employee: EmployeeOption) =>
-  [
-    employee.id,
-    employee.employee_id,
-    employee.employee_detail?.employee_id,
-  ]
-    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-    .map((value) => String(value).trim());
-
-const getIclockEmployeeName = (transaction: IclockTransaction, employeeCode: string) => {
-  const name = [transaction.first_name, transaction.last_name].filter(Boolean).join(" ").trim();
-  return name || employeeCode;
-};
-
-const getObjectLabel = (value: unknown, keys: string[]) => {
-  if (!value) return "";
-  if (typeof value === "string" || typeof value === "number") return String(value);
-  if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    for (const key of keys) {
-      const label = record[key];
-      if (typeof label === "string" || typeof label === "number") return String(label);
-    }
-  }
-  return "";
-};
-
-const getPersonnelEmployeeCode = (employee: IclockEmployee) =>
-  String(employee.emp_code ?? employee.employee_id ?? employee.id ?? "").trim();
-
-const buildPersonnelEmployeeOptions = (employees: IclockEmployee[]): EmployeeOption[] =>
-  employees
-    .map((employee) => {
-      const employeeCode = getPersonnelEmployeeCode(employee);
-      if (!employeeCode) return null;
-      const name = [employee.first_name, employee.last_name].filter(Boolean).join(" ").trim() || employee.nickname || employeeCode;
-      const designation = getObjectLabel(employee.position, ["position_name", "name", "alias"]);
-      const department = getObjectLabel(employee.department, ["dept_name", "department_name", "name", "alias"]);
-
-      return {
-        id: employeeCode,
-        employee_id: employeeCode,
-        name,
-        email: "",
-        role: "employee",
-        employee_detail: {
-          employee_id: employeeCode,
-          designation: designation ? { name: designation } : undefined,
-          department: department ? { name: department, team_name: department } : undefined,
-        },
-      };
-    })
-    .filter(Boolean) as EmployeeOption[];
-
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
   const userId = String(user.id || "");
@@ -183,86 +87,9 @@ const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?
   );
 };
 
-const buildIclockEmployeeOptions = (
-  transactions: IclockTransaction[],
-  employeeList: EmployeeOption[],
-): EmployeeOption[] => {
-  const existingCodes = new Set(employeeList.flatMap(getEmployeeMatchCodes));
-  const virtualEmployees = new Map<string, EmployeeOption>();
-
-  transactions.forEach((transaction) => {
-    const employeeCode = getTransactionEmployeeCode(transaction);
-    if (!employeeCode || existingCodes.has(employeeCode) || virtualEmployees.has(employeeCode)) return;
-
-    virtualEmployees.set(employeeCode, {
-      id: employeeCode,
-      employee_id: employeeCode,
-      name: getIclockEmployeeName(transaction, employeeCode),
-      email: "",
-      role: "employee",
-      employee_detail: {
-        employee_id: employeeCode,
-        designation: transaction.position ? { name: transaction.position } : undefined,
-        department: transaction.department ? { name: transaction.department, team_name: transaction.department } : undefined,
-      },
-    });
-  });
-
-  return Array.from(virtualEmployees.values());
-};
-
-const buildIclockAttendanceRecords = (
-  transactions: IclockTransaction[],
-  employeeList: EmployeeOption[],
-  selectedDate: string,
-): AttendanceRecord[] => {
-  const grouped = new Map<string, { employee: EmployeeOption; punches: Array<IclockTransaction & { punchTime: string; sortable: string }> }>();
-
-  transactions.forEach((transaction) => {
-    const punchDateTime = normalizePunchDateTime(transaction.punch_time || transaction.timestamp);
-    if (!punchDateTime || punchDateTime.date !== selectedDate) return;
-
-    const transactionEmployeeCode = getTransactionEmployeeCode(transaction);
-    if (!transactionEmployeeCode) return;
-
-    const employee = employeeList.find((item) => getEmployeeMatchCodes(item).includes(transactionEmployeeCode));
-    if (!employee) return;
-
-    const key = String(employee.id);
-    const existing = grouped.get(key);
-    const punch = { ...transaction, punchTime: punchDateTime.time, sortable: punchDateTime.sortable };
-
-    if (existing) {
-      existing.punches.push(punch);
-    } else {
-      grouped.set(key, { employee, punches: [punch] });
-    }
-  });
-
-  return Array.from(grouped.values()).map(({ employee, punches }) => {
-    const sortedPunches = punches.sort((first, second) => first.sortable.localeCompare(second.sortable));
-    const firstPunch = sortedPunches[0];
-    const lastPunch = sortedPunches[sortedPunches.length - 1];
-    const deviceId = firstPunch.terminal_id || firstPunch.terminal_sn || firstPunch.terminal_alias || "iclock";
-
-    return {
-      id: `iclock-${selectedDate}-${employee.id}`,
-      employee_id: employee.id,
-      user_id: employee.id,
-      employee,
-      date: selectedDate,
-      clock_in: firstPunch.punchTime,
-      clock_out: sortedPunches.length > 1 ? lastPunch.punchTime : "",
-      clock_in_ip: firstPunch.terminal_sn || firstPunch.terminal_alias || firstPunch.area_alias || "iClock",
-      clock_out_ip: sortedPunches.length > 1 ? lastPunch.terminal_sn || lastPunch.terminal_alias || lastPunch.area_alias || "iClock" : "",
-      source_type: "machine",
-      source: "iclock",
-      device_id: deviceId,
-      attendance_device_id: deviceId,
-      status: "present",
-    };
-  });
-};
+const isCurrentUserAttendance = (attendance: AttendanceRecord, user: { id?: number | string; name?: string; email?: string } | null) =>
+  isCurrentUserEmployee(attendance.employee as EmployeeOption | undefined, user) ||
+  String(attendance.employee_id || attendance.user_id || "") === String(user?.id || "");
 
 export default function AttendanceByDatePage() {
   const { showToast } = useToast();
@@ -281,50 +108,22 @@ export default function AttendanceByDatePage() {
   const fetchAttendance = async () => {
     setLoading(true);
     try {
-      let attendanceList: AttendanceRecord[] = [];
-      let deviceEmployees: EmployeeOption[] = [];
-
-      try {
-        const [employeeApiResponse, deviceResponse] = await Promise.all([
-          fetch("/api/iclock-employees?page_size=10000", { cache: "no-store" }),
-          fetch(`/api/iclock-transactions?date=${encodeURIComponent(date)}`, { cache: "no-store" }),
-        ]);
-        const [employeePayload, devicePayload] = await Promise.all([
-          employeeApiResponse.json(),
-          deviceResponse.json(),
-        ]);
-
-        if (!employeeApiResponse.ok || employeePayload.success === false || !Array.isArray(employeePayload.data)) {
-          showToast(employeePayload.message || "Could not load biometric employees", "error");
-        }
-
-        const personnelEmployees = employeeApiResponse.ok && employeePayload.success !== false && Array.isArray(employeePayload.data)
-          ? buildPersonnelEmployeeOptions(employeePayload.data as IclockEmployee[])
-          : [];
-        deviceEmployees = personnelEmployees;
-
-        if (deviceResponse.ok && devicePayload.success !== false && Array.isArray(devicePayload.data)) {
-          const deviceTransactions = devicePayload.data as IclockTransaction[];
-          const fallbackEmployees = buildIclockEmployeeOptions(deviceTransactions, personnelEmployees);
-          deviceEmployees = [...personnelEmployees, ...fallbackEmployees];
-          attendanceList = buildIclockAttendanceRecords(deviceTransactions, deviceEmployees, date);
-        } else {
-          showToast(devicePayload.message || "Could not load biometric attendance", "error");
-        }
-      } catch (deviceError) {
-        console.error("Fetch iClock Transactions Error:", deviceError);
-        showToast("Could not load biometric attendance.", "error");
-      }
+      const [employeeResponse, attendanceResponse] = await Promise.all([
+        api.get("/employee"),
+        api.get("/attendance"),
+      ]);
+      const employeeList = (employeeResponse.data.data || []) as EmployeeOption[];
+      const attendanceList = (attendanceResponse.data.data || []) as AttendanceRecord[];
 
       const employeesWithAttendance = canManageAttendance
-        ? deviceEmployees.filter((employee) =>
+        ? employeeList.filter((employee) =>
             attendanceList.some((row) => String(row.employee_id || row.user_id || row.employee?.id || "") === String(employee.id))
           )
-        : deviceEmployees.filter((employee) => isCurrentUserEmployee(employee, user));
+        : employeeList.filter((employee) => isCurrentUserEmployee(employee, user));
       setEmployees(employeesWithAttendance);
       setAttendance(attendanceList.filter((row) =>
         canManageAttendance ||
-        isCurrentUserEmployee(row.employee as EmployeeOption | undefined, user)
+        isCurrentUserAttendance(row, user)
       ));
     } catch (err) {
       console.error("Fetch Daily Attendance Error:", err);

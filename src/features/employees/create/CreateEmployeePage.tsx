@@ -142,7 +142,7 @@ export default function CreateEmployeePage() {
         }
         if ((shiftRes.data.data || []).length === 0) {
           setShiftTypes([
-            { id: 1, shift_name: "General Day Shift", type: "fixed", start_time: "09:00", end_time: "18:00" },
+            { id: 1, type: "morning", start_time: "09:00", end_time: "18:00", break_minutes: 60, late_grace_minutes: 15, shift_hours: 8 },
           ]);
         }
       } catch (err) {
@@ -440,7 +440,7 @@ export default function CreateEmployeePage() {
                           <option value="">Select Shift</option>
                           {shiftTypes.map((shift) => (
                             <option key={shift.id} value={shift.id}>
-                              {shift.shift_name} {shift.start_time && shift.end_time ? `(${shift.start_time}-${shift.end_time})` : ""}
+                              {shift.type} {shift.start_time && shift.end_time ? `(${shift.start_time}-${shift.end_time})` : ""}
                             </option>
                           ))}
                        </select>
