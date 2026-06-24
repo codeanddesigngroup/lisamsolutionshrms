@@ -17,17 +17,22 @@ import {
   Info,
   ChevronDown,
   Clock,
+  RefreshCw,
   UserCheck,
   UserRound
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import { useToast } from "@/context/ToastContext";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const optionApiUrls = {
-  designations: `${process.env.NEXT_PUBLIC_API_BASE_URL}/designations`,
-  departments: `${process.env.NEXT_PUBLIC_API_BASE_URL}/departments`,
-  shifts: `${process.env.NEXT_PUBLIC_API_BASE_URL}/shifts`,
+  designations: `${API_BASE_URL}/designations`,
+  departments: `${API_BASE_URL}/departments`,
+  shifts: `${API_BASE_URL}/shifts`,
+  employees: `${API_BASE_URL}/employees`,
 };
 
 type DesignationOption = {
@@ -57,28 +62,28 @@ const getResponseData = async <T,>(response: Response): Promise<T[]> => {
 const staticPermissionActions = ["View", "Create", "Edit", "Delete", "Approve", "Export", "Manage"] as const;
 
 const staticPermissionModules = [
-  { label: "Dashboards", group: "Core", actions: ["View"], enabled: ["View"] },
-  { label: "Company Profile", group: "Core", actions: ["View", "Edit", "Manage"], enabled: [] },
-  { label: "Employees", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Export"], enabled: [] },
-  { label: "Clients", group: "Core", actions: ["View", "Create", "Edit", "Delete", "Export"], enabled: [] },
-  { label: "HR Setup", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
-  { label: "Shift Types", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
-  { label: "Attendance", group: "HR", actions: ["View", "Create", "Edit", "Approve", "Export", "Manage"], enabled: ["View", "Create"] },
-  { label: "Leaves", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Approve", "Manage"], enabled: ["View", "Create", "Delete"] },
-  { label: "Holidays", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
-  { label: "Projects", group: "Work", actions: ["View", "Create", "Edit", "Delete", "Export", "Manage"], enabled: ["View"] },
-  { label: "Tasks", group: "Work", actions: ["View", "Create", "Edit", "Delete", "Export", "Manage"], enabled: ["View"] },
-  { label: "Leads", group: "Core", actions: ["View", "Create", "Edit", "Delete", "Export", "Manage"], enabled: [] },
-  { label: "Contracts", group: "Work", actions: ["View", "Create", "Edit", "Delete", "Export"], enabled: [] },
-  { label: "Finance", group: "Finance", actions: ["View", "Create", "Edit", "Delete", "Approve", "Export", "Manage"], enabled: [] },
-  { label: "Payroll", group: "Finance", actions: ["View", "Create", "Edit", "Approve", "Export", "Manage"], enabled: ["View"] },
-  { label: "Recruitment", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
-  { label: "Reports", group: "Core", actions: ["View", "Export"], enabled: [] },
-  { label: "Messages", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View", "Create", "Edit", "Delete", "Manage"] },
-  { label: "Events", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
-  { label: "Notice Board", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
-  { label: "Billing", group: "Finance", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
-  { label: "Settings", group: "Settings", actions: ["View", "Edit", "Manage"], enabled: [] },
+  { key: "dashboard", label: "Dashboards", group: "Core", actions: ["View"], enabled: ["View"] },
+  { key: "company", label: "Company Profile", group: "Core", actions: ["View", "Edit", "Manage"], enabled: [] },
+  { key: "employees", label: "Employees", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Export"], enabled: [] },
+  { key: "clients", label: "Clients", group: "Core", actions: ["View", "Create", "Edit", "Delete", "Export"], enabled: [] },
+  { key: "hr", label: "HR Setup", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
+  { key: "shifts", label: "Shift Types", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
+  { key: "attendance", label: "Attendance", group: "HR", actions: ["View", "Create", "Edit", "Approve", "Export", "Manage"], enabled: ["View", "Create"] },
+  { key: "leaves", label: "Leaves", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Approve", "Manage"], enabled: ["View", "Create", "Delete"] },
+  { key: "holidays", label: "Holidays", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
+  { key: "projects", label: "Projects", group: "Work", actions: ["View", "Create", "Edit", "Delete", "Export", "Manage"], enabled: ["View"] },
+  { key: "tasks", label: "Tasks", group: "Work", actions: ["View", "Create", "Edit", "Delete", "Export", "Manage"], enabled: ["View"] },
+  { key: "leads", label: "Leads", group: "Core", actions: ["View", "Create", "Edit", "Delete", "Export", "Manage"], enabled: [] },
+  { key: "contracts", label: "Contracts", group: "Work", actions: ["View", "Create", "Edit", "Delete", "Export"], enabled: [] },
+  { key: "finance", label: "Finance", group: "Finance", actions: ["View", "Create", "Edit", "Delete", "Approve", "Export", "Manage"], enabled: [] },
+  { key: "payroll", label: "Payroll", group: "Finance", actions: ["View", "Create", "Edit", "Approve", "Export", "Manage"], enabled: ["View"] },
+  { key: "recruitment", label: "Recruitment", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
+  { key: "reports", label: "Reports", group: "Core", actions: ["View", "Export"], enabled: [] },
+  { key: "messages", label: "Messages", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View", "Create", "Edit", "Delete", "Manage"] },
+  { key: "events", label: "Events", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
+  { key: "notices", label: "Notice Board", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
+  { key: "billing", label: "Billing", group: "Finance", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
+  { key: "settings", label: "Settings", group: "Settings", actions: ["View", "Edit", "Manage"], enabled: [] },
 ];
 
 type PermissionActionLabel = (typeof staticPermissionActions)[number];
@@ -90,12 +95,17 @@ const initialPermissionState = staticPermissionModules.reduce<PermissionState>((
 }, {});
 
 export default function CreateEmployeePage() {
+  const { showToast } = useToast();
   const [permissionState, setPermissionState] = useState<PermissionState>(initialPermissionState);
   const [designations, setDesignations] = useState<DesignationOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedModuleCount = Object.values(permissionState).filter((actions) => actions.length > 0).length;
+  const permissionKeys = staticPermissionModules.flatMap((moduleItem) =>
+    (permissionState[moduleItem.label] || []).map((action) => `${moduleItem.key}.${action.toLowerCase()}`),
+  );
 
   useEffect(() => {
     const fetchDropdownOptions = async () => {
@@ -152,6 +162,53 @@ export default function CreateEmployeePage() {
     });
   };
 
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setIsSubmitting(true);
+
+    const formData = new FormData(form);
+    const payload = {
+      employee_id: String(formData.get("employee_id") || "").trim(),
+      name: String(formData.get("name") || "").trim(),
+      email: String(formData.get("email") || "").trim(),
+      password: String(formData.get("password") || ""),
+      gender: String(formData.get("gender") || ""),
+      designation_id: String(formData.get("designation") || "") || null,
+      department_id: String(formData.get("department") || "") || null,
+      shift_type_id: String(formData.get("shift_type_id") || "") || null,
+      joining_date: String(formData.get("joining_date") || "") || null,
+      hourly_rate: String(formData.get("hourly_rate") || "") || null,
+      mobile: String(formData.get("mobile") || "") || null,
+      login: formData.get("login_enabled") ? "enable" : "disable",
+      status: formData.get("status_active") ? "active" : "deactive",
+      permissions: permissionKeys,
+    };
+
+    try {
+      const response = await fetch(optionApiUrls.employees, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result?.message || result?.error || "Failed to create employee.");
+      }
+
+      form.reset();
+      setPermissionState(initialPermissionState);
+      showToast("Employee created successfully.", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to create employee.", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-5xl mx-auto pb-10">
@@ -176,7 +233,7 @@ export default function CreateEmployeePage() {
           </Link>
         </div>
 
-        <form className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {/* Section 1: Basic Information */}
           <Card className="p-8 border-none shadow-sm bg-white rounded-2xl">
             <div className="flex items-center space-x-3 mb-8 border-l-4 border-primary pl-4">
@@ -191,7 +248,7 @@ export default function CreateEmployeePage() {
                   <input
                     name="employee_id"
                     defaultValue=""
-                    placeholder="EMP-001"
+                    placeholder="01"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
@@ -502,6 +559,7 @@ export default function CreateEmployeePage() {
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
+                      name="login_enabled"
                       className="sr-only peer"
                       defaultChecked
                     />
@@ -524,6 +582,7 @@ export default function CreateEmployeePage() {
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
+                      name="status_active"
                       className="sr-only peer"
                       defaultChecked
                     />
@@ -540,15 +599,18 @@ export default function CreateEmployeePage() {
               <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400">
                 <Info className="h-5 w-5" />
               </div>
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed max-w-sm">
-                Review all credentials before saving.
-              </p>
+              <div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed max-w-sm">
+                  Review all credentials before saving.
+                </p>
+              </div>
             </div>
             <Button
-              type="button"
+              type="submit"
+              disabled={isSubmitting}
               className="w-full sm:w-auto bg-primary text-white text-[10px] font-black px-12 h-14 uppercase tracking-[0.2em] shadow-2xl shadow-primary/30 hover:scale-[1.05] active:scale-95 transition-all flex items-center justify-center rounded-2xl"
             >
-              <><Save className="h-5 w-5 mr-3" /> Complete Onboarding</>
+              {isSubmitting ? <RefreshCw className="h-5 w-5 animate-spin" /> : <><Save className="h-5 w-5 mr-3" /> Complete Onboarding</>}
             </Button>
           </div>
         </form>
