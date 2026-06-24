@@ -14,7 +14,7 @@ import {
   Search,
   Download
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -23,17 +23,18 @@ import { useToast } from "@/context/ToastContext";
 import { getStoredRole } from "@/lib/session";
 import type { UserRole } from "@/lib/auth-contract";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
 type EmployeeRecord = {
   id: number | string;
   name: string;
   email?: string;
   role?: string;
   status?: string;
-  employee_detail?: {
-    designation?: { name?: string };
-    department?: { team_name?: string };
-    joining_date?: string;
-  };
+  designation?: { name?: string };
+  department?: { name?: string; team_name?: string };
+  shift_type?: { type?: string; shift_name?: string };
+  joining_date?: string;
 };
 
 export default function EmployeesPage() {
@@ -54,38 +55,49 @@ export default function EmployeesPage() {
 
   const [deletingEmployeeId, setDeletingEmployeeId] = useState<number | string | null>(null);
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get("/employee?include=employeeDetail,employeeDetail.designation,employeeDetail.department,role");
-      setEmployees(Array.isArray(response.data?.data) ? response.data.data : []);
+      const response = await fetch(`${API_BASE_URL}/employees`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result?.message || result?.error || "Failed to fetch employees");
+      }
+
+      setEmployees(Array.isArray(result?.data) ? result.data : []);
     } catch (err) {
       console.error("Fetch Employees Error:", err);
+      showToast(err instanceof Error ? err.message : "Failed to fetch employees", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEmployees();
-  }, []);
+  }, [fetchEmployees]);
+
+  const getEmployeeDesignation = (employee: EmployeeRecord) => employee.designation?.name || "";
+  const getEmployeeDepartment = (employee: EmployeeRecord) => employee.department?.name || employee.department?.team_name || "";
+  const getEmployeeJoiningDate = (employee: EmployeeRecord) => employee.joining_date || "";
 
   const filteredEmployees = employees.filter(emp => {
     const query = searchTerm.trim().toLowerCase();
-    const joiningDate = emp.employee_detail?.joining_date || "";
+    const joiningDate = getEmployeeJoiningDate(emp);
     const searchableText = [
       emp.name,
       emp.email,
       emp.role,
       emp.status,
-      emp.employee_detail?.designation?.name,
-      emp.employee_detail?.department?.team_name,
+      getEmployeeDesignation(emp),
+      getEmployeeDepartment(emp),
     ].filter(Boolean).join(" ").toLowerCase();
     const searchMatch = !query || searchableText.includes(query);
     const statusMatch = statusFilter === "all" || emp.status === statusFilter;
-    const deptMatch = deptFilter === "all" || emp.employee_detail?.department?.team_name === deptFilter;
-    const desigMatch = designationFilter === "all" || emp.employee_detail?.designation?.name === designationFilter;
+    const deptMatch = deptFilter === "all" || getEmployeeDepartment(emp) === deptFilter;
+    const desigMatch = designationFilter === "all" || getEmployeeDesignation(emp) === designationFilter;
     const empMatch = employeeFilter === "all" || emp.id.toString() === employeeFilter;
     const roleMatch = roleFilter === "all" || (emp.role || "employee") === roleFilter;
     const startMatch = !startDate || (Boolean(joiningDate) && joiningDate >= startDate);
@@ -126,9 +138,9 @@ export default function EmployeesPage() {
         employee.name,
         employee.email || "",
         employee.role || "employee",
-        employee.employee_detail?.designation?.name || "",
-        employee.employee_detail?.department?.team_name || "",
-        employee.employee_detail?.joining_date || "",
+        getEmployeeDesignation(employee),
+        getEmployeeDepartment(employee),
+        getEmployeeJoiningDate(employee),
         employee.status || "",
       ]),
     ];
@@ -142,8 +154,8 @@ export default function EmployeesPage() {
     URL.revokeObjectURL(url);
   };
 
-  const departments = Array.from(new Set(employees.map(e => e.employee_detail?.department?.team_name).filter(Boolean)));
-  const designations = Array.from(new Set(employees.map(e => e.employee_detail?.designation?.name).filter(Boolean)));
+  const departments = Array.from(new Set(employees.map(getEmployeeDepartment).filter(Boolean)));
+  const designations = Array.from(new Set(employees.map(getEmployeeDesignation).filter(Boolean)));
 
   return (
     <DashboardLayout>
@@ -352,11 +364,11 @@ export default function EmployeesPage() {
                       </div>
                     </td>
                     <td>
-                       <div>{emp.employee_detail?.designation?.name || 'N/A'}</div>
-                       <div className="text-[10px] text-primary">{emp.employee_detail?.department?.team_name || 'N/A'}</div>
+                       <div>{getEmployeeDesignation(emp) || 'N/A'}</div>
+                       <div className="text-[10px] text-primary">{getEmployeeDepartment(emp) || 'N/A'}</div>
                     </td>
                     <td>
-                       {emp.employee_detail?.joining_date ? new Date(emp.employee_detail.joining_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                       {getEmployeeJoiningDate(emp) ? new Date(getEmployeeJoiningDate(emp)).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                     </td>
                     <td>
                       <span className={`label ${
