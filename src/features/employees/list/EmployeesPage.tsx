@@ -248,18 +248,6 @@ export default function EmployeesPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block mb-1">Role</label>
-              <select 
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="form-control"
-              >
-                <option value="all">All Roles</option>
-                <option value="employee">Employee</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
               <label className="block mb-1">Designation</label>
               <select 
                 value={designationFilter}

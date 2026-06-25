@@ -89,7 +89,7 @@ export default function TeamsPage() {
         <Card className="p-0 overflow-hidden border border-gray-100">
 
           {/* HEADER ROW */}
-          <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+          <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
             <h2 className="text-xs font-black uppercase tracking-widest text-gray-600">
               Department List
             </h2>
@@ -137,7 +137,7 @@ export default function TeamsPage() {
                   {departments.map((dept, i) => (
                     <tr
                       key={dept.id}
-                      className="border-b hover:bg-gray-50 transition"
+                      className="hover:bg-gray-50 transition"
                     >
                       <td className="p-4 text-xs font-bold text-gray-400">
                         {i + 1}
