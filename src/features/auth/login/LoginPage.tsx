@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import Grainient from "@/components/backgrounds/Grainient";
 import api from "@/lib/api";
-import { makeDevUserFromEmail, type LoginResponse } from "@/lib/auth-contract";
+import { type LoginResponse } from "@/lib/auth-contract";
 import { useAuth } from "@/context/AuthContext";
 
 const loginSchema = z.object({
@@ -25,6 +25,7 @@ function LoginFormContent() {
   const searchParams = useSearchParams();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const redirectTo = searchParams.get("next") || undefined;
 
   const {
@@ -42,6 +43,7 @@ function LoginFormContent() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setLoading(true);
+    setLoginError("");
     try {
       const response = await api.post<{ data: LoginResponse }>("/auth/login", {
         email: data.email,
@@ -50,10 +52,9 @@ function LoginFormContent() {
 
       const { token, user } = response.data.data;
       login(token, user, data.rememberMe, redirectTo);
-    } catch (err: unknown) {
-      console.warn("Login API unavailable, using dev role fallback:", err);
-      const devUser = makeDevUserFromEmail(data.email);
-      login("frontend_dev_token", devUser, data.rememberMe, redirectTo);
+    } catch (err: any) {
+      console.warn("Login failed:", err);
+      setLoginError(err?.response?.data?.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
@@ -89,6 +90,12 @@ function LoginFormContent() {
               {/* </div> */}
 
               <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
+                {loginError && (
+                  <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[10px] font-bold text-red-600">
+                    {loginError}
+                  </div>
+                )}
+
                 <div>
                   <div
                     className={`login-glass-field flex items-center rounded-full border px-3 transition ${errors.email ? "border-red-400/80" : "border-slate-200"}`}
