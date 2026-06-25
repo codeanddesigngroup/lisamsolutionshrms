@@ -19,10 +19,9 @@ export const AdminsTable = ({ admins, loading, companyMap, onStatusToggle, onEdi
       <table className="w-full text-left">
         <thead className="border-b border-gray-100 bg-gray-50">
           <tr>
-            <th className="min-w-64 px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Admin</th>
+            <th className="min-w-64 px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Name</th>
             <th className="min-w-52 px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Company</th>
             <th className="min-w-40 px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Role</th>
-            <th className="min-w-56 px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Modules</th>
             <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Status</th>
             <th className="px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-gray-500">Action</th>
           </tr>
@@ -54,22 +53,8 @@ export const AdminsTable = ({ admins, loading, companyMap, onStatusToggle, onEdi
                 </td>
                 <td className="px-6 py-4">
                   <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-indigo-600">
-                    {roleLabel}
+                    {admin.role}
                   </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex max-w-md flex-wrap gap-1.5">
-                    {modules.slice(0, 5).map((moduleKey) => (
-                      <span key={moduleKey} className="rounded-full bg-blue-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-blue-600">
-                        {moduleKey}
-                      </span>
-                    ))}
-                    {modules.length > 5 && (
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
-                        +{modules.length - 5}
-                      </span>
-                    )}
-                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${admin.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>

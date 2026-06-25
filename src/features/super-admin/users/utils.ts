@@ -59,6 +59,7 @@ export const emptyAdminForm: AdminFormState = {
   email: "",
   password: "",
   company_id: "",
+  role_id: "",
   status: "active",
   permissions: ["dashboard.view", profilePermission],
 };

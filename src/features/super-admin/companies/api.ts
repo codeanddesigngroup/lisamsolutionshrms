@@ -1,5 +1,4 @@
 import api from "@/lib/api";
-import apiClient from "@/lib/api-client";
 import type { LoginResponse } from "@/lib/auth-contract";
 import type { Company, CompanyFormState, CreateCompanyAdminPayload } from "./types";
 
@@ -23,5 +22,6 @@ export const loginAsCompany = async (companyId: number | string) => {
 };
 
 export const createCompanyWithAdmin = async (payload: CreateCompanyAdminPayload) => {
-  await apiClient.create("companies", payload);
+  const response = await api.post("/companies", payload.company);
+  return response.data.data as Company | undefined;
 };

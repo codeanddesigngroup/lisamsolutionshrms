@@ -28,8 +28,8 @@ export const CompaniesTable = ({
             <th className="w-16">#</th>
             <th>Name</th>
             <th>Email</th>
+            <th>Website</th>
             <th>Status</th>
-            <th>Last Activity</th>
             <th className="text-right">Action</th>
           </tr>
         </thead>
@@ -39,12 +39,12 @@ export const CompaniesTable = ({
               <td>{index + 1}</td>
               <td>{getCompanyName(company)}</td>
               <td>{company.email}</td>
+              <td>{company.website}</td>
               <td>
                 <span className={`label ${company.status === "active" ? "label-success" : "label-danger"}`}>
                   {company.status}
                 </span>
               </td>
-              <td>{company.lastLogin}</td>
               <td className="text-right">
                 <div className="flex justify-end space-x-1">
                   <button

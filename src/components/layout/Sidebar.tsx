@@ -53,7 +53,7 @@ const menuItems: MenuItem[] = [
     submenu: [
       { label: "Dashboard", href: "/super-admin/dashboard" },
       { label: "Company / Branches", href: "/super-admin/companies" },
-      { label: "Admins", href: "/super-admin/admins" },
+      { label: "Users", href: "/super-admin/users" },
       { label: "Packages", href: "/super-admin/packages" },
       { label: "Invoices", href: "/super-admin/invoices" },
       { label: "Settings", href: "/super-admin/settings" },
@@ -228,7 +228,7 @@ const hiddenSidebarLabels = new Set(["FAQ", "Search"]);
 const superAdminMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/super-admin/dashboard" },
   { icon: Users, label: "Company / Branches", href: "/super-admin/companies" },
-  { icon: Shield, label: "Admins", href: "/super-admin/admins" },
+  { icon: Shield, label: "Users", href: "/super-admin/users" },
   { icon: ShoppingBag, label: "Packages", href: "/super-admin/packages" },
   { icon: DollarSign, label: "Invoices", href: "/super-admin/invoices" },
   { icon: Settings, label: "Settings", href: "/super-admin/settings" },

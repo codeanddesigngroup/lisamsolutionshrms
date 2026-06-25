@@ -109,6 +109,7 @@ export const useSuperAdminAdmins = () => {
       email: admin.email || "",
       password: String(admin.password || ""),
       company_id: getAdminCompanyId(admin),
+      role_id: String(admin.role_id || admin.role_record?.id || ""),
       status: admin.status || "active",
       permissions: normalizePermissions(admin.permissions || []),
     });
@@ -165,6 +166,7 @@ export const useSuperAdminAdmins = () => {
       email: form.email.trim(),
       password: form.password.trim() || undefined,
       role: "admin" as const,
+      role_id: form.role_id,
       company_id: form.company_id,
       status: form.status,
       permissions: nextPermissions,

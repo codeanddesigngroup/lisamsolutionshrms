@@ -7,14 +7,21 @@ export type Company = {
   status?: string;
 };
 
+export type Role = {
+  id: number | string;
+  name: string;
+};
+
 export type AdminAccount = {
   id: number | string;
   name: string;
   email: string;
   password?: string;
-  role: "admin";
+  role: string;
   company_id: number | string;
+  role_id?: number | string;
   company?: Company;
+  role_record?: Role;
   status: "active" | "inactive";
   permissions: PermissionKey[];
   modules?: string[];
@@ -27,6 +34,7 @@ export type AdminFormState = {
   email: string;
   password: string;
   company_id: string;
+  role_id: string;
   status: AdminAccount["status"];
   permissions: PermissionKey[];
 };
@@ -42,7 +50,8 @@ export type AdminSavePayload = {
   name: string;
   email: string;
   password?: string;
-  role: "admin";
+  role?: string;
+  role_id?: string;
   company_id: string;
   status: AdminAccount["status"];
   permissions: PermissionKey[];
