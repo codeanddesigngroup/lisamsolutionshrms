@@ -5,10 +5,10 @@ import Button from "@/components/ui/Button";
 import { Plus, Calendar, Check, X, Star, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { getHolidayDate, getLeaveDate, getLeaveEmployeeId, parseOfficeOpenDays, calculateAttendanceStatus, ShiftDefinition } from "@/lib/hr-utils";
+import { attendanceService } from "@/services/attendance/attendance.service";
 
 type ShiftSummary = {
   id?: number | string;
@@ -104,19 +104,13 @@ export default function AttendanceSummaryPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [employeeResponse, attendanceResponse, holidayResponse, leaveResponse, settingsResponse] = await Promise.all([
-        api.get("/employee"),
-        api.get("/attendance"),
-        api.get("/holidays"),
-        api.get("/leaves"),
-        api.get("/attendance-settings"),
-      ]);
-      const employeeList = (employeeResponse.data.data || []) as EmployeeOption[];
-      const attendanceList = (attendanceResponse.data.data || []) as AttendanceRecord[];
-      const holidayList = (holidayResponse.data.data || []) as HolidayRecord[];
-      const leaveList = (leaveResponse.data.data || []) as LeaveRecord[];
-      const settingsRecords = settingsResponse.data.data;
-      const attendanceSettings = Array.isArray(settingsRecords) ? settingsRecords[0] : settingsRecords;
+      const employeeRecords = await attendanceService.getEmployees();
+      const employeeList = employeeRecords as EmployeeOption[];
+      const startDate = getDateForDay(year, month, 1);
+      const endDate = getDateForDay(year, month, new Date(year, month, 0).getDate());
+      const attendanceList = (await attendanceService.getRecords({ startDate, endDate, limit: 500 }, employeeRecords)) as AttendanceRecord[];
+      const holidayList: HolidayRecord[] = [];
+      const leaveList: LeaveRecord[] = [];
 
       const employeesWithAttendance = canManageAttendance
         ? employeeList
@@ -128,7 +122,7 @@ export default function AttendanceSummaryPage() {
       ));
       setHolidays(holidayList);
       setLeaves(canManageAttendance ? leaveList : leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(user?.id || "") || leave.user?.name === user?.name || leave.employee?.name === user?.name));
-      setOfficeOpenDays(parseOfficeOpenDays(attendanceSettings?.office_open_days));
+      setOfficeOpenDays(parseOfficeOpenDays(undefined));
     } catch (err) {
       console.error("Fetch Attendance Summary Error:", err);
       showToast("Failed to load attendance summary", "error");

@@ -8,7 +8,6 @@ import AttendanceOverrideModal, {
   AttendanceEmployeeOption,
   AttendanceRecordForOverride,
 } from "@/features/attendance/components/AttendanceOverrideModal";
-import api from "@/lib/api";
 import {
   calculateAttendanceStatus,
   calculateLateAfterGraceMinutes,
@@ -21,6 +20,7 @@ import {
   parseOfficeOpenDays,
   ShiftDefinition,
 } from "@/lib/hr-utils";
+import { attendanceService } from "@/services/attendance/attendance.service";
 import { Activity, AlertTriangle, CalendarDays, Clock, Cpu, Edit3, RefreshCw, ShieldCheck, TimerReset, Users } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -54,6 +54,7 @@ type AttendanceRecord = AttendanceRecordForOverride & {
   manual_override?: boolean;
   override_reason?: string;
   override_history?: unknown[];
+  device_serial?: string | null;
 };
 
 type HolidayRecord = { date?: string; holiday_date?: string; name?: string; occassion?: string };
@@ -121,8 +122,8 @@ const getSourceLabel = (attendance?: AttendanceRecord) => {
 };
 
 const getDeviceLabel = (attendance?: AttendanceRecord) => {
-  const deviceId = attendance?.attendance_device_id || attendance?.device_id;
-  return deviceId ? `Device ${deviceId}` : "No device";
+  const deviceSerial = attendance?.device_serial || attendance?.attendance_device_id || attendance?.device_id;
+  return deviceSerial ? `${deviceSerial}` : "No device";
 };
 
 const isPastDate = (date: string) => date < todayString();
@@ -187,19 +188,11 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const fetchAttendance = async () => {
     setLoading(true);
     try {
-      const [employeeResponse, attendanceResponse, holidayResponse, leaveResponse, settingsResponse] = await Promise.all([
-        api.get("/employee"),
-        api.get("/attendance"),
-        api.get("/holidays"),
-        api.get("/leaves"),
-        api.get("/attendance-settings"),
-      ]);
-      const employeeList = (employeeResponse.data.data || []) as EmployeeOption[];
-      const attendanceList = (attendanceResponse.data.data || []) as AttendanceRecord[];
-      const holidayList = (holidayResponse.data.data || []) as HolidayRecord[];
-      const leaveList = (leaveResponse.data.data || []) as LeaveRecord[];
-      const settingsRecords = settingsResponse.data.data;
-      const attendanceSettings = Array.isArray(settingsRecords) ? settingsRecords[0] : settingsRecords;
+      const employeeRecords = await attendanceService.getEmployees();
+      const employeeList = employeeRecords as EmployeeOption[];
+      const attendanceList = (await attendanceService.getRecords({ workDate: date, limit: 500 }, employeeRecords)) as AttendanceRecord[];
+      const holidayList: HolidayRecord[] = [];
+      const leaveList: LeaveRecord[] = [];
 
       const visibleEmployees = canManageAttendance
         ? employeeList
@@ -208,7 +201,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       setAttendance(canManageAttendance ? attendanceList : attendanceList.filter((row) => isCurrentUserAttendance(row, user)));
       setHolidays(holidayList);
       setLeaves(canManageAttendance ? leaveList : leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(user?.id || "") || leave.user?.name === user?.name || leave.employee?.name === user?.name));
-      setOfficeOpenDays(parseOfficeOpenDays(attendanceSettings?.office_open_days));
+      setOfficeOpenDays(parseOfficeOpenDays(undefined));
     } catch (err) {
       console.error("Fetch Daily Attendance Error:", err);
       showToast("Failed to load attendance", "error");
