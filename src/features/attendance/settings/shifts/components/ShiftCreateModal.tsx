@@ -19,12 +19,14 @@ type ShiftCreateModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onCreated?: (shift: ShiftTypeOption) => void;
+  companyId?: string;
 };
 
 export default function ShiftCreateModal({
   isOpen,
   onClose,
   onCreated,
+  companyId = "",
 }: ShiftCreateModalProps) {
   const { showToast } = useToast();
 
@@ -67,6 +69,11 @@ export default function ShiftCreateModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!companyId) {
+      showToast("No company is assigned to this login. Shift cannot be created.", "error");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -77,7 +84,7 @@ export default function ShiftCreateModal({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({ ...formData, company_id: companyId }),
         }
       );
 

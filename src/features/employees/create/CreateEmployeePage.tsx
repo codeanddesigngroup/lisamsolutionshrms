@@ -24,6 +24,7 @@ import {
 import { type FormEvent, useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -96,6 +97,7 @@ const initialPermissionState = staticPermissionModules.reduce<PermissionState>((
 
 export default function CreateEmployeePage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [permissionState, setPermissionState] = useState<PermissionState>(initialPermissionState);
   const [designations, setDesignations] = useState<DesignationOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
@@ -106,14 +108,20 @@ export default function CreateEmployeePage() {
   const permissionKeys = staticPermissionModules.flatMap((moduleItem) =>
     (permissionState[moduleItem.label] || []).map((action) => `${moduleItem.key}.${action.toLowerCase()}`),
   );
+  const companyId = user?.company_id ? String(user.company_id) : "";
+  const withCompanyQuery = (url: string) => {
+    if (!companyId) return url;
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}company_id=${encodeURIComponent(companyId)}`;
+  };
 
   useEffect(() => {
     const fetchDropdownOptions = async () => {
       try {
         const [designationResponse, departmentResponse, shiftResponse] = await Promise.all([
-          fetch(optionApiUrls.designations),
-          fetch(optionApiUrls.departments),
-          fetch(optionApiUrls.shifts),
+          fetch(withCompanyQuery(optionApiUrls.designations)),
+          fetch(withCompanyQuery(optionApiUrls.departments)),
+          fetch(withCompanyQuery(optionApiUrls.shifts)),
         ]);
 
         const [designationOptions, departmentOptions, shiftOptions] = await Promise.all([
@@ -134,7 +142,7 @@ export default function CreateEmployeePage() {
     };
 
     fetchDropdownOptions();
-  }, []);
+  }, [companyId]);
 
   const togglePermission = (moduleLabel: string, action: PermissionActionLabel) => {
     setPermissionState((current) => {
@@ -164,11 +172,17 @@ export default function CreateEmployeePage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!companyId) {
+      showToast("No company is assigned to this login. Employee cannot be created.", "error");
+      return;
+    }
+
     const form = event.currentTarget;
     setIsSubmitting(true);
 
     const formData = new FormData(form);
     const payload = {
+      company_id: companyId,
       employee_id: String(formData.get("employee_id") || "").trim(),
       name: String(formData.get("name") || "").trim(),
       email: String(formData.get("email") || "").trim(),

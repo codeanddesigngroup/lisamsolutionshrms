@@ -188,9 +188,10 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const fetchAttendance = async () => {
     setLoading(true);
     try {
-      const employeeRecords = await attendanceService.getEmployees();
+      const companyId = user?.company_id ? String(user.company_id) : "";
+      const employeeRecords = await attendanceService.getEmployees({ companyId });
       const employeeList = employeeRecords as EmployeeOption[];
-      const attendanceList = (await attendanceService.getRecords({ workDate: date, limit: 500 }, employeeRecords)) as AttendanceRecord[];
+      const attendanceList = (await attendanceService.getRecords({ companyId, workDate: date, limit: 500 }, employeeRecords)) as AttendanceRecord[];
       const holidayList: HolidayRecord[] = [];
       const leaveList: LeaveRecord[] = [];
 

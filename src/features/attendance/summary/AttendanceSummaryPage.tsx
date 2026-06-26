@@ -104,11 +104,12 @@ export default function AttendanceSummaryPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const employeeRecords = await attendanceService.getEmployees();
+      const companyId = user?.company_id ? String(user.company_id) : "";
+      const employeeRecords = await attendanceService.getEmployees({ companyId });
       const employeeList = employeeRecords as EmployeeOption[];
       const startDate = getDateForDay(year, month, 1);
       const endDate = getDateForDay(year, month, new Date(year, month, 0).getDate());
-      const attendanceList = (await attendanceService.getRecords({ startDate, endDate, limit: 500 }, employeeRecords)) as AttendanceRecord[];
+      const attendanceList = (await attendanceService.getRecords({ companyId, startDate, endDate, limit: 500 }, employeeRecords)) as AttendanceRecord[];
       const holidayList: HolidayRecord[] = [];
       const leaveList: LeaveRecord[] = [];
 

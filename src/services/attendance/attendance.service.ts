@@ -31,6 +31,7 @@ type NodeShift = {
 
 type NodeEmployee = {
   id: number | string;
+  company_id?: number | string;
   employee_id: number | string;
   name: string;
   email?: string;
@@ -45,6 +46,8 @@ type NodeEmployee = {
 
 type NodeAttendanceRecord = {
   id: number | string;
+  companyId?: number | string;
+  company_id?: number | string;
   employeeId?: number | string;
   employee_id?: number | string;
   workDate?: string;
@@ -82,6 +85,7 @@ export type AttendanceEmployee = NodeEmployee & {
 
 export type AttendanceRecord = {
   id: number | string;
+  company_id?: number | string;
   employee_id?: number | string;
   employee_code?: number | string;
   user_id?: number | string;
@@ -168,12 +172,14 @@ const normalizeAttendanceRecord = (
 ): AttendanceRecord => {
   const employeeCode = String(record.employeeId ?? record.employee_id ?? "");
   const employee = findEmployeeForAttendance(employees, employeeCode);
+  const companyId = record.companyId ?? record.company_id ?? employee?.company_id;
   const checkIn = record.checkIn ?? record.check_in ?? null;
   const checkOut = record.checkOut ?? record.check_out ?? null;
   const deviceSerial = record.deviceSerial ?? record.device_serial ?? null;
 
   return {
     id: record.id,
+    company_id: companyId,
     employee_id: employee?.id ?? employeeCode,
     employee_code: employeeCode,
     user_id: employee?.id,
@@ -192,27 +198,38 @@ const normalizeAttendanceRecord = (
 };
 
 export const attendanceService = {
-  getEmployees: async (): Promise<AttendanceEmployee[]> => {
-    const response = await nodeApi.get<ApiEnvelope<NodeEmployee[]> & { count?: number }>("/employees");
+  getEmployees: async (query: { companyId?: string | number; company_id?: string | number } = {}): Promise<AttendanceEmployee[]> => {
+    const companyId = query.companyId ?? query.company_id;
+    const response = await nodeApi.get<ApiEnvelope<NodeEmployee[]> & { count?: number }>("/employees", {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
     return (response.data.data || []).map(normalizeEmployee);
   },
 
   getRecords: async (
-    query: { employeeId?: string | number; workDate?: string; startDate?: string; endDate?: string; limit?: number } = {},
+    query: { employeeId?: string | number; companyId?: string | number; company_id?: string | number; workDate?: string; startDate?: string; endDate?: string; limit?: number } = {},
     employees: AttendanceEmployee[] = [],
   ): Promise<AttendanceRecord[]> => {
+    const { companyId, company_id, ...restQuery } = query;
     const response = await nodeApi.get<ApiEnvelope<NodeAttendanceRecord[]> & { count?: number }>("/attendance", {
-      params: query,
+      params: {
+        ...restQuery,
+        ...(companyId || company_id ? { company_id: companyId ?? company_id } : {}),
+      },
     });
     return (response.data.data || []).map((record) => normalizeAttendanceRecord(record, employees));
   },
 
   getTodayRecords: async (
-    query: { employeeId?: string | number } = {},
+    query: { employeeId?: string | number; companyId?: string | number; company_id?: string | number } = {},
     employees: AttendanceEmployee[] = [],
   ): Promise<AttendanceRecord[]> => {
+    const { companyId, company_id, ...restQuery } = query;
     const response = await nodeApi.get<ApiEnvelope<NodeAttendanceRecord[]> & { count?: number }>("/attendance/today", {
-      params: query,
+      params: {
+        ...restQuery,
+        ...(companyId || company_id ? { company_id: companyId ?? company_id } : {}),
+      },
     });
     return (response.data.data || []).map((record) => normalizeAttendanceRecord(record, employees));
   },

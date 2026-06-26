@@ -14,6 +14,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Modal from "@/components/ui/Modal";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import ShiftCreateModal from "@/features/attendance/settings/shifts/components/ShiftCreateModal";
 
@@ -29,6 +30,7 @@ interface Shift {
 
 export default function AttendanceShiftsPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -38,12 +40,16 @@ export default function AttendanceShiftsPage() {
 
   const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const companyId = user?.company_id ? String(user.company_id) : "";
+  const shiftsUrl = companyId
+    ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/shifts?company_id=${encodeURIComponent(companyId)}`
+    : `${process.env.NEXT_PUBLIC_API_BASE_URL}/shifts`;
 
   const getShifts = async () => {
     try {
       setLoading(true);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shifts`);
+      const response = await fetch(shiftsUrl);
 
       const result = await response.json();
 
@@ -62,7 +68,7 @@ export default function AttendanceShiftsPage() {
 
   useEffect(() => {
     getShifts();
-  }, []);
+  }, [companyId]);
 
   const openCreate = () => {
     setEditingShift(null);
@@ -238,6 +244,7 @@ export default function AttendanceShiftsPage() {
             closeShiftModal();
             getShifts();
           }}
+          companyId={companyId}
         />
       )}
 

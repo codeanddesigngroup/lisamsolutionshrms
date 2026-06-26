@@ -7,11 +7,13 @@ import { ArrowLeft, Briefcase, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 
 export default function CreateTeamPage() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -24,6 +26,12 @@ export default function CreateTeamPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const companyId = user?.company_id ? String(user.company_id) : "";
+
+    if (!companyId) {
+      showToast("No company is assigned to this login. Department cannot be created.", "error");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -35,6 +43,7 @@ export default function CreateTeamPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          company_id: companyId,
           name,
         }),
       });

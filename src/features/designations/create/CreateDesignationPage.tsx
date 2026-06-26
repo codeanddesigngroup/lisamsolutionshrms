@@ -11,10 +11,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 
 export default function CreateDesignationPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -22,6 +24,12 @@ export default function CreateDesignationPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const companyId = user?.company_id ? String(user.company_id) : "";
+
+    if (!companyId) {
+      showToast("No company is assigned to this login. Designation cannot be created.", "error");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -33,6 +41,7 @@ export default function CreateDesignationPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          company_id: companyId,
           name,
         }),
       });
