@@ -13,6 +13,7 @@ export type DashboardStatCard = {
   value: number;
   icon: LucideIcon;
   color: string;
+  helper: string;
 };
 
 export type RecentCompany = {
