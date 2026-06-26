@@ -14,6 +14,7 @@ export type ApiResource =
   | "currencies"
   | "departments"
   | "designations"
+  | "devices"
   | "discussions"
   | "employees"
   | "estimates"

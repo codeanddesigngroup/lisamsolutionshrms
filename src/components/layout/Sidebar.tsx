@@ -31,6 +31,7 @@ import {
   User,
   Search,
   Shield,
+  Cpu,
 } from "lucide-react";
 
 interface SubItem {
@@ -109,6 +110,7 @@ const menuItems: MenuItem[] = [
       { label: "Leaves", href: "/leaves" },
     ],
   },
+  { icon: Cpu, label: "Device", href: "/device" },
   {
     icon: Layers,
     label: "Work",
