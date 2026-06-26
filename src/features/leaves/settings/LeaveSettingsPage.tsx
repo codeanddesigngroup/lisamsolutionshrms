@@ -20,6 +20,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 
 const leaveColorClasses: Record<string, string> = {
   info: "bg-blue-500 shadow-blue-500/50",
@@ -31,8 +32,10 @@ const leaveColorClasses: Record<string, string> = {
 
 export default function LeaveSettingsPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const companyId = user?.company_id ? String(user.company_id) : "";
   
   // Settings parity with Laravel
   const [leaveStartFrom, setLeaveStartFrom] = useState("joining_date");
@@ -89,6 +92,7 @@ export default function LeaveSettingsPage() {
     setSaving(true);
     try {
       await api.put(`/leaveType/${id}`, { 
+        company_id: companyId,
         leaves: count,
         no_of_leaves: count,
         paid: paid
@@ -104,9 +108,14 @@ export default function LeaveSettingsPage() {
   const handleCreateType = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newType.type_name) return;
+    if (!companyId) {
+      showToast("Company is required to create a leave type", "error");
+      return;
+    }
     setSaving(true);
     try {
       await api.post("/leaveType", {
+        company_id: companyId,
         type_name: newType.type_name,
         color: newType.color,
         no_of_leaves: newType.leave_number,

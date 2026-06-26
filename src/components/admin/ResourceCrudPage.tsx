@@ -18,6 +18,7 @@ import Card from "@/components/ui/Card";
 import Modal from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 
 export type ResourceRecord = Record<string, unknown> & {
   id?: string | number;
@@ -63,6 +64,7 @@ interface ResourceCrudPageProps {
   createButtonLabel?: string;
   idKey?: string;
   statusActions?: ResourceStatusAction[];
+  attachCompanyId?: boolean;
 }
 
 function readByPath(record: ResourceRecord, path: string): unknown {
@@ -131,8 +133,10 @@ export default function ResourceCrudPage({
   createButtonLabel,
   idKey = "id",
   statusActions = [],
+  attachCompanyId = false,
 }: ResourceCrudPageProps) {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [records, setRecords] = useState<ResourceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -186,6 +190,9 @@ export default function ResourceCrudPage({
       accumulator[field.name] = typeof value === "string" ? value : "";
       return accumulator;
     }, {});
+    if (attachCompanyId && user?.company_id) {
+      payload.company_id = String(user.company_id);
+    }
 
     const existingId = editingRecord ? readByPath(editingRecord, idKey) : undefined;
     const normalizedId = typeof existingId === "string" || typeof existingId === "number" ? existingId : undefined;

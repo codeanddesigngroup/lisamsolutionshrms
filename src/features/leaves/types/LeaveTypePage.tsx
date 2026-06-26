@@ -24,6 +24,7 @@ export default function LeaveTypePage() {
       breadcrumbs={[{ label: "Leaves", value: "/leaves" }]}
       createButtonLabel="Add Leave Type"
       initialRecords={initialRecords}
+      attachCompanyId
     />
   );
 }
