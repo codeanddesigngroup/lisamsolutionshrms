@@ -99,7 +99,7 @@ const menuItems: MenuItem[] = [
     label: "HR",
     href: "/employees",
     submenu: [
-      { label: "Employee List", href: "/employees" },
+      { label: "Employees", href: "/employees" },
       { label: "Department", href: "/teams" },
       { label: "Designation", href: "/designation" },
       { label: "Attendance", href: "/attendance" },

@@ -338,7 +338,7 @@ export default function EmployeeDetailPage() {
                 <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
                   {[
                     ["Full Name", employee.name],
-                    ["Employee ID", getEmployeeDisplayId(employee)],
+                    ["Employee Device ID", getEmployeeDisplayId(employee)],
                     ["Joining Date", formatDate(detail.joining_date)],
                     ["Department", departmentName],
                     ["Designation", designationName],

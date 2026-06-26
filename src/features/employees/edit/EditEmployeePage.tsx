@@ -24,7 +24,7 @@ const employeeSchema = z.object({
     .string()
     .optional()
     .refine((value) => !value || value.length >= 8, "Password must be at least 8 characters"),
-  employee_id: z.string().min(1, "Employee ID is required"),
+  employee_id: z.string().min(1, "Employee Device ID is required"),
   joining_date: z.string().min(1, "Joining date is required"),
   gender: z.string().min(1, "Please select gender"),
   department_id: z.string().min(1, "Please select a department"),
@@ -333,7 +333,7 @@ export default function EditEmployeePage() {
                        {errors.gender && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.gender.message}</p>}
                     </div>
                     <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Employee ID <span className="text-red-500">*</span></label>
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Employee Device ID <span className="text-red-500">*</span></label>
                        <input 
                           type="text" 
                           {...register("employee_id")}
