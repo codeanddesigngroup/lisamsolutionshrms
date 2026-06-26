@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/context/ToastContext";
+import api from "@/lib/api";
 
 export default function DesignationPage() {
   const { showToast } = useToast();
@@ -30,10 +31,8 @@ export default function DesignationPage() {
   const fetchDesignations = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/designations`);
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.message || "Failed to load designations");
+      const response = await api.get("/designations");
+      const data = response.data;
 
       setDesignations(data.data || []);
     } catch (err: any) {

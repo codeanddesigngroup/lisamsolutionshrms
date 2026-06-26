@@ -23,8 +23,6 @@ import { useToast } from "@/context/ToastContext";
 import { getStoredRole } from "@/lib/session";
 import type { UserRole } from "@/lib/auth-contract";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
 type EmployeeRecord = {
   id: number | string;
   name: string;
@@ -58,12 +56,8 @@ export default function EmployeesPage() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/employees`);
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result?.message || result?.error || "Failed to fetch employees");
-      }
+      const response = await api.get("/employees");
+      const result = response.data;
 
       setEmployees(Array.isArray(result?.data) ? result.data : []);
     } catch (err) {

@@ -1,9 +1,10 @@
 // 1. IMPORTING LIBRARIES
 // axios: The tool we use to send HTTP requests (GET, POST, etc.) to the backend.
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 // js-cookie: A helper to read and write browser cookies (where we store the login token).
 import Cookies from "js-cookie";
 import { normalizeApiPath } from "./api-contract";
+import { getStoredUser } from "./session";
 
 // 2. SETTING THE BACKEND URL
 // We check if there's a URL set in our environment variables (.env file).
@@ -27,11 +28,59 @@ const api = axios.create({
   },
 });
 
+const platformScopedResources = new Set(["auth", "billing"]);
+
+const getPathParts = (url?: string) => {
+  if (!url) return [];
+  const path = url.split("?")[0] || "";
+  return path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+};
+
+const isCollectionGet = (url?: string) => {
+  const parts = getPathParts(url);
+  if (parts[0] === "v1") return parts.length === 2;
+  return parts.length === 1;
+};
+
+const shouldAttachCompanyScope = (method?: string, url?: string) => {
+  if (String(method || "get").toLowerCase() !== "get") return false;
+  if (!isCollectionGet(url)) return false;
+  const query = url?.split("?")[1] || "";
+  const searchParams = new URLSearchParams(query);
+  if (searchParams.has("company_id") || searchParams.has("companyId")) return false;
+
+  const parts = getPathParts(url);
+  const resource = parts[0] === "v1" ? parts[1] : parts[0];
+  return Boolean(resource && !platformScopedResources.has(resource));
+};
+
+const attachCompanyScope = (config: InternalAxiosRequestConfig) => {
+  const user = getStoredUser();
+  const companyId = user?.role === "super_admin" ? null : user?.company_id;
+
+  if (!companyId || !shouldAttachCompanyScope(config.method, config.url)) {
+    return config;
+  }
+
+  const existingParams = config.params && typeof config.params === "object" ? config.params : {};
+  if ("company_id" in existingParams || "companyId" in existingParams) {
+    return config;
+  }
+
+  config.params = {
+    ...existingParams,
+    company_id: companyId,
+  };
+
+  return config;
+};
+
 // 4. REQUEST INTERCEPTOR (The "Before it leaves" filter)
 // This code runs AUTOMATICALLY every single time before a request is sent to the backend.
 api.interceptors.request.use((config) => {
   // Cleans up the URL so there are no double slashes (e.g. //api//users becomes /api/users)
   config.url = normalizeApiPath(config.url);
+  config = attachCompanyScope(config);
 
   // Grab the user's login token from their browser cookies
   const token = Cookies.get("token");

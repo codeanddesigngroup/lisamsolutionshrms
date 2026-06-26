@@ -166,6 +166,11 @@ const normalizeEmployee = (employee: NodeEmployee): AttendanceEmployee => ({
 const findEmployeeForAttendance = (employees: AttendanceEmployee[], employeeCode: string) =>
   employees.find((employee) => String(employee.employee_id) === employeeCode || String(employee.id) === employeeCode);
 
+const hasCompanyScope = (companyId?: string | number) => companyId !== undefined && companyId !== null && String(companyId).trim() !== "";
+
+const belongsToCompany = (value: string | number | undefined, companyId?: string | number) =>
+  !hasCompanyScope(companyId) || String(value || "") === String(companyId);
+
 const normalizeAttendanceRecord = (
   record: NodeAttendanceRecord,
   employees: AttendanceEmployee[] = [],
@@ -203,7 +208,9 @@ export const attendanceService = {
     const response = await nodeApi.get<ApiEnvelope<NodeEmployee[]> & { count?: number }>("/employees", {
       params: companyId ? { company_id: companyId } : undefined,
     });
-    return (response.data.data || []).map(normalizeEmployee);
+    return (response.data.data || [])
+      .map(normalizeEmployee)
+      .filter((employee) => belongsToCompany(employee.company_id, companyId));
   },
 
   getRecords: async (
@@ -217,7 +224,9 @@ export const attendanceService = {
         ...(companyId || company_id ? { company_id: companyId ?? company_id } : {}),
       },
     });
-    return (response.data.data || []).map((record) => normalizeAttendanceRecord(record, employees));
+    return (response.data.data || [])
+      .map((record) => normalizeAttendanceRecord(record, employees))
+      .filter((record) => belongsToCompany(record.company_id, companyId ?? company_id));
   },
 
   getTodayRecords: async (
@@ -231,7 +240,9 @@ export const attendanceService = {
         ...(companyId || company_id ? { company_id: companyId ?? company_id } : {}),
       },
     });
-    return (response.data.data || []).map((record) => normalizeAttendanceRecord(record, employees));
+    return (response.data.data || [])
+      .map((record) => normalizeAttendanceRecord(record, employees))
+      .filter((record) => belongsToCompany(record.company_id, companyId ?? company_id));
   },
 
   /**

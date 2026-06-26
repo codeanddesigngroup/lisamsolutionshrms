@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useToast } from "@/context/ToastContext";
+import api from "@/lib/api";
 
 export default function TeamsPage() {
   const { showToast } = useToast();
@@ -31,10 +32,8 @@ export default function TeamsPage() {
     try {
       setLoading(true);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/departments`);
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.message || "Failed to load");
+      const response = await api.get("/departments");
+      const data = response.data;
 
       setDepartments(data.data || []);
     } catch (err: any) {
