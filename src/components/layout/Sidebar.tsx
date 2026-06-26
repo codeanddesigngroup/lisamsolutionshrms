@@ -229,6 +229,7 @@ const hiddenSidebarLabels = new Set(["FAQ", "Search"]);
 
 const superAdminMenuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/super-admin/dashboard" },
+  { icon: User, label: "Profile", href: "/super-admin/profile" },
   { icon: Users, label: "Company / Branches", href: "/super-admin/companies" },
   { icon: Shield, label: "Users", href: "/super-admin/users" },
   { icon: ShoppingBag, label: "Packages", href: "/super-admin/packages" },

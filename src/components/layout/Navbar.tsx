@@ -18,6 +18,7 @@ type NavbarTitleRule = {
 
 const navbarTitleRules: NavbarTitleRule[] = [
   { prefix: "/super-admin/dashboard", title: "Dashboard", section: "Super Admin" },
+  { prefix: "/super-admin/profile", title: "Profile", section: "Super Admin" },
   { prefix: "/super-admin/companies", title: "Companies & Branches", section: "Super Admin" },
   { prefix: "/super-admin/admins", title: "Admins", section: "Super Admin" },
   { prefix: "/super-admin/packages", title: "Packages", section: "Super Admin" },
@@ -126,6 +127,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
   const displayEmail = user?.email || "user@company.com";
   const displayRole = (user?.role || "member").replace("_", " ");
   const showEmployeeNotifications = user?.role === "employee";
+  const profileHref = user?.role === "super_admin" ? "/super-admin/profile" : "/profile";
 
   return (
     <header className="app-navbar sticky top-0 z-40 flex h-[60px] w-full items-center justify-between px-6 border-b">
@@ -211,7 +213,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
                 <p className="text-[10px] text-gray-400 font-medium">{displayEmail}</p>
               </div>
               <div className="p-2">
-                <Link href="/profile" className="flex items-center space-x-3 px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-primary transition-all">
+                <Link href={profileHref} className="flex items-center space-x-3 px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-primary transition-all">
                   <User className="h-4 w-4" />
                   <span>My Profile</span>
                 </Link>
