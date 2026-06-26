@@ -17,6 +17,7 @@ import Modal from "@/components/ui/Modal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import ShiftCreateModal from "@/features/attendance/settings/shifts/components/ShiftCreateModal";
+import api from "@/lib/api";
 
 interface Shift {
   id: number;
@@ -83,6 +84,29 @@ export default function AttendanceShiftsPage() {
   const closeShiftModal = () => {
     setEditingShift(null);
     setIsCreateOpen(false);
+  };
+
+  const handleDeleteShift = async () => {
+    if (!deletingShift) return;
+
+    if (!companyId) {
+      showToast("Company is required", "error");
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await api.delete(`/shifts/${deletingShift.id}`, {
+        data: { company_id: companyId },
+      });
+      showToast("Shift deleted successfully", "success");
+      setDeletingShift(null);
+      await getShifts();
+    } catch (error: any) {
+      showToast(error.response?.data?.message || error.message || "Failed to delete shift", "error");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -245,6 +269,14 @@ export default function AttendanceShiftsPage() {
             getShifts();
           }}
           companyId={companyId}
+          editingShift={
+            editingShift
+              ? {
+                  ...editingShift,
+                  shift_hours: Number(editingShift.shift_hours || 0),
+                }
+              : null
+          }
         />
       )}
 
@@ -281,6 +313,7 @@ export default function AttendanceShiftsPage() {
               type="button"
               loading={deleting}
               className="h-12 flex-1 bg-red-500 text-[10px] font-black uppercase tracking-widest text-white"
+              onClick={handleDeleteShift}
             >
               Delete
             </Button>

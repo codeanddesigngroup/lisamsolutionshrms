@@ -16,13 +16,17 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 
 export default function DesignationPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const [designations, setDesignations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [editingDesignation, setEditingDesignation] = useState<any | null>(null);
   const [deletingDesignationId, setDeletingDesignationId] = useState<number | string | null>(null);
@@ -46,6 +50,58 @@ export default function DesignationPage() {
   useEffect(() => {
     fetchDesignations();
   }, [fetchDesignations]);
+
+  const handleUpdateDesignation = async () => {
+    const name = designationForm.name.trim();
+
+    if (!editingDesignation || !name) {
+      showToast("Designation name is required", "error");
+      return;
+    }
+
+    if (!user?.company_id) {
+      showToast("Company is required", "error");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await api.put(`/designations/${editingDesignation.id}`, {
+        name,
+        company_id: user.company_id,
+      });
+      showToast("Designation updated successfully", "success");
+      setEditingDesignation(null);
+      await fetchDesignations();
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || "Failed to update designation", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteDesignation = async () => {
+    if (!deletingDesignationId) return;
+
+    if (!user?.company_id) {
+      showToast("Company is required", "error");
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await api.delete(`/designations/${deletingDesignationId}`, {
+        data: { company_id: user.company_id },
+      });
+      showToast("Designation deleted successfully", "success");
+      setDeletingDesignationId(null);
+      await fetchDesignations();
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || "Failed to delete designation", "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -208,7 +264,7 @@ export default function DesignationPage() {
           className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none"
         />
 
-        <Button className="w-full mt-4 bg-primary text-white">
+        <Button className="w-full mt-4 bg-primary text-white" loading={saving} onClick={handleUpdateDesignation}>
           <Save className="h-4 w-4 mr-2" />
           Save Changes
         </Button>
@@ -235,7 +291,7 @@ export default function DesignationPage() {
               Cancel
             </Button>
 
-            <Button className="flex-1 bg-red-500 text-white">
+            <Button className="flex-1 bg-red-500 text-white" loading={deleting} onClick={handleDeleteDesignation}>
               Delete
             </Button>
           </div>

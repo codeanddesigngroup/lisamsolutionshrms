@@ -4,6 +4,7 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/context/ToastContext";
+import api from "@/lib/api";
 
 export type ShiftTypeOption = {
   id: number | string;
@@ -20,6 +21,7 @@ type ShiftCreateModalProps = {
   onClose: () => void;
   onCreated?: (shift: ShiftTypeOption) => void;
   companyId?: string;
+  editingShift?: ShiftTypeOption | null;
 };
 
 export default function ShiftCreateModal({
@@ -27,16 +29,17 @@ export default function ShiftCreateModal({
   onClose,
   onCreated,
   companyId = "",
+  editingShift = null,
 }: ShiftCreateModalProps) {
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
-    type: "morning",
-    start_time: "",
-    end_time: "",
-    break_minutes: 0,
-    late_grace_minutes: 0,
-    shift_hours: 0,
+    type: editingShift?.type || "morning",
+    start_time: editingShift?.start_time || "",
+    end_time: editingShift?.end_time || "",
+    break_minutes: Number(editingShift?.break_minutes || 0),
+    late_grace_minutes: Number(editingShift?.late_grace_minutes || 0),
+    shift_hours: Number(editingShift?.shift_hours || 0),
   });
 
   const [loading, setLoading] = useState(false);
@@ -77,22 +80,10 @@ export default function ShiftCreateModal({
     try {
       setLoading(true);
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/shifts`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ ...formData, company_id: companyId }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to create shift");
-      }
+      const response = editingShift
+        ? await api.put(`/shifts/${editingShift.id}`, { ...formData, company_id: companyId })
+        : await api.post("/shifts", { ...formData, company_id: companyId });
+      const result = response.data;
 
       const createdShift = result.data || result.shift || result;
       if (createdShift?.id !== undefined && createdShift?.id !== null) {
@@ -107,10 +98,26 @@ export default function ShiftCreateModal({
         });
       }
 
-      showToast("Shift created successfully", "success");
+      showToast(editingShift ? "Shift updated successfully" : "Shift created successfully", "success");
       closeAndReset();
     } catch (error: unknown) {
-      showToast(error instanceof Error ? error.message : "Failed to create shift", "error");
+      const message =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response &&
+        typeof error.response === "object" &&
+        "data" in error.response &&
+        error.response.data &&
+        typeof error.response.data === "object" &&
+        "message" in error.response.data
+          ? String(error.response.data.message)
+          : error instanceof Error
+            ? error.message
+            : editingShift
+              ? "Failed to update shift"
+              : "Failed to create shift";
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }
@@ -120,7 +127,7 @@ export default function ShiftCreateModal({
     <Modal
       isOpen={isOpen}
       onClose={closeAndReset}
-      title="Create Shift"
+      title={editingShift ? "Edit Shift" : "Create Shift"}
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -226,7 +233,7 @@ export default function ShiftCreateModal({
             disabled={loading}
             className="h-12 flex-1 bg-primary text-[10px] font-black uppercase tracking-widest text-white"
           >
-            {loading ? "Saving..." : "Save Shift"}
+            {loading ? "Saving..." : editingShift ? "Save Changes" : "Save Shift"}
           </Button>
         </div>
       </form>

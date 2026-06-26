@@ -16,13 +16,17 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 
 export default function TeamsPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [editingDept, setEditingDept] = useState<any | null>(null);
   const [deletingDept, setDeletingDept] = useState<any | null>(null);
@@ -47,6 +51,59 @@ export default function TeamsPage() {
   useEffect(() => {
     fetchDepartments();
   }, []);
+
+  const handleUpdateDepartment = async () => {
+    const trimmedName = name.trim();
+
+    if (!editingDept || !trimmedName) {
+      showToast("Department name is required", "error");
+      return;
+    }
+
+    if (!user?.company_id) {
+      showToast("Company is required", "error");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await api.put(`/departments/${editingDept.id}`, {
+        name: trimmedName,
+        company_id: user.company_id,
+      });
+      showToast("Department updated successfully", "success");
+      setEditingDept(null);
+      setName("");
+      await fetchDepartments();
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || "Failed to update department", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!deletingDept) return;
+
+    if (!user?.company_id) {
+      showToast("Company is required", "error");
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await api.delete(`/departments/${deletingDept.id}`, {
+        data: { company_id: user.company_id },
+      });
+      showToast("Department deleted successfully", "success");
+      setDeletingDept(null);
+      await fetchDepartments();
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || "Failed to delete department", "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -197,7 +254,7 @@ export default function TeamsPage() {
             placeholder="Department name"
           />
 
-          <Button className="w-full bg-primary text-white h-11">
+          <Button className="w-full bg-primary text-white h-11" loading={saving} onClick={handleUpdateDepartment}>
             <Save className="h-4 w-4 mr-2" />
             Save Changes
           </Button>
@@ -217,7 +274,7 @@ export default function TeamsPage() {
             Delete <b>{deletingDept?.name}</b>?
           </p>
 
-          <Button className="bg-red-500 text-white w-full h-11">
+          <Button className="bg-red-500 text-white w-full h-11" loading={deleting} onClick={handleDeleteDepartment}>
             Delete
           </Button>
         </div>
