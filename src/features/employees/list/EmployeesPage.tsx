@@ -20,6 +20,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import { getStoredRole } from "@/lib/session";
 import type { UserRole } from "@/lib/auth-contract";
 
@@ -37,6 +38,7 @@ type EmployeeRecord = {
 
 export default function EmployeesPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole] = useState<UserRole>(() => getStoredRole());
@@ -103,7 +105,9 @@ export default function EmployeesPage() {
   const handleDelete = async () => {
     if (deletingEmployeeId) {
       try {
-        await api.delete(`/employee/${deletingEmployeeId}`);
+        await api.delete(`/employee/${deletingEmployeeId}`, {
+          data: user?.company_id ? { company_id: user.company_id } : undefined,
+        });
         setEmployees(prev => prev.filter(e => e.id !== deletingEmployeeId));
         showToast("Employee deleted successfully", "success");
         setDeletingEmployeeId(null);

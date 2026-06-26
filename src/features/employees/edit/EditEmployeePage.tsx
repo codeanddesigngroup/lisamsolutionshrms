@@ -15,6 +15,7 @@ import { Employee } from "@/types";
 import { getModulesFromPermissions, rolePermissions, type PermissionKey } from "@/lib/auth-contract";
 import EmployeePermissionMatrix from "@/features/employees/components/EmployeePermissionMatrix";
 import ShiftCreateModal, { type ShiftTypeOption } from "@/features/attendance/settings/shifts/components/ShiftCreateModal";
+import { useAuth } from "@/context/AuthContext";
 
 const employeeSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -54,7 +55,8 @@ type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 type DepartmentOption = {
   id: number | string;
-  team_name: string;
+  name?: string;
+  team_name?: string;
 };
 
 type DesignationOption = {
@@ -63,6 +65,7 @@ type DesignationOption = {
 };
 
 type EmployeeUpdatePayload = {
+  company_id?: string;
   name: string;
   email: string;
   role: "employee";
@@ -86,14 +89,25 @@ type EmployeeUpdatePayload = {
 };
 
 type EmployeeWithAccess = Employee & {
+  employee_id?: string;
+  company_id?: number | string;
+  joining_date?: string;
+  department_id?: number | string;
+  designation_id?: number | string;
+  shift_type_id?: number | string;
+  hourly_rate?: number | string;
   permissions?: PermissionKey[];
   modules?: string[];
+  permission_record?: {
+    permission_keys?: PermissionKey[];
+  };
 };
 
 export default function EditEmployeePage() {
   const params = useParams();
   const router = useRouter();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -103,6 +117,7 @@ export default function EditEmployeePage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isShiftCreateOpen, setIsShiftCreateOpen] = useState(false);
   const [permissionState, setPermissionState] = useState<PermissionKey[]>(rolePermissions.employee);
+  const companyId = user?.company_id ? String(user.company_id) : "";
 
   const {
     register,
@@ -131,13 +146,19 @@ export default function EditEmployeePage() {
       try {
         const [empRes, deptRes, desigRes, shiftRes] = await Promise.all([
           api.get(`/employee/${params.id}`),
-          api.get("/department"),
-          api.get("/designation"),
+          api.get("/departments"),
+          api.get("/designations"),
           api.get("/shift-types"),
         ]);
 
         const data = empRes.data.data as EmployeeWithAccess;
-        const permissions = Array.isArray(data.permissions) && data.role !== "admin" ? data.permissions : rolePermissions.employee;
+        const permissions =
+          Array.isArray(data.permissions) && data.permissions.length > 0
+            ? data.permissions
+            : Array.isArray(data.permission_record?.permission_keys) && data.permission_record.permission_keys.length > 0
+              ? data.permission_record.permission_keys
+              : rolePermissions.employee;
+        const detail = data.employee_detail || {};
         setEmployee(data);
         setPermissionState(permissions);
         setDepartments(deptRes.data.data || []);
@@ -147,17 +168,17 @@ export default function EditEmployeePage() {
         reset({
           name: data.name,
           email: data.email,
-          employee_id: data.employee_detail?.employee_id || "",
-          joining_date: data.employee_detail?.joining_date || "",
+          employee_id: detail.employee_id || data.employee_id || "",
+          joining_date: detail.joining_date || data.joining_date || "",
           gender: data.gender || "",
-          department_id: data.employee_detail?.department_id?.toString() || "",
-          designation_id: data.employee_detail?.designation_id?.toString() || "",
-          shift_type_id: data.employee_detail?.shift_type_id?.toString() || "",
+          department_id: (detail.department_id || data.department_id || "")?.toString(),
+          designation_id: (detail.designation_id || data.designation_id || "")?.toString(),
+          shift_type_id: (detail.shift_type_id || data.shift_type_id || "")?.toString(),
           role: "employee",
           status: data.status === "deactive" ? "deactive" : "active",
           password: "",
-          mobile: data.employee_detail?.mobile || "",
-          address: data.employee_detail?.address || "",
+          mobile: detail.mobile || data.mobile || "",
+          address: detail.address || "",
         });
       } catch (err: unknown) {
         console.error("Fetch Edit Data Error:", err);
@@ -184,6 +205,7 @@ export default function EditEmployeePage() {
         email: data.email,
         role: "employee",
         status: data.status,
+        company_id: companyId,
         gender: data.gender,
         permissions,
         modules,
@@ -206,12 +228,6 @@ export default function EditEmployeePage() {
       }
 
       await api.put(`/employee/${params.id}`, payload);
-      await api.post("/employees/assignRole", {
-        user_id: params.id,
-        role: "employee",
-        permissions,
-        modules,
-      });
       showToast("Employee updated successfully!");
       router.push(`/employees/${params.id}`);
       router.refresh();
@@ -347,7 +363,7 @@ export default function EditEmployeePage() {
                        >
                           <option value="">Select Department</option>
                           {departments.map(dept => (
-                            <option key={dept.id} value={dept.id}>{dept.team_name}</option>
+                            <option key={dept.id} value={dept.id}>{dept.name || dept.team_name}</option>
                           ))}
                        </select>
                        {errors.department_id && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.department_id.message}</p>}
@@ -485,6 +501,7 @@ export default function EditEmployeePage() {
         isOpen={isShiftCreateOpen}
         onClose={() => setIsShiftCreateOpen(false)}
         onCreated={handleShiftCreated}
+        companyId={companyId}
       />
     </DashboardLayout>
   );

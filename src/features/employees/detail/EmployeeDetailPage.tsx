@@ -107,28 +107,36 @@ export default function EmployeeDetailPage() {
     setLoading(true);
     setError(null);
     try {
+      const safeGet = async (url: string) => {
+        try {
+          const response = await api.get(url);
+          return (response.data.data || []) as HRRecord[];
+        } catch {
+          return [] as HRRecord[];
+        }
+      };
+
+      const employeeResponse = await api.get(`/employee/${params.id}`);
       const [
-        employeeResponse,
-        projectResponse,
-        taskResponse,
-        leaveResponse,
-        timeLogResponse,
-        docsResponse,
-        activityResponse,
-        attendanceResponse,
-        leaveTypeResponse,
-        quotaResponse,
+        allProjects,
+        allTasks,
+        allLeaves,
+        allTimeLogs,
+        allDocs,
+        allActivities,
+        allAttendance,
+        allLeaveTypes,
+        allQuotas,
       ] = await Promise.all([
-        api.get(`/employee/${params.id}`),
-        api.get("/projects"),
-        api.get("/tasks"),
-        api.get("/leaves"),
-        api.get("/time-logs"),
-        api.get("/employee-docs"),
-        api.get("/user-activities"),
-        api.get("/attendance"),
-        api.get("/leave-type"),
-        api.get("/leave-quotas"),
+        safeGet("/projects"),
+        safeGet("/tasks"),
+        safeGet("/leaves"),
+        safeGet("/time-logs"),
+        safeGet("/employee-docs"),
+        safeGet("/user-activities"),
+        safeGet("/attendance"),
+        safeGet("/leave-type"),
+        safeGet("/leave-quotas"),
       ]);
 
       const employeeData = employeeResponse.data.data as HRRecord;
@@ -136,16 +144,6 @@ export default function EmployeeDetailPage() {
       const employeeName = String(employeeData.name || "");
       const belongsToEmployee = (record: HRRecord) =>
         getEmployeeId(record) === employeeId || record.user?.name === employeeName || record.employee?.name === employeeName;
-
-      const allProjects = (projectResponse.data.data || []) as HRRecord[];
-      const allTasks = (taskResponse.data.data || []) as HRRecord[];
-      const allLeaves = (leaveResponse.data.data || []) as HRRecord[];
-      const allTimeLogs = (timeLogResponse.data.data || []) as HRRecord[];
-      const allDocs = (docsResponse.data.data || []) as HRRecord[];
-      const allActivities = (activityResponse.data.data || []) as HRRecord[];
-      const allAttendance = (attendanceResponse.data.data || []) as HRRecord[];
-      const allLeaveTypes = (leaveTypeResponse.data.data || []) as HRRecord[];
-      const allQuotas = (quotaResponse.data.data || []) as HRRecord[];
 
       setEmployee(employeeData);
       setProjects((employeeData.projects || allProjects.filter((project) => hasMember(project, employeeData))) as HRRecord[]);
