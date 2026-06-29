@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell, Power, ChevronDown, User, Menu } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -121,13 +121,20 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const { user, logout } = useAuth();
+  const [hasHydrated, setHasHydrated] = useState(false);
   const pathname = usePathname();
   const navbarTitle = getNavbarTitle(pathname);
-  const displayName = user?.name || "User";
-  const displayEmail = user?.email || "user@company.com";
-  const displayRole = (user?.role || "member").replace("_", " ");
-  const showEmployeeNotifications = user?.role === "employee";
-  const profileHref = user?.role === "super_admin" ? "/super-admin/profile" : "/profile";
+  const hydratedUser = hasHydrated ? user : null;
+  const displayName = hydratedUser?.name || "User";
+  const displayEmail = hydratedUser?.email || "user@company.com";
+  const displayRole = (hydratedUser?.role || "member").replace("_", " ");
+  const showEmployeeNotifications = hydratedUser?.role === "employee";
+  const profileHref = hydratedUser?.role === "super_admin" ? "/super-admin/profile" : "/profile";
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setHasHydrated(true), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   return (
     <header className="app-navbar sticky top-0 z-40 flex h-[60px] w-full items-center justify-between px-6 border-b">

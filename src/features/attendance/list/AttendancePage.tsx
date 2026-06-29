@@ -165,13 +165,17 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const queryDate = searchParams.get("date");
   const { showToast } = useToast();
   const { user, hasPermission } = useAuth();
+  const [hasHydrated, setHasHydrated] = useState(false);
+  const hydratedUser = hasHydrated ? user : null;
   const canManageAttendance =
-    user?.role === "admin" ||
-    hasPermission("attendance.manage") ||
-    hasPermission("attendance.edit") ||
-    hasPermission("attendance.approve") ||
-    hasPermission("attendance.export");
-  const isSelfServiceAttendance = user?.role === "employee" && !canManageAttendance;
+    hasHydrated && (
+      hydratedUser?.role === "admin" ||
+      hasPermission("attendance.manage") ||
+      hasPermission("attendance.edit") ||
+      hasPermission("attendance.approve") ||
+      hasPermission("attendance.export")
+    );
+  const isSelfServiceAttendance = hydratedUser?.role === "employee" && !canManageAttendance;
 
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -188,7 +192,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const fetchAttendance = async () => {
     setLoading(true);
     try {
-      const companyId = user?.company_id ? String(user.company_id) : "";
+      const companyId = hydratedUser?.company_id ? String(hydratedUser.company_id) : "";
       const employeeRecords = await attendanceService.getEmployees({ companyId });
       const employeeList = employeeRecords as EmployeeOption[];
       const attendanceList = (await attendanceService.getRecords({ companyId, workDate: date, limit: 500 }, employeeRecords)) as AttendanceRecord[];
@@ -197,11 +201,11 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
 
       const visibleEmployees = canManageAttendance
         ? employeeList
-        : employeeList.filter((employee) => isCurrentUserEmployee(employee, user));
+        : employeeList.filter((employee) => isCurrentUserEmployee(employee, hydratedUser));
       setEmployees(visibleEmployees);
-      setAttendance(canManageAttendance ? attendanceList : attendanceList.filter((row) => isCurrentUserAttendance(row, user)));
+      setAttendance(canManageAttendance ? attendanceList : attendanceList.filter((row) => isCurrentUserAttendance(row, hydratedUser)));
       setHolidays(holidayList);
-      setLeaves(canManageAttendance ? leaveList : leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(user?.id || "") || leave.user?.name === user?.name || leave.employee?.name === user?.name));
+      setLeaves(canManageAttendance ? leaveList : leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(hydratedUser?.id || "") || leave.user?.name === hydratedUser?.name || leave.employee?.name === hydratedUser?.name));
       setOfficeOpenDays(parseOfficeOpenDays(undefined));
     } catch (err) {
       console.error("Fetch Daily Attendance Error:", err);
@@ -212,16 +216,22 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   };
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => setHasHydrated(true), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
     if (!isDateWise || !isValidDateParam(queryDate) || queryDate === date) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDate(String(queryDate));
   }, [date, isDateWise, queryDate]);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAttendance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [date, hasHydrated]);
 
   const dailyRows = useMemo<DailyAttendanceRow[]>(() => {
     const holiday = holidays.find((item) => getHolidayDate(item) === date);

@@ -32,7 +32,9 @@ export const timeToMinutes = (value?: string) => {
 
 /**
  * Normalizes minutes for overnight shifts.
- * If clock-in is before start_time and it's an overnight shift, it might need adjustment.
+ * Times in the after-midnight portion of an overnight shift need to be moved
+ * onto the following day. A time just before shift start is an early check-in,
+ * not a check-in on the following day.
  */
 export const normalizeShiftMinute = (value?: string, shift?: ShiftDefinition) => {
   const minutes = timeToMinutes(value);
@@ -41,8 +43,9 @@ export const normalizeShiftMinute = (value?: string, shift?: ShiftDefinition) =>
   
   if (minutes === null) return null;
   
-  // Overnight shift logic: if end time is numerically less than start time (e.g. 22:00 to 06:00)
-  if (start !== null && end !== null && end <= start && minutes < start) {
+  // For a 22:00-06:00 shift, 02:00 belongs to the following day, while 21:55
+  // must remain on the shift-start day so it is correctly treated as on time.
+  if (start !== null && end !== null && end <= start && minutes <= end) {
     return minutes + 24 * 60; // Treat as next day
   }
   

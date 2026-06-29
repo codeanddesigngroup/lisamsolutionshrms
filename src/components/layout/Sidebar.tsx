@@ -283,8 +283,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, logout, stopImpersonation } = useAuth();
   const [hasHydrated, setHasHydrated] = useState(false);
-  const userRole = hasHydrated ? user?.role || "employee" : "employee";
-  const userName = hasHydrated ? user?.name || "User" : "User";
+  const hydratedUser = hasHydrated ? user : null;
+  const userRole = hydratedUser?.role || "employee";
+  const userName = hydratedUser?.name || "User";
 
   const filteredMenuItems = useMemo(() => {
     if (userRole === "super_admin") {
@@ -300,7 +301,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       .filter((item) => allowedMenus.includes(item.label))
       .filter((item) => !hiddenSidebarLabels.has(item.label))
       .filter((item) => isSaasBillingEnabled || item.label !== "Billing")
-      .filter((item) => canOpenItem(user, userRole, item))
+      .filter((item) => canOpenItem(hydratedUser, userRole, item))
       .map((item) => {
         const roleDashboardHref =
           userRole === "employee" ? "/employee/dashboard" : userRole === "client" ? "/dashboard/client" : item.href;
@@ -322,12 +323,12 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           .filter((sub) => !allowedSubmenuLabels || allowedSubmenuLabels.includes(sub.label))
           .map((sub) => (normalizedItem.label === "Dashboard" && sub.label === "Dashboard" ? { ...sub, href: roleDashboardHref } : sub));
 
-        const permissionFilteredSubmenu = user
-          ? roleFilteredSubmenu?.filter((sub) => canUserAccessPath(user, sub.href))
+        const permissionFilteredSubmenu = hydratedUser
+          ? roleFilteredSubmenu?.filter((sub) => canUserAccessPath(hydratedUser, sub.href))
           : roleFilteredSubmenu;
 
         const href =
-          user && !canUserAccessPath(user, normalizedItem.href) && permissionFilteredSubmenu?.length
+          hydratedUser && !canUserAccessPath(hydratedUser, normalizedItem.href) && permissionFilteredSubmenu?.length
             ? permissionFilteredSubmenu[0].href
             : normalizedItem.href;
 
@@ -339,7 +340,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           submenu: permissionFilteredSubmenu,
         };
       });
-  }, [user, userRole]);
+  }, [hydratedUser, userRole]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setHasHydrated(true), 0);
@@ -537,11 +538,11 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
                   <div className="app-sidebar-border px-3 py-3 border-b mb-1">
                     <p className="text-xs font-black text-primary truncate">{userName}</p>
                     <p className="app-sidebar-muted mt-1 text-[10px] uppercase tracking-widest">{userRole}</p>
-                    {user?.impersonator_role && (
+                    {hydratedUser?.impersonator_role && (
                       <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-yellow-500">Impersonating Company</p>
                     )}
                   </div>
-                  {user?.impersonator_role === "super_admin" && (
+                  {hydratedUser?.impersonator_role === "super_admin" && (
                     <button type="button" onClick={stopImpersonation} className="flex w-full items-center space-x-3 px-3 py-2.5 rounded-xl text-xs text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 transition-all">
                       <Shield className="h-4 w-4" /> <span>Return to Super Admin</span>
                     </button>
