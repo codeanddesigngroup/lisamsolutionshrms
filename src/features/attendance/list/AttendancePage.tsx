@@ -582,6 +582,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             date={date}
             employee={editingRow.employee}
             attendance={editingRow.attendance}
+            currentStatus={editingRow.status}
             contextLabel={editingRow.contextLabel || (editingRow.status === "absent" ? "Absent correction" : "")}
             onClose={() => setEditingRow(null)}
             onSaved={handleAttendanceSaved}

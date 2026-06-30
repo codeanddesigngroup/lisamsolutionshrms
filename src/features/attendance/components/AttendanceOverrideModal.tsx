@@ -56,13 +56,14 @@ type AttendanceOverrideModalProps = {
   date: string;
   employee: AttendanceEmployeeOption;
   attendance?: AttendanceRecordForOverride;
+  currentStatus?: string;
   contextLabel?: string;
   onClose: () => void;
   onSaved: (record: AttendanceRecordForOverride) => void;
 };
 
 type OverrideForm = {
-  status: "present" | "late" | "absent" | "half-day";
+  status: "on-time" | "late" | "absent" | "half-day" | "missing-checkout";
   clock_in: string;
   clock_out: string;
   clock_in_ip: string;
@@ -72,15 +73,22 @@ type OverrideForm = {
   reason: string;
 };
 
-const getInitialForm = (attendance: AttendanceRecordForOverride | undefined, employee: AttendanceEmployeeOption): OverrideForm => {
+const getInitialForm = (
+  attendance: AttendanceRecordForOverride | undefined,
+  employee: AttendanceEmployeeOption,
+  currentStatus?: string,
+): OverrideForm => {
   const shift = employee.employee_detail?.shift_type;
-  const status = String(attendance?.status || "present").toLowerCase();
-  const normalizedStatus = status === "late" || status === "absent" || status === "half-day" ? status : "present";
+  const status = String(currentStatus || attendance?.status || "present").toLowerCase();
+  const normalizedStatus: OverrideForm["status"] =
+    status === "late" || status === "absent" || status === "half-day" || status === "missing-checkout"
+      ? status
+      : "on-time";
 
   return {
     status: normalizedStatus,
     clock_in: attendance?.clock_in || (normalizedStatus === "absent" ? "" : shift?.start_time || "09:00"),
-    clock_out: attendance?.clock_out || (normalizedStatus === "absent" ? "" : shift?.end_time || "18:00"),
+    clock_out: attendance?.clock_out || (["absent", "missing-checkout"].includes(normalizedStatus) ? "" : shift?.end_time || "18:00"),
     clock_in_ip: attendance?.clock_in_ip || "192.168.1.1",
     clock_out_ip: attendance?.clock_out_ip || "192.168.1.1",
     working_from: attendance?.working_from || "office",
@@ -94,18 +102,19 @@ export default function AttendanceOverrideModal({
   date,
   employee,
   attendance,
+  currentStatus,
   contextLabel,
   onClose,
   onSaved,
 }: AttendanceOverrideModalProps) {
   const { showToast } = useToast();
-  const [form, setForm] = useState<OverrideForm>(() => getInitialForm(attendance, employee));
+  const [form, setForm] = useState<OverrideForm>(() => getInitialForm(attendance, employee, currentStatus));
   const [saving, setSaving] = useState(false);
 
   const shift = employee.employee_detail?.shift_type;
-  const title = attendance?.id ? "Edit Attendance" : "Create Attendance";
+  const isEditing = Boolean(attendance?.id);
+  const title = isEditing ? "Edit Attendance" : "Create Attendance";
   const isAbsent = form.status === "absent";
-  const reasonRequired = attendance?.id || contextLabel;
 
   const shiftLabel = useMemo(() => {
     if (!shift) return "No shift assigned";
@@ -121,17 +130,12 @@ export default function AttendanceOverrideModal({
       ...current,
       status,
       clock_in: status === "absent" ? "" : current.clock_in || shift?.start_time || "09:00",
-      clock_out: status === "absent" ? "" : current.clock_out || shift?.end_time || "18:00",
+      clock_out: status === "absent" || status === "missing-checkout" ? "" : current.clock_out || shift?.end_time || "18:00",
     }));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (reasonRequired && !form.reason.trim()) {
-      showToast("Add an override reason before saving.", "error");
-      return;
-    }
 
     setSaving(true);
     try {
@@ -140,7 +144,7 @@ export default function AttendanceOverrideModal({
         employee_id: employee.id,
         user_id: employee.id,
         date,
-        status: form.status,
+        status: form.status === "on-time" || form.status === "missing-checkout" ? "present" : form.status,
         clock_in: isAbsent ? "" : form.clock_in,
         clock_out: isAbsent ? "" : form.clock_out,
         clock_in_ip: isAbsent ? "-" : form.clock_in_ip,
@@ -188,24 +192,11 @@ export default function AttendanceOverrideModal({
               onChange={(event) => handleStatusChange(event.target.value as OverrideForm["status"])}
               className="form-control"
             >
-              <option value="present">Present</option>
+              <option value="on-time">On Time</option>
               <option value="late">Late</option>
               <option value="half-day">Half Day</option>
+              <option value="missing-checkout">Missing Checkout</option>
               <option value="absent">Absent</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Working From</label>
-            <select
-              value={form.working_from}
-              disabled={isAbsent}
-              onChange={(event) => updateForm({ working_from: event.target.value })}
-              className="form-control disabled:bg-gray-100"
-            >
-              <option value="office">Office</option>
-              <option value="home">Home</option>
-              <option value="remote">Remote</option>
-              <option value="field">Field</option>
             </select>
           </div>
           <div>
@@ -226,46 +217,6 @@ export default function AttendanceOverrideModal({
               disabled={isAbsent}
               onChange={(event) => updateForm({ clock_out: event.target.value })}
               className="form-control disabled:bg-gray-100"
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Check In IP</label>
-            <input
-              type="text"
-              value={form.clock_in_ip}
-              disabled={isAbsent}
-              onChange={(event) => updateForm({ clock_in_ip: event.target.value })}
-              className="form-control disabled:bg-gray-100"
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Check Out IP</label>
-            <input
-              type="text"
-              value={form.clock_out_ip}
-              disabled={isAbsent}
-              onChange={(event) => updateForm({ clock_out_ip: event.target.value })}
-              className="form-control disabled:bg-gray-100"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Attendance Machine / Device ID</label>
-            <input
-              type="text"
-              value={form.device_id}
-              onChange={(event) => updateForm({ device_id: event.target.value })}
-              placeholder="Optional now, required when machine sync is connected"
-              className="form-control"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Reason</label>
-            <textarea
-              value={form.reason}
-              onChange={(event) => updateForm({ reason: event.target.value })}
-              rows={3}
-              placeholder="Example: Missing machine punch, approved weekend work, HR correction"
-              className="form-control min-h-24"
             />
           </div>
         </div>
