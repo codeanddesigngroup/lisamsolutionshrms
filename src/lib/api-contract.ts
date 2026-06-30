@@ -15,7 +15,6 @@ export type ApiResource =
   | "departments"
   | "designations"
   | "devices"
-  | "discussions"
   | "employees"
   | "estimates"
   | "events"
@@ -43,7 +42,6 @@ export type ApiResource =
   | "salary-tds"
   | "shift-types"
   | "tasks"
-  | "time-logs"
   | "employee-salaries"
   | "employee-salary-groups"
   | "employee-payroll-cycles"
@@ -84,8 +82,6 @@ const singularResourceMap: Record<string, string> = {
   currency: "currencies",
   department: "departments",
   designation: "designations",
-  discussion: "discussions",
-  "discussion-category": "discussion-categories",
   employee: "employees",
   "employee-faq": "employee-faqs",
   "employee-faq-category": "employee-faq-categories",
@@ -111,7 +107,6 @@ const singularResourceMap: Record<string, string> = {
   "payroll-setting": "payroll-settings",
   product: "products",
   project: "projects",
-  "project-category": "project-categories",
   proposal: "proposals",
   "role-permission": "role-permission",
   "salary-component": "salary-components",
@@ -121,10 +116,7 @@ const singularResourceMap: Record<string, string> = {
   "shift-type": "shift-types",
   task: "tasks",
   "task-category": "task-categories",
-  "task-label": "task-labels",
-  "task-request": "task-requests",
   team: "teams",
-  "time-log": "time-logs",
   "employee-salary": "employee-salaries",
   "employee-salary-group": "employee-salary-groups",
   "employee-payroll-cycle": "employee-payroll-cycles",

@@ -48,6 +48,6 @@ This makes modules easier to test, replace with real backend APIs, and scale wit
 - `payroll`: payroll list and payroll settings
 - `reports`: overview, attendance, expense, finance, income/expense, leave, payroll, tasks, time-log
 - `settings`: overview, account, app, attendance, company, finance, language, leave, notifications, profile, roles
-- Remaining operational modules: member, events, leaves, holidays, notices, products, contracts, billing, time logs, currencies, estimates, credit notes, proposals, discussions, teams, designations, taxes, FAQ, profile, auth, notifications, project/task/lead/client settings, and other setup/config pages
+- Remaining operational modules: member, events, leaves, holidays, notices, products, contracts, billing, currencies, estimates, credit notes, proposals, teams, designations, taxes, FAQ, profile, auth, notifications, project/task/lead/client settings, and other setup/config pages
 
 All application `page.tsx` route files under `src/app` are now routing wrappers. Feature UI and page logic live under `src/features`.

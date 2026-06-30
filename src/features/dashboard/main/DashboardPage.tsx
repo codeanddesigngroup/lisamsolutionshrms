@@ -45,7 +45,6 @@ export default function DashboardPage() {
     { label: "Total Projects", value: statsData.totalProjects, icon: Layers, color: "text-purple-500", bg: "bg-purple-50", href: "/projects" },
     { label: "Unpaid Invoices", value: statsData.unpaidInvoices, icon: Receipt, color: "text-red-500", bg: "bg-red-50", href: "/invoices" },
     { label: "Pending Tasks", value: statsData.pendingTasks, icon: AlertCircle, color: "text-yellow-500", bg: "bg-yellow-50", href: "/tasks" },
-    { label: "Hours Logged", value: statsData.hoursLogged, icon: Clock, color: "text-indigo-500", bg: "bg-indigo-50", href: "/time-logs" },
     { label: "Completed Tasks", value: statsData.completedTasks, icon: CheckSquare, color: "text-green-500", bg: "bg-green-50", href: "/tasks" },
     { label: "Today Attendance", value: statsData.todayAttendance, icon: UserSquare2, color: "text-pink-500", bg: "bg-pink-50", href: "/attendance" },
   ];

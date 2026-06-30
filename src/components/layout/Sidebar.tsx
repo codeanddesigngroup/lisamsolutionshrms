@@ -67,10 +67,7 @@ const menuItems: MenuItem[] = [
     submenu: [
       { label: "Dashboard", href: "/dashboard" },
       { label: "Employee Dashboard", href: "/employee/dashboard" },
-      { label: "Project Dashboard", href: "/dashboard/project" },
       { label: "Client Dashboard", href: "/dashboard/client" },
-      { label: "HR Dashboard", href: "/dashboard/hr" },
-      { label: "Finance Dashboard", href: "/dashboard/finance" },
     ],
   },
   {
@@ -118,16 +115,9 @@ const menuItems: MenuItem[] = [
     submenu: [
       { label: "Contracts", href: "/contracts" },
       { label: "Projects", href: "/projects" },
-      { label: "Project Categories", href: "/project-category" },
       { label: "Tasks", href: "/tasks" },
       { label: "Task Board", href: "/taskboard" },
       { label: "Task Calendar", href: "/task-calendar" },
-      { label: "Task Labels", href: "/task-label" },
-      { label: "Task Requests", href: "/task-request" },
-      { label: "Sub Tasks", href: "/sub-task" },
-      { label: "Time Logs", href: "/time-logs" },
-      { label: "Discussion", href: "/discussion" },
-      { label: "Discussion Categories", href: "/discussion-categories" },
     ],
   },
   {
@@ -191,7 +181,6 @@ const menuItems: MenuItem[] = [
     href: "/reports",
     submenu: [
       { label: "Task Report", href: "/reports/tasks" },
-      { label: "Time Log Report", href: "/reports/time-log" },
       { label: "Finance Report", href: "/reports/finance" },
       { label: "Income vs Expense", href: "/reports/income-expense" },
       { label: "Leave Report", href: "/reports/leave" },
@@ -248,13 +237,13 @@ const roleSubmenuAccess: Partial<Record<UserRole, Record<string, string[]>>> = {
   employee: {
     Dashboard: ["Employee Dashboard"],
     HR: ["Attendance", "Holidays", "Leaves"],
-    Work: ["Projects", "Tasks", "Task Board", "Task Calendar", "Time Logs", "Discussion"],
+    Work: ["Projects", "Tasks", "Task Board", "Task Calendar"],
     Events: ["Event Calendar"],
     Payroll: ["My Payslips"],
   },
   client: {
-    Dashboard: ["Client Dashboard", "Project Dashboard"],
-    Work: ["Projects", "Tasks", "Task Board", "Task Calendar", "Discussion"],
+    Dashboard: ["Client Dashboard"],
+    Work: ["Projects", "Tasks", "Task Board", "Task Calendar"],
     Finance: ["Estimates", "Invoices", "Payments", "Credit Notes"],
   },
 };
@@ -313,6 +302,13 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           return {
             ...item,
             href: roleDashboardHref,
+            submenu: undefined,
+          };
+        }
+        if (userRole === "admin" && item.label === "Dashboard") {
+          return {
+            ...item,
+            href: "/dashboard",
             submenu: undefined,
           };
         }

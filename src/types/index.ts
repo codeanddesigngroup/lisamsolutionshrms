@@ -90,11 +90,9 @@ export interface Task {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   project?: Project;
   users?: Employee[];
-  subtasks?: unknown[];
   files?: unknown[];
   comments?: unknown[];
   notes?: unknown[];
-  time_logs?: unknown[];
   history?: unknown[];
   category?: {
     category_name?: string;

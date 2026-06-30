@@ -32,14 +32,12 @@ import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
 import {
   calculateAttendanceStatus,
-  formatDuration,
   getAttendanceEmployeeId,
   getEmployeeDisplayId,
   getEmployeeId,
   getLeaveDate,
   getLeaveEmployeeId,
   leaveUnits,
-  minutesBetween,
   type HRRecord,
 } from "@/lib/hr-utils";
 
@@ -49,7 +47,6 @@ const tabs = [
   { id: "projects", label: "Projects", icon: Briefcase },
   { id: "tasks", label: "Tasks", icon: CheckCircle2 },
   { id: "leaves", label: "Leaves", icon: FileText },
-  { id: "time-logs", label: "Time Logs", icon: Clock },
   { id: "documents", label: "Documents", icon: FileText },
 ];
 
@@ -94,7 +91,6 @@ export default function EmployeeDetailPage() {
   const [projects, setProjects] = useState<HRRecord[]>([]);
   const [tasks, setTasks] = useState<HRRecord[]>([]);
   const [leaves, setLeaves] = useState<HRRecord[]>([]);
-  const [timeLogs, setTimeLogs] = useState<HRRecord[]>([]);
   const [documents, setDocuments] = useState<HRRecord[]>([]);
   const [activities, setActivities] = useState<HRRecord[]>([]);
   const [attendanceRows, setAttendanceRows] = useState<HRRecord[]>([]);
@@ -121,7 +117,6 @@ export default function EmployeeDetailPage() {
         allProjects,
         allTasks,
         allLeaves,
-        allTimeLogs,
         allDocs,
         allActivities,
         allAttendance,
@@ -131,7 +126,6 @@ export default function EmployeeDetailPage() {
         safeGet("/projects"),
         safeGet("/tasks"),
         safeGet("/leaves"),
-        safeGet("/time-logs"),
         safeGet("/employee-docs"),
         safeGet("/user-activities"),
         safeGet("/attendance"),
@@ -149,7 +143,6 @@ export default function EmployeeDetailPage() {
       setProjects((employeeData.projects || allProjects.filter((project) => hasMember(project, employeeData))) as HRRecord[]);
       setTasks((employeeData.tasks || allTasks.filter((task) => hasMember(task, employeeData) || belongsToEmployee(task))) as HRRecord[]);
       setLeaves((employeeData.leaves || allLeaves.filter((leave) => getLeaveEmployeeId(leave) === employeeId || leave.user?.name === employeeName || leave.employee?.name === employeeName)) as HRRecord[]);
-      setTimeLogs(allTimeLogs.filter((row) => belongsToEmployee(row)));
       setDocuments(allDocs.filter((row) => belongsToEmployee(row)));
       setActivities(allActivities.filter((row) => belongsToEmployee(row)).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))));
       setAttendanceRows(allAttendance.filter((row) => getAttendanceEmployeeId(row) === employeeId || row.employee?.name === employeeName));
@@ -186,7 +179,6 @@ export default function EmployeeDetailPage() {
 
   const derived = useMemo(() => {
     const completedTasks = tasks.filter((task) => ["completed", "done"].includes(String(task.status || "").toLowerCase()));
-    const loggedMinutes = timeLogs.reduce((total, row) => total + Number(row.total_minutes || minutesBetween(row.start_time, row.end_time)), 0);
     const approvedLeaveUnits = leaves.filter((leave) => leave.status === "approved").reduce((total, leave) => total + leaveUnits(leave), 0);
     const quotaTotal = leaveQuotas.length > 0
       ? leaveQuotas.reduce((total, quota) => total + Number(quota.no_of_leaves || quota.leaves || 0), 0)
@@ -196,14 +188,13 @@ export default function EmployeeDetailPage() {
 
     return {
       completedTasks: completedTasks.length,
-      loggedMinutes,
       approvedLeaveUnits,
       quotaTotal,
       remainingLeaves: Math.max(0, quotaTotal - approvedLeaveUnits),
       activeProjects: projects.filter((project) => !["finished", "completed", "archived"].includes(String(project.status || "").toLowerCase())).length,
       attendanceRate,
     };
-  }, [attendanceRows, leaveQuotas, leaveTypes, leaves, projects, tasks, timeLogs]);
+  }, [attendanceRows, leaveQuotas, leaveTypes, leaves, projects, tasks]);
 
   const leaveBalanceRows = useMemo(() => {
     return leaveTypes.map((type) => {
@@ -283,7 +274,6 @@ export default function EmployeeDetailPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {[
             { label: "Tasks Done", value: derived.completedTasks, icon: CheckCircle2, color: "text-green-500", bg: "bg-green-50" },
-            { label: "Hours Logged", value: formatDuration(derived.loggedMinutes), icon: Clock, color: "text-blue-500", bg: "bg-blue-50" },
             { label: "Leaves Taken", value: derived.approvedLeaveUnits, icon: FileText, color: "text-orange-500", bg: "bg-orange-50" },
             { label: "Remaining Leaves", value: derived.remainingLeaves, icon: XCircle, color: "text-red-500", bg: "bg-red-50" },
           ].map((stat) => (
@@ -417,20 +407,6 @@ export default function EmployeeDetailPage() {
                   ))}
                 </DataCard>
               </div>
-            )}
-
-            {activeTab === "time-logs" && (
-              <DataCard title="Time Logs" emptyLabel="No time logs found" columns={["Project", "Start", "End", "Total", "Memo"]}>
-                {timeLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="px-6 py-4 text-sm font-bold text-gray-700">{log.project?.project_name || log.project_name || "Project"}</td>
-                    <td className="px-6 py-4 text-xs font-bold text-gray-500">{formatDateTime(log.start_time)}</td>
-                    <td className="px-6 py-4 text-xs font-bold text-gray-500">{formatDateTime(log.end_time)}</td>
-                    <td className="px-6 py-4 text-xs font-black text-gray-700">{formatDuration(Number(log.total_minutes || minutesBetween(log.start_time, log.end_time)))}</td>
-                    <td className="max-w-[220px] truncate px-6 py-4 text-xs text-gray-500">{log.memo || "-"}</td>
-                  </tr>
-                ))}
-              </DataCard>
             )}
 
             {activeTab === "documents" && (

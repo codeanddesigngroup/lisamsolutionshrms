@@ -4,9 +4,6 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import Card from "@/components/ui/Card";
 import { 
   BarChart3, 
-  PieChart, 
-  LineChart, 
-  Clock, 
   DollarSign, 
   FileText, 
   Calendar, 
@@ -23,7 +20,6 @@ const reportsList = [
     title: "Task Reports",
     items: [
       { label: "Task Report", href: "/reports/tasks", icon: FileText, description: "View task progress and status reports." },
-      { label: "Time Log Report", href: "/reports/time-log", icon: Clock, description: "Analyze employee time logs and efficiency." },
     ]
   },
   {

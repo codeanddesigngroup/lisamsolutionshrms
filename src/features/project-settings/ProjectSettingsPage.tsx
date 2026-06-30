@@ -3,15 +3,10 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { ArrowLeft, Save, FileText, Plus, Edit, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, FileText } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 
 export default function ProjectSettingsPage() {
-  const [activeTab, setActiveTab] = useState("categories");
-
-  const categories = ["Web Development", "Mobile App", "UI/UX Design", "Marketing"];
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -42,22 +37,7 @@ export default function ProjectSettingsPage() {
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Configuration</h3>
               </div>
               <div className="p-2 space-y-1">
-                {[
-                  { id: "categories", label: "Project Categories" },
-                  { id: "reminders", label: "Project Reminders" },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full text-left px-4 py-3 rounded text-sm font-bold transition-colors flex items-center justify-between ${
-                      activeTab === tab.id
-                        ? "bg-primary text-white"
-                        : "text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
+                <div className="w-full rounded bg-primary px-4 py-3 text-sm font-bold text-white">Project Reminders</div>
               </div>
             </Card>
           </div>
@@ -69,41 +49,13 @@ export default function ProjectSettingsPage() {
                 <div>
                   <h3 className="text-sm font-black text-gray-800 tracking-wide flex items-center">
                     <FileText className="h-4 w-4 mr-2 text-primary" /> 
-                    Manage {activeTab === "categories" ? "Project Categories" : "Project Reminders"}
+                    Manage Project Reminders
                   </h3>
-                  <p className="text-xs text-gray-500 mt-1">Configure {activeTab} for your projects.</p>
+                  <p className="text-xs text-gray-500 mt-1">Configure reminders for your projects.</p>
                 </div>
-                {activeTab === "categories" && (
-                  <Button className="bg-primary text-white text-[10px] font-bold px-6 h-9 uppercase tracking-widest shadow-sm shadow-primary/20">
-                    <Plus className="h-3.5 w-3.5 mr-2" /> Add Category
-                  </Button>
-                )}
               </div>
 
               <div className="p-0">
-                {activeTab === "categories" ? (
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-100">
-                      <tr>
-                        <th className="px-6 py-4 text-xs font-black text-gray-500 uppercase tracking-widest">Name</th>
-                        <th className="px-6 py-4 text-xs font-black text-gray-500 uppercase tracking-widest text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {categories.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-bold text-gray-800">{item}</td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end space-x-2">
-                              <button className="text-blue-400 hover:text-blue-600 transition-colors p-1"><Edit className="h-4 w-4" /></button>
-                              <button className="text-red-400 hover:text-red-600 transition-colors p-1"><Trash2 className="h-4 w-4" /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
                   <div className="p-8 space-y-6">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1 max-w-md">
@@ -122,7 +74,6 @@ export default function ProjectSettingsPage() {
                       </Button>
                     </div>
                   </div>
-                )}
               </div>
             </Card>
           </div>

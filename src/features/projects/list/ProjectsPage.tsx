@@ -266,7 +266,7 @@ export default function ProjectsPage() {
            </div>
            <h3 className="text-lg font-bold text-gray-800 mb-2">Delete Project?</h3>
            <p className="text-xs text-gray-500 font-medium leading-relaxed mb-8">
-             This will permanently delete the project and all associated tasks, files, and time logs.
+             This will permanently delete the project and all associated tasks and files.
            </p>
            <div className="flex space-x-3">
               <Button onClick={() => setDeletingProjectId(null)} className="flex-1 bg-gray-100 text-gray-600 border-none h-11 text-[10px] font-black uppercase tracking-widest">Cancel</Button>

@@ -272,14 +272,6 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin"],
   },
   {
-    prefixes: ["/time-logs/active", "/time-logs/by-employee"],
-    roles: ["admin"],
-  },
-  {
-    prefixes: ["/time-logs/create", "/time-logs/calendar"],
-    roles: ["admin", "employee"],
-  },
-  {
     prefixes: ["/events/create", "/event-type"],
     roles: ["admin"],
   },
@@ -294,10 +286,6 @@ export const roleRouteRules: RoleRouteRule[] = [
   {
     prefixes: ["/dashboard/client"],
     roles: ["client"],
-  },
-  {
-    prefixes: ["/dashboard/hr", "/dashboard/finance", "/dashboard/project"],
-    roles: ["admin"],
   },
   {
     prefixes: ["/employee/dashboard", "/employee/payroll", "/member/dashboard", "/member/payroll"],
@@ -320,7 +308,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin", "employee"],
   },
   {
-    prefixes: ["/projects", "/tasks", "/taskboard", "/task-calendar", "/time-logs", "/discussion", "/user-chat", "/events", "/event-calendar", "/notices", "/faqs", "/search", "/profile"],
+    prefixes: ["/projects", "/tasks", "/taskboard", "/task-calendar", "/user-chat", "/events", "/event-calendar", "/notices", "/faqs", "/search", "/profile"],
     roles: ["admin", "employee", "client"],
   },
   {
@@ -330,9 +318,6 @@ export const roleRouteRules: RoleRouteRule[] = [
 ];
 
 export const permissionRouteRules: PermissionRouteRule[] = [
-  { prefixes: ["/dashboard/hr"], anyOf: ["dashboard.view", "hr.view", "employees.view", "attendance.view", "leaves.view", "holidays.view"] },
-  { prefixes: ["/dashboard/finance"], anyOf: ["dashboard.view", "finance.view"] },
-  { prefixes: ["/dashboard/project"], anyOf: ["dashboard.view", "projects.view", "tasks.view"] },
   { prefixes: ["/dashboard"], anyOf: ["dashboard.view"] },
   { prefixes: ["/settings", "/account-setup", "/module-settings", "/custom-fields"], anyOf: ["settings.view", "settings.manage"] },
   { prefixes: ["/role-permission"], anyOf: ["roles.view", "roles.manage"] },
@@ -357,10 +342,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/contracts"], anyOf: ["contracts.view", "contracts.manage"] },
   { prefixes: ["/projects"], anyOf: ["projects.view", "projects.manage"] },
   { prefixes: ["/tasks/create"], anyOf: ["tasks.create", "tasks.manage"] },
-  { prefixes: ["/tasks", "/taskboard", "/task-calendar", "/task-category", "/task-label", "/task-request", "/sub-task"], anyOf: ["tasks.view", "tasks.manage"] },
-  { prefixes: ["/time-logs/active", "/time-logs/by-employee"], anyOf: ["tasks.manage", "projects.manage", "reports.view"] },
-  { prefixes: ["/time-logs"], anyOf: ["tasks.view", "projects.view", "reports.view"] },
-  { prefixes: ["/discussion", "/discussion-categories", "/discussion-reply"], anyOf: ["projects.view", "tasks.view"] },
+  { prefixes: ["/tasks", "/taskboard", "/task-calendar", "/task-category"], anyOf: ["tasks.view", "tasks.manage"] },
   { prefixes: ["/user-chat"], anyOf: ["messages.view", "messages.manage"] },
   { prefixes: ["/events/create", "/event-type"], anyOf: ["events.create", "events.manage"] },
   { prefixes: ["/events", "/event-calendar"], anyOf: ["events.view", "events.manage"] },

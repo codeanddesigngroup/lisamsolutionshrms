@@ -7,10 +7,8 @@ import {
   AlertCircle,
   Bell,
   Calendar,
-  CheckCircle2,
   CheckSquare,
   ChevronLeft,
-  Clock,
   Edit,
   Flag,
   ListTodo,
@@ -19,7 +17,6 @@ import {
   Pause,
   Pin,
   Play,
-  Plus,
   RefreshCw,
   Share2,
   User,
@@ -33,7 +30,6 @@ import Card from "@/components/ui/Card";
 import api from "@/lib/api";
 import { Task } from "@/types";
 import { useToast } from "@/context/ToastContext";
-import { formatDuration } from "@/lib/hr-utils";
 import { useAuth } from "@/context/AuthContext";
 import { isTaskAssignedToUser } from "@/lib/task-visibility";
 
@@ -70,29 +66,10 @@ type LooseRecord = {
 
 const tabs = [
   { id: "details", label: "Task", icon: ListTodo },
-  { id: "subtasks", label: "Subtasks", icon: CheckSquare },
   { id: "files", label: "Files", icon: Paperclip },
-  { id: "timelogs", label: "Time Logs", icon: Clock },
   { id: "comments", label: "Comments", icon: MessageSquare },
   { id: "notes", label: "Notes", icon: MessageSquare },
   { id: "history", label: "History", icon: Calendar },
-];
-
-const starterSubtasks = [
-  {
-    id: "starter-subtask-1",
-    title: "Confirm task requirements",
-    status: "complete",
-    due_date: "2026-05-10",
-    files: [],
-  },
-  {
-    id: "starter-subtask-2",
-    title: "Prepare frontend handoff",
-    status: "incomplete",
-    due_date: "2026-05-13",
-    files: [{ id: "starter-subtask-file-1", filename: "handoff-checklist.pdf", size: "95 KB" }],
-  },
 ];
 
 const starterFiles = [
@@ -120,17 +97,6 @@ const starterNotes = [
     body: "Internal note: keep this task pinned until the current milestone is closed.",
     created_at: "2026-05-01T11:00:00.000Z",
     user: { name: "Admin" },
-  },
-];
-
-const starterTimeLogs = [
-  {
-    id: "starter-log-1",
-    employee: { name: "Frontend Developer" },
-    start_time: "2026-05-01 09:00",
-    end_time: "2026-05-01 11:30",
-    total_minutes: 150,
-    memo: "Initial implementation",
   },
 ];
 
@@ -206,7 +172,6 @@ export default function TaskDetailPage() {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [task, setTask] = useState<Task | null>(null);
-  const [subtasks, setSubtasks] = useState<LooseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const canManageTask = user?.role === "admin" || user?.role === "super_admin";
@@ -230,7 +195,6 @@ export default function TaskDetailPage() {
         }
 
         setTask(fetchedTask);
-        setSubtasks(getCollection((fetchedTask as unknown as LooseRecord).subtasks, starterSubtasks));
         setError(null);
       } catch (err: unknown) {
         console.error("Fetch Task Error:", err);
@@ -249,25 +213,9 @@ export default function TaskDetailPage() {
       files: getCollection(source.files, starterFiles),
       comments: getCollection(source.comments, starterComments),
       notes: getCollection(source.notes, starterNotes),
-      timeLogs: getCollection(source.time_logs || source.timeLogs, starterTimeLogs),
       history: getCollection(source.history || source.activities, starterHistory),
     };
   }, [task]);
-
-  const completedSubtasks = subtasks.filter((subtask) => ["complete", "completed"].includes(String(subtask.status || "").toLowerCase())).length;
-  const subtaskProgress = subtasks.length ? Math.round((completedSubtasks / subtasks.length) * 100) : 0;
-  const totalLoggedMinutes = collections.timeLogs.reduce((sum, entry) => sum + Number(entry.total_minutes || entry.minutes || 0), 0);
-
-  const toggleSubtask = (subtaskId: number | string) => {
-    setSubtasks((current) =>
-      current.map((subtask) => {
-        const key = subtask.id || subtask.title || subtask.name;
-        if (key !== subtaskId) return subtask;
-        const isComplete = ["complete", "completed"].includes(String(subtask.status || "").toLowerCase());
-        return { ...subtask, status: isComplete ? "incomplete" : "complete" };
-      }),
-    );
-  };
 
   if (loading) {
     return (
@@ -397,74 +345,12 @@ export default function TaskDetailPage() {
               </Card>
             )}
 
-            {activeTab === "subtasks" && (
-              <div className="rounded-2xl border border-gray-50 bg-white p-6 shadow-sm">
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-800">Subtasks</h3>
-                    <p className="mt-1 text-xs font-medium text-gray-400">{completedSubtasks}/{subtasks.length} complete / {subtaskProgress}% progress</p>
-                  </div>
-                  {canManageTask && (
-                    <button className="flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-primary/20">
-                      <Plus className="h-4 w-4" />
-                      <span>Add Subtask</span>
-                    </button>
-                  )}
-                </div>
-                <div className="mb-5 h-2 overflow-hidden rounded-full bg-gray-100">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${subtaskProgress}%` }} />
-                </div>
-                <div className="space-y-3">
-                  {subtasks.map((subtask, index) => {
-                    const isComplete = ["complete", "completed"].includes(String(subtask.status || "").toLowerCase());
-                    const subtaskKey = getRecordKey(subtask, `subtask-${index}`);
-                    return (
-                      <div key={subtaskKey} className="rounded-2xl border border-gray-50 bg-gray-50/60 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-4">
-                          <button type="button" onClick={() => toggleSubtask(subtask.id || subtaskKey)} className="flex min-w-0 items-center gap-3 text-left">
-                            <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border ${isComplete ? "border-green-500 bg-green-500 text-white" : "border-gray-200 bg-white text-transparent"}`}>
-                              <CheckCircle2 className="h-4 w-4" />
-                            </span>
-                            <span className={`text-sm font-black ${isComplete ? "text-gray-400 line-through" : "text-gray-800"}`}>{subtask.title || subtask.name || "Untitled subtask"}</span>
-                          </button>
-                          <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                            <span>{subtask.due_date || "No due date"}</span>
-                            <span className={`${getStatusColor(subtask.status)} rounded-full px-2.5 py-1 text-[9px] font-black`}>{subtask.status || "Incomplete"}</span>
-                          </div>
-                        </div>
-                        {Array.isArray(subtask.files) && subtask.files.length > 0 && (
-                          <div className="mt-4 border-t border-gray-100 pt-4">
-                            <AdminFileManager title="Subtask Files" description="Files attached to this subtask." files={subtask.files} allowUpload={false} emptyText="No subtask files." />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {activeTab === "files" && (
               <AdminFileManager
                 title="Task Files"
                 description="Matches Laravel task file controls with upload, preview, download, and delete."
                 files={collections.files}
                 emptyText="No task files uploaded yet."
-              />
-            )}
-
-            {activeTab === "timelogs" && (
-              <AdminDataTable
-                title={`Time Logs / ${formatDuration(totalLoggedMinutes)}`}
-                records={collections.timeLogs}
-                getRecordKey={(record, index) => getRecordKey(record, `time-log-${index}`)}
-                columns={[
-                  { header: "Employee", accessor: (record) => record.employee?.name || record.user?.name || record.name || "N/A" },
-                  { header: "Start", accessor: (record) => record.start_time || record.started_at || "N/A" },
-                  { header: "End", accessor: (record) => record.end_time || record.ended_at || "Running" },
-                  { header: "Time", accessor: (record) => formatDuration(Number(record.total_minutes || record.minutes)) },
-                  { header: "Memo", accessor: (record) => record.memo || record.note || "N/A" },
-                ]}
               />
             )}
 
@@ -546,10 +432,6 @@ export default function TaskDetailPage() {
                     <Flag className={`h-3 w-3 fill-current ${getPriorityColor(task.priority)}`} />
                     <span className={`text-[10px] font-black uppercase ${getPriorityColor(task.priority)}`}>{task.priority}</span>
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Subtask Progress</span>
-                  <span className="text-xs font-black text-gray-800">{subtaskProgress}%</span>
                 </div>
                 {canManageTask && (
                   <Button className="mt-2 h-11 w-full bg-primary text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-primary/20">

@@ -7,13 +7,11 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckSquare,
-  Clock,
   DollarSign,
   Edit,
   Eye,
   FileText,
   Layers,
-  MessageSquare,
   Milestone,
   MoreHorizontal,
   Paperclip,
@@ -91,12 +89,10 @@ const projectNav = [
   { label: "Milestones", href: "/projects/{projectId}/milestones", icon: Milestone },
   { label: "Tasks", href: "/projects/{projectId}/tasks", icon: CheckSquare },
   { label: "Files", href: "/projects/{projectId}/files", icon: Paperclip },
-  { label: "Discussions", href: "/projects/{projectId}/discussions", icon: MessageSquare },
   { label: "Notes", href: "/projects/{projectId}/notes", icon: FileText },
   { label: "Issues", href: "/projects/{projectId}/issues", icon: AlertCircle },
   { label: "Invoices", href: "/projects/{projectId}/invoices", icon: FileText },
   { label: "Payments", href: "/projects/{projectId}/payments", icon: DollarSign },
-  { label: "Time Logs", href: "/projects/{projectId}/time-logs", icon: Clock },
   { label: "Gantt", href: "/projects/{projectId}/gantt", icon: MoreHorizontal },
   { label: "Burndown", href: "/projects/{projectId}/burndown", icon: MoreHorizontal },
 ];
@@ -300,7 +296,7 @@ export default function ProjectWorkspacePage({
 
     try {
       const projectResponse = await api.get(
-        `/project/${projectId}?include=client,members,tasks,milestones,files,invoices,payments,expenses,issues,notes,discussions,timeLogs`,
+        `/project/${projectId}?include=client,members,tasks,milestones,files,invoices,payments,expenses,issues,notes`,
         { timeout: PROJECT_API_TIMEOUT_MS }
       );
       fetchedProject = extractProject(projectResponse.data);

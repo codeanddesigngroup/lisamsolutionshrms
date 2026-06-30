@@ -8,7 +8,6 @@ import {
   Calendar,
   CheckCircle2,
   ChevronRight,
-  Clock,
   Coffee,
   FileText,
   MapPin,
@@ -22,7 +21,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { isTaskAssignedToUser } from "@/lib/task-visibility";
-import { filterEmployeeScopedRecords, isEmployeeScopedRecordForUser } from "@/lib/employee-scope";
+import { filterEmployeeScopedRecords } from "@/lib/employee-scope";
 
 type ShiftSummary = {
   id?: number | string;
@@ -75,23 +74,6 @@ type TaskRecord = {
   status?: string;
   project?: { project_name?: string; name?: string };
   users?: Array<{ id?: number | string; name?: string }>;
-};
-
-type TimeLogRecord = {
-  id: number | string;
-  user_id?: number | string;
-  employee_id?: number | string;
-  employee?: { id?: number | string; name?: string };
-  user?: { id?: number | string; name?: string };
-  project?: { project_name?: string; name?: string };
-  project_name?: string;
-  task?: { heading?: string; title?: string };
-  task_name?: string;
-  start_time?: string;
-  end_time?: string;
-  total_minutes?: number | string;
-  total_hours?: number | string;
-  memo?: string;
 };
 
 type EventRecord = {
@@ -192,18 +174,6 @@ function getShiftLabel(shift?: ShiftSummary) {
   return `${shift.shift_name || "Assigned Shift"} - ${shift.start_time || "--:--"} to ${shift.end_time || "--:--"}`;
 }
 
-function formatDuration(minutes?: number | string, hours?: number | string) {
-  const totalMinutes = Number(minutes || 0) || Math.round((Number(hours || 0) || 0) * 60);
-  if (!totalMinutes) return "0h";
-  const wholeHours = Math.floor(totalMinutes / 60);
-  const remainingMinutes = totalMinutes % 60;
-  return remainingMinutes ? `${wholeHours}h ${remainingMinutes}m` : `${wholeHours}h`;
-}
-
-function getTimeLogMinutes(log: TimeLogRecord) {
-  return Number(log.total_minutes || 0) || Math.round((Number(log.total_hours || 0) || 0) * 60);
-}
-
 function formatDate(value?: string) {
   if (!value) return "No date";
   const date = new Date(value);
@@ -222,7 +192,6 @@ export default function EmployeeDashboard() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
-  const [timeLogs, setTimeLogs] = useState<TimeLogRecord[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isClockedIn, setIsClockedIn] = useState(false);
@@ -243,19 +212,17 @@ export default function EmployeeDashboard() {
       setLoading(true);
       try {
         const userScope = user?.id ? `user_id=${encodeURIComponent(String(user.id))}` : "";
-        const [employeeResponse, attendanceResponse, leaveResponse, taskResponse, timeLogResponse, eventResponse] = await Promise.all([
+        const [employeeResponse, attendanceResponse, leaveResponse, taskResponse, eventResponse] = await Promise.all([
           api.get("/employee"),
           api.get("/attendance"),
           api.get("/leave"),
           api.get(user?.id ? `/task?include=project,users&user_id=${encodeURIComponent(String(user.id))}` : "/task?include=project,users"),
-          api.get(userScope ? `/time-log?include=project,task&${userScope}` : "/time-log?include=project,task"),
           api.get(userScope ? `/event?${userScope}` : "/event"),
         ]);
         setEmployees(extractRecords<EmployeeRecord>(employeeResponse.data));
         setAttendance(extractRecords<AttendanceRecord>(attendanceResponse.data));
         setLeaves(extractRecords<LeaveRecord>(leaveResponse.data));
         setTasks(extractRecords<TaskRecord>(taskResponse.data));
-        setTimeLogs(extractRecords<TimeLogRecord>(timeLogResponse.data));
         setEvents(extractRecords<EventRecord>(eventResponse.data));
       } catch {
         showToast("Failed to load employee dashboard data.", "error");
@@ -304,12 +271,6 @@ export default function EmployeeDashboard() {
       .slice(0, 4);
   }, [employeeId, tasks, user]);
 
-  const myTimeLogs = useMemo(() => {
-    return filterEmployeeScopedRecords(timeLogs, user)
-      .filter((log) => !employeeId || String(log.employee_id || log.user_id || log.employee?.id || log.user?.id) === employeeId || isEmployeeScopedRecordForUser(log, user))
-      .sort((a, b) => String(b.start_time || "").localeCompare(String(a.start_time || "")));
-  }, [employeeId, timeLogs, user]);
-
   const upcomingEvents = useMemo(() => {
     const today = localDateString();
     return filterEmployeeScopedRecords(events, user, { includePublic: true })
@@ -348,13 +309,11 @@ export default function EmployeeDashboard() {
 
   const pendingLeaves = myLeaves.filter((leave) => statusText(leave.status) === "pending").length;
   const activeLeaves = myLeaves.filter((leave) => !["rejected", "cancelled"].includes(statusText(leave.status))).length;
-  const loggedMinutes = myTimeLogs.reduce((total, log) => total + getTimeLogMinutes(log), 0);
 
   const summaryStats = [
     { label: "My Leaves", value: String(activeLeaves), icon: Calendar, color: "text-blue-600", bg: "bg-blue-50" },
     { label: "Attendance", value: `${attendanceRate}%`, icon: UserCheck, color: "text-purple-600", bg: "bg-purple-50" },
     { label: "My Shift", value: assignedShift?.code || "None", icon: Timer, color: "text-green-600", bg: "bg-green-50" },
-    { label: "Time Logged", value: formatDuration(loggedMinutes), icon: Clock, color: "text-cyan-600", bg: "bg-cyan-50" },
     { label: "Events", value: String(upcomingEvents.length), icon: Calendar, color: "text-pink-600", bg: "bg-pink-50" },
     { label: "Pending Requests", value: String(pendingLeaves), icon: AlertCircle, color: "text-orange-600", bg: "bg-orange-50" },
   ];
@@ -527,37 +486,6 @@ export default function EmployeeDashboard() {
                 }) : (
                   <div className="px-6 py-10 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
                     No assigned tasks yet
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            <Card className="overflow-hidden border-none bg-white p-0 shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-50 px-6 py-5">
-                <h3 className="flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-800">
-                  <Clock className="mr-2 h-4 w-4 text-primary" />
-                  My Time Logs
-                </h3>
-                <Link href="/time-logs" className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline">View All</Link>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {myTimeLogs.slice(0, 4).length > 0 ? myTimeLogs.slice(0, 4).map((log) => (
-                  <Link key={log.id} href="/time-logs" className="block p-5 transition-colors hover:bg-gray-50/50">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-gray-800">{log.task?.heading || log.task?.title || log.memo || "Time log"}</p>
-                        <p className="mt-1 truncate text-[10px] font-black uppercase tracking-widest text-gray-400">
-                          {log.project?.project_name || log.project?.name || log.project_name || "Internal"} / {formatDate(log.start_time)}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-cyan-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-cyan-600">
-                        {formatDuration(log.total_minutes, log.total_hours)}
-                      </span>
-                    </div>
-                  </Link>
-                )) : (
-                  <div className="px-6 py-10 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
-                    No time logged yet
                   </div>
                 )}
               </div>

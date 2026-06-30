@@ -18,7 +18,6 @@ const modules = [
   { name: "Attendance", permissions: ["Add", "View", "Update", "Delete"] },
   { name: "Leaves", permissions: ["Add", "View", "Update", "Delete"] },
   { name: "Invoices", permissions: ["Add", "View", "Update", "Delete"] },
-  { name: "Time Logs", permissions: ["Add", "View", "Update", "Delete"] },
 ];
 
 export default function RolesPermissionPage() {

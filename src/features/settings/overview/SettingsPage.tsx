@@ -10,9 +10,6 @@ import {
   Palette,
   FileText,
   Calendar,
-  Briefcase,
-  Tags,
-  GitPullRequest,
   DollarSign,
   type LucideIcon,
 } from "lucide-react";
@@ -47,9 +44,6 @@ const settingsGroups: Array<{ title: string; items: SettingsItem[] }> = [
   {
     title: "Work Configuration",
     items: [
-      { label: "Project Categories", href: "/project-category", icon: Briefcase, module: "Projects", description: "Project category records used by project forms and reporting filters." },
-      { label: "Task Labels", href: "/task-label", icon: Tags, module: "Tasks", description: "Task labels used by tasks, task board, and quick task creation." },
-      { label: "Task Requests", href: "/task-request", icon: GitPullRequest, module: "Tasks", description: "Incoming task request review, approval, and rejection flow." },
       { label: "Event Types", href: "/event-type", icon: Calendar, module: "Events", description: "Event type names and colors for the admin event calendar." },
     ]
   },

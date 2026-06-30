@@ -16,7 +16,6 @@ import { useToast } from "@/context/ToastContext";
 type OptionRecord = {
   id: number | string;
   name?: string;
-  category_name?: string;
   project_name?: string;
 };
 
@@ -33,7 +32,6 @@ const projectSchema = z.object({
   start_date: z.string().min(1, "Start date is required"),
   deadline: z.string().optional(),
   without_deadline: z.boolean(),
-  category_id: z.string().optional(),
   client_id: z.string().optional(),
   project_summary: z.string().optional(),
   status: z.enum(["not started", "in progress", "on hold", "canceled", "finished"]),
@@ -52,7 +50,6 @@ type ProjectFormValues = z.infer<typeof projectSchema>;
 export default function CreateProjectPage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [categories, setCategories] = useState<OptionRecord[]>([]);
   const [clients, setClients] = useState<OptionRecord[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,7 +66,6 @@ export default function CreateProjectPage() {
       start_date: new Date().toISOString().split('T')[0],
       deadline: "",
       without_deadline: false,
-      category_id: "",
       client_id: "",
       project_summary: "",
       status: "not started",
@@ -82,11 +78,7 @@ export default function CreateProjectPage() {
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const [catRes, clientRes] = await Promise.all([
-          api.get("/project-category"),
-          api.get("/client")
-        ]);
-        setCategories(catRes.data.data || []);
+        const clientRes = await api.get("/client");
         setClients(clientRes.data.data || []);
       } catch (err) {
         console.error("Failed to fetch project options:", err);
@@ -215,19 +207,6 @@ export default function CreateProjectPage() {
                   }`} 
                 />
                 {errors.deadline && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.deadline.message}</p>}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project Category</label>
-                <select 
-                  {...register("category_id")}
-                  className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
-                >
-                  <option value="">--</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.category_name}</option>
-                  ))}
-                </select>
               </div>
 
               <div className="space-y-1.5">

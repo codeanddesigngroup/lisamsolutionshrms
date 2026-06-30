@@ -19,7 +19,6 @@ import {
   FileText, 
   Calendar, 
   DollarSign, 
-  Clock, 
   MessageSquare, 
   Plus, 
   Edit, 
@@ -34,13 +33,11 @@ const tabs = [
   { id: "milestones", label: "Milestones", icon: Milestone },
   { id: "tasks", label: "Tasks", icon: CheckSquare },
   { id: "files", label: "Files", icon: Paperclip },
-  { id: "discussions", label: "Discussions", icon: MessageSquare },
   { id: "notes", label: "Notes", icon: FileText },
   { id: "issues", label: "Issues", icon: AlertCircle },
   { id: "invoices", label: "Invoices", icon: FileText },
   { id: "payments", label: "Payments", icon: DollarSign },
   { id: "expenses", label: "Expenses", icon: DollarSign },
-  { id: "timelogs", label: "Time Logs", icon: Clock },
   { id: "gantt", label: "Gantt", icon: MoreVertical },
   { id: "burndown", label: "Burndown", icon: MoreVertical },
 ];
@@ -160,7 +157,7 @@ export default function ProjectDetailPage() {
               ) : (
                 <Link
                   key={tab.id}
-                  href={`/projects/${project.id}/${tab.id === "timelogs" ? "time-logs" : tab.id}`}
+                  href={`/projects/${project.id}/${tab.id}`}
                   className="flex items-center space-x-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap text-gray-400 hover:bg-gray-50 hover:text-gray-600"
                 >
                    <tab.icon className="h-4 w-4" />
