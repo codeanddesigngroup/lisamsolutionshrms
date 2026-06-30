@@ -3,7 +3,7 @@
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/context/ToastContext";
-import api from "@/lib/api";
+import { attendanceService } from "@/services/attendance/attendance.service";
 import { RefreshCw } from "lucide-react";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
@@ -21,6 +21,8 @@ type ShiftSummary = {
 
 export type AttendanceEmployeeOption = {
   id: number | string;
+  company_id?: number | string;
+  employee_id?: number | string;
   name: string;
   email?: string;
   employee_detail?: {
@@ -53,6 +55,7 @@ export type AttendanceRecordForOverride = {
 
 type AttendanceOverrideModalProps = {
   isOpen: boolean;
+  mode?: "create" | "edit";
   date: string;
   employee: AttendanceEmployeeOption;
   attendance?: AttendanceRecordForOverride;
@@ -99,6 +102,7 @@ const getInitialForm = (
 
 export default function AttendanceOverrideModal({
   isOpen,
+  mode,
   date,
   employee,
   attendance,
@@ -112,9 +116,9 @@ export default function AttendanceOverrideModal({
   const [saving, setSaving] = useState(false);
 
   const shift = employee.employee_detail?.shift_type;
-  const isEditing = Boolean(attendance?.id);
+  const isEditing = mode ? mode === "edit" : Boolean(attendance?.id);
   const title = isEditing ? "Edit Attendance" : "Create Attendance";
-  const isAbsent = form.status === "absent";
+  const isAbsent = !isEditing && form.status === "absent";
 
   const shiftLabel = useMemo(() => {
     if (!shift) return "No shift assigned";
@@ -139,31 +143,20 @@ export default function AttendanceOverrideModal({
 
     setSaving(true);
     try {
-      const response = await api.post("/attendance/override", {
-        attendance_id: attendance?.id,
-        employee_id: employee.id,
-        user_id: employee.id,
+      const response = await attendanceService.overrideAttendance({
+        company_id: employee.company_id || "",
+        employee_id: employee.employee_id || employee.employee_detail?.employee_id || employee.id,
         date,
-        status: form.status === "on-time" || form.status === "missing-checkout" ? "present" : form.status,
+        status: isEditing && (form.clock_in || form.clock_out)
+          ? "present"
+          : form.status === "on-time" || form.status === "missing-checkout"
+            ? "present"
+            : form.status,
         clock_in: isAbsent ? "" : form.clock_in,
         clock_out: isAbsent ? "" : form.clock_out,
-        clock_in_ip: isAbsent ? "-" : form.clock_in_ip,
-        clock_out_ip: isAbsent ? "-" : form.clock_out_ip,
-        working_from: isAbsent ? "" : form.working_from,
-        late: form.status === "late",
-        half_day: form.status === "half-day",
-        shift_type_id: employee.employee_detail?.shift_type_id || shift?.id || attendance?.shift_type_id || null,
-        shift_type: shift || attendance?.shift_type,
-        source: "manual_override",
-        source_type: "manual_override",
-        device_id: form.device_id || null,
-        attendance_device_id: form.device_id || null,
-        reason: form.reason.trim() || "Manual attendance entry",
-        override_reason: form.reason.trim() || "Manual attendance entry",
-        override_context: contextLabel || "daily_attendance",
       });
 
-      onSaved(response.data.data as AttendanceRecordForOverride);
+      onSaved(response.data as AttendanceRecordForOverride);
       showToast(attendance?.id ? "Attendance updated." : "Attendance created.");
       onClose();
     } catch (error) {
@@ -185,20 +178,22 @@ export default function AttendanceOverrideModal({
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Final Status</label>
-            <select
-              value={form.status}
-              onChange={(event) => handleStatusChange(event.target.value as OverrideForm["status"])}
-              className="form-control"
-            >
-              <option value="on-time">On Time</option>
-              <option value="late">Late</option>
-              <option value="half-day">Half Day</option>
-              <option value="missing-checkout">Missing Checkout</option>
-              <option value="absent">Absent</option>
-            </select>
-          </div>
+          {!isEditing && (
+            <div>
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Final Status</label>
+              <select
+                value={form.status}
+                onChange={(event) => handleStatusChange(event.target.value as OverrideForm["status"])}
+                className="form-control"
+              >
+                <option value="on-time">On Time</option>
+                <option value="late">Late</option>
+                <option value="half-day">Half Day</option>
+                <option value="missing-checkout">Missing Checkout</option>
+                <option value="absent">Absent</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">Check In</label>
             <input

@@ -60,6 +60,8 @@ type NodeAttendanceRecord = {
   device_serial?: string | null;
   workedHours?: number | string;
   worked_hours?: number | string;
+  manualOverride?: boolean;
+  manual_override?: boolean;
 };
 
 export type AttendanceEmployee = NodeEmployee & {
@@ -95,6 +97,7 @@ export type AttendanceRecord = {
   clock_in?: string;
   clock_out?: string;
   worked_hours?: number;
+  manual_override?: boolean;
   source?: string;
   source_type?: string;
   device_id?: string | number | null;
@@ -194,6 +197,7 @@ const normalizeAttendanceRecord = (
     clock_in: toClockTime(checkIn),
     clock_out: toClockTime(checkOut),
     worked_hours: Number(record.workedHours ?? record.worked_hours ?? 0),
+    manual_override: record.manualOverride ?? record.manual_override ?? false,
     source: "machine",
     source_type: "machine",
     device_id: deviceSerial,
@@ -258,12 +262,13 @@ export const attendanceService = {
    */
   overrideAttendance: async (payload: {
     employee_id: string | number;
+    company_id: string | number;
     date: string;
+    status: string;
     clock_in?: string;
     clock_out?: string;
-    reason: string;
-  }): Promise<ApiEnvelope<{ success: boolean }>> => {
-    const response = await api.post<ApiEnvelope<{ success: boolean }>>("/v1/attendance/override", payload);
+  }): Promise<ApiEnvelope<NodeAttendanceRecord>> => {
+    const response = await nodeApi.post<ApiEnvelope<NodeAttendanceRecord>>("/attendance/override", payload);
     return response.data;
   }
 };

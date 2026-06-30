@@ -324,15 +324,8 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     setExceptionsOnly(false);
   };
 
-  const handleAttendanceSaved = (record: AttendanceRecordForOverride) => {
-    const savedRecord = record as AttendanceRecord;
-    setAttendance((current) => {
-      const withoutSameRecord = current.filter((item) => {
-        if (savedRecord.id && String(item.id) === String(savedRecord.id)) return false;
-        return !(String(item.date) === String(savedRecord.date) && String(item.employee_id || item.user_id) === String(savedRecord.employee_id || savedRecord.user_id));
-      });
-      return [savedRecord, ...withoutSameRecord];
-    });
+  const handleAttendanceSaved = () => {
+    void fetchAttendance();
   };
 
   return (
@@ -489,11 +482,6 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                         <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${getStatusClass(row.status)}`}>
                           {statusLabel(row.status)}
                         </span>
-                        {row.attendance?.manual_override && (
-                          <div className="mt-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-blue-600">
-                            <ShieldCheck className="h-3 w-3" /> Override
-                          </div>
-                        )}
                       </td>
                       <td className="px-4 py-4">
                         <div className="text-xs font-bold text-gray-700">{formatTime(row.attendance?.clock_in)}</div>
@@ -533,7 +521,11 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                         <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{getDeviceLabel(row.attendance)}</div>
                       </td>
                       <td className={`${canManageAttendance ? "" : "rounded-r-lg"} px-4 py-4`}>
-                        {row.contextLabel ? (
+                        {row.attendance?.manual_override ? (
+                          <div className="flex items-center gap-1 text-xs font-bold text-blue-600">
+                            <ShieldCheck className="h-3.5 w-3.5" /> Override
+                          </div>
+                        ) : row.contextLabel ? (
                           <div className="flex items-center gap-1 text-xs font-bold text-gray-700">
                             <CalendarDays className="h-3.5 w-3.5 text-primary" /> {row.contextLabel}
                           </div>
@@ -579,6 +571,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
           <AttendanceOverrideModal
             key={`${editingRow.employee.id}-${date}-${editingRow.attendance?.id || "new"}-${editingRow.status}`}
             isOpen={Boolean(editingRow)}
+            mode="edit"
             date={date}
             employee={editingRow.employee}
             attendance={editingRow.attendance}
