@@ -73,6 +73,7 @@ export const calculateAttendanceStatus = (
   record: { 
     status?: string; 
     clock_in?: string; 
+    clock_out?: string;
     half_day?: boolean; 
     late?: boolean;
     is_holiday?: boolean;
@@ -88,8 +89,18 @@ export const calculateAttendanceStatus = (
   if (record.half_day || explicit === "half-day" || explicit === "half day") return "half-day";
 
   const clockIn = normalizeShiftMinute(record.clock_in, shift);
+  const clockOut = normalizeShiftMinute(record.clock_out, shift);
   const shiftStart = normalizeShiftMinute(shift?.start_time, shift);
+  const shiftEnd = normalizeShiftMinute(shift?.end_time, shift);
   const halfDayMark = normalizeShiftMinute(getShiftHalfDayMarkTime(shift), shift);
+
+  if (clockIn !== null && clockOut !== null && shiftStart !== null && shiftEnd !== null) {
+    const shiftDuration = shiftEnd - shiftStart;
+    let workedDuration = clockOut - clockIn;
+    if (workedDuration < 0) workedDuration += 24 * 60;
+
+    if (shiftDuration > 0 && workedDuration <= shiftDuration / 2) return "half-day";
+  }
 
   // 1. Half Day Check (if clocked in after the half-day mark)
   if (clockIn !== null && halfDayMark !== null && clockIn >= halfDayMark) return "half-day";
