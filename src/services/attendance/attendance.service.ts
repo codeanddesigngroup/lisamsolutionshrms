@@ -1,7 +1,7 @@
 import axios from "axios";
 import api from "../../lib/api";
 import { ApiEnvelope } from "../../lib/api-contract";
-import { AttendanceStatus } from "../../lib/hr-utils";
+import { AttendanceStatus, getShiftHalfDayMarkTime } from "../../lib/hr-utils";
 
 const NODE_API_URL =
   process.env.NEXT_PUBLIC_NODE_API_URL ||
@@ -27,6 +27,7 @@ type NodeShift = {
   break_minutes?: number;
   late_grace_minutes?: number;
   shift_hours?: number | string;
+  half_day_mark_time?: string;
 };
 
 type NodeEmployee = {
@@ -146,10 +147,15 @@ const toClockTime = (value?: string | null) => {
 const normalizeShift = (shift?: NodeShift) => {
   if (!shift) return undefined;
 
-  return {
+  const normalizedShift = {
     ...shift,
     shift_name: shift.shift_name || shift.type || "Shift",
     min_hours: Number(shift.shift_hours || 0),
+  };
+
+  return {
+    ...normalizedShift,
+    half_day_mark_time: getShiftHalfDayMarkTime(normalizedShift),
   };
 };
 

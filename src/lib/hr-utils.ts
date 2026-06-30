@@ -30,6 +30,20 @@ export const timeToMinutes = (value?: string) => {
   return hours * 60 + minutes;
 };
 
+export const getShiftHalfDayMarkTime = (shift?: ShiftDefinition) => {
+  if (shift?.half_day_mark_time) return shift.half_day_mark_time.slice(0, 5);
+
+  const start = timeToMinutes(shift?.start_time);
+  const end = timeToMinutes(shift?.end_time);
+  if (start === null || end === null || start === end) return undefined;
+
+  const duration = end > start ? end - start : end + 24 * 60 - start;
+  const midpoint = (start + Math.floor(duration / 2)) % (24 * 60);
+  const hours = String(Math.floor(midpoint / 60)).padStart(2, "0");
+  const minutes = String(midpoint % 60).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
+
 /**
  * Normalizes minutes for overnight shifts.
  * Times in the after-midnight portion of an overnight shift need to be moved
@@ -75,7 +89,7 @@ export const calculateAttendanceStatus = (
 
   const clockIn = normalizeShiftMinute(record.clock_in, shift);
   const shiftStart = normalizeShiftMinute(shift?.start_time, shift);
-  const halfDayMark = normalizeShiftMinute(shift?.half_day_mark_time, shift);
+  const halfDayMark = normalizeShiftMinute(getShiftHalfDayMarkTime(shift), shift);
 
   // 1. Half Day Check (if clocked in after the half-day mark)
   if (clockIn !== null && halfDayMark !== null && clockIn >= halfDayMark) return "half-day";
