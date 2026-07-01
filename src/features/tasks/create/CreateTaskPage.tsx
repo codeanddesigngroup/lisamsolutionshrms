@@ -13,6 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
+import { getStoredUser } from "@/lib/session";
 
 type OptionRecord = {
   id: number | string;
@@ -42,7 +43,6 @@ const taskSchema = z.object({
   label: z.enum(["", "bug", "feature", "improvement", "support"]),
   priority: z.enum(["high", "medium", "low"]),
   status: z.string().min(1, "Status is required"),
-  is_private: z.boolean(),
   description: z.string().optional(),
 });
 
@@ -76,7 +76,6 @@ export default function CreateTaskPage() {
       label: "",
       priority: "medium",
       status: "incomplete",
-      is_private: false,
       description: "",
     },
   });
@@ -131,23 +130,20 @@ export default function CreateTaskPage() {
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
+        company_id: getStoredUser()?.company_id || null,
         heading: data.heading,
         start_date: data.start_date,
         due_date: data.due_date,
         priority: data.priority,
         status: data.status,
-        is_private: data.is_private,
         description: data.description,
         label: data.label || null,
-        task_users: [{ id: data.assigned_user_id }]
+        assigned_employee_id: Number(data.assigned_user_id),
+        designation_id: data.category_id ? Number(data.category_id) : null,
       };
 
       if (data.project_id) {
-        payload.project = { id: data.project_id };
-      }
-
-      if (data.category_id) {
-        payload.category = { id: data.category_id };
+        payload.project_id = Number(data.project_id);
       }
 
       await api.post("/task", payload);
