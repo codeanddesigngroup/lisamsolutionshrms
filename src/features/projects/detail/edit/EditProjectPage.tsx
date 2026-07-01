@@ -1,117 +1,133 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, RefreshCw, Save } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { Save, ArrowLeft } from "lucide-react";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import api from "@/lib/api";
+import { useToast } from "@/context/ToastContext";
+
+type Option = { id: number; name: string };
+type ProjectForm = {
+  project_name: string;
+  client_id: string;
+  department_id: string;
+  start_date: string;
+  deadline: string;
+  without_deadline: boolean;
+  project_summary: string;
+  status: "not started" | "in progress" | "on hold" | "canceled" | "finished";
+};
+
+const emptyForm: ProjectForm = {
+  project_name: "", client_id: "", department_id: "", start_date: "", deadline: "",
+  without_deadline: false, project_summary: "", status: "not started",
+};
 
 export default function EditProjectPage() {
+  const params = useParams();
   const router = useRouter();
+  const { showToast } = useToast();
+  const [form, setForm] = useState<ProjectForm>(emptyForm);
+  const [clients, setClients] = useState<Option[]>([]);
+  const [departments, setDepartments] = useState<Option[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [project, setProject] = useState({
-    name: "Website Redesign",
-    client: "Acme Corp",
-    startDate: "2024-01-15",
-    deadline: "2024-06-30",
-    status: "In Progress",
-    budget: "$15,000",
-    category: "Development",
-    description: "Complete overhaul of the corporate website including new branding and CMS integration."
-  });
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [projectResponse, clientResponse, departmentResponse] = await Promise.all([
+          api.get(`/project/${params.id}`),
+          api.get("/client?per_page=100"),
+          api.get("/departments"),
+        ]);
+        const project = projectResponse.data.data;
+        setClients(clientResponse.data.data || []);
+        setDepartments(departmentResponse.data.data || []);
+        setForm({
+          project_name: project.project_name || "",
+          client_id: project.client_id ? String(project.client_id) : "",
+          department_id: project.department_id ? String(project.department_id) : "",
+          start_date: project.start_date || "",
+          deadline: project.deadline || "",
+          without_deadline: Boolean(project.without_deadline),
+          project_summary: project.project_summary || "",
+          status: project.status || "not started",
+        });
+      } catch (err) {
+        console.error("Load Project Error:", err);
+        showToast("Failed to load project.", "error");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [params.id, showToast]);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    router.push('/projects');
+  const update = <K extends keyof ProjectForm>(key: K, value: ProjectForm[K]) => {
+    setForm((current) => ({ ...current, [key]: value }));
   };
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/project/${params.id}`, {
+        ...form,
+        client_id: form.client_id ? Number(form.client_id) : null,
+        department_id: form.department_id ? Number(form.department_id) : null,
+        deadline: form.without_deadline ? null : form.deadline,
+      });
+      showToast("Project updated successfully!");
+      router.push("/projects");
+      router.refresh();
+    } catch (err) {
+      console.error("Update Project Error:", err);
+      showToast("Failed to update project.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <DashboardLayout><div className="flex min-h-[400px] items-center justify-center"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div></DashboardLayout>;
+  }
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="bg-white px-6 py-4 rounded-2xl shadow-sm border border-gray-50 flex items-center justify-between -mx-6 -mt-6 mb-6">
-           <div className="flex items-center space-x-4">
-              <Link href="/projects" className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 transition-colors">
-                 <ArrowLeft className="h-5 w-5" />
-              </Link>
-              <div>
-                 <h1 className="text-base font-black text-gray-800 uppercase tracking-widest">Edit Project</h1>
-                 <p className="text-[10px] text-gray-400 font-bold mt-0.5">Update details for {project.name}</p>
-              </div>
-           </div>
-           <div className="flex items-center space-x-3">
-              <Button onClick={() => router.back()} className="bg-gray-50 text-gray-500 border-none px-6 h-10 text-[10px] font-black uppercase tracking-widest">Cancel</Button>
-              <Button onClick={handleSave} className="bg-primary text-white text-[10px] font-black px-6 h-10 uppercase tracking-widest shadow-lg shadow-primary/20">
-                 <Save className="h-4 w-4 mr-2" /> Update Project
-              </Button>
-           </div>
+      <form onSubmit={handleSave} className="space-y-6">
+        <div className="-mx-6 -mt-6 flex items-center justify-between border border-gray-50 bg-white px-6 py-4 shadow-sm">
+          <div className="flex items-center gap-4">
+            <Link href="/projects" className="rounded-xl p-2 text-gray-400 hover:bg-gray-50"><ArrowLeft className="h-5 w-5" /></Link>
+            <div><h1 className="text-base font-black uppercase tracking-widest text-gray-800">Edit Project</h1><p className="mt-0.5 text-[10px] font-bold text-gray-400">Update {form.project_name}</p></div>
+          </div>
+          <Button type="submit" disabled={saving} className="h-10 bg-primary px-6 text-[10px] font-black uppercase tracking-widest text-white">
+            {saving ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{saving ? "Updating..." : "Update Project"}
+          </Button>
         </div>
 
-        <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-           <div className="lg:col-span-2 space-y-6">
-              <Card title="General Details" className="border-none shadow-sm p-8 bg-white">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1.5 md:col-span-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Project Name</label>
-                       <input type="text" value={project.name} onChange={(e) => setProject({...project, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none" />
-                    </div>
-                    <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
-                       <input type="date" value={project.startDate} onChange={(e) => setProject({...project, startDate: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none" />
-                    </div>
-                    <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Deadline</label>
-                       <input type="date" value={project.deadline} onChange={(e) => setProject({...project, deadline: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none" />
-                    </div>
-                    <div className="space-y-1.5 md:col-span-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</label>
-                       <textarea value={project.description} onChange={(e) => setProject({...project, description: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none h-32" />
-                    </div>
-                 </div>
-              </Card>
-           </div>
-
-           <div className="space-y-6">
-              <Card title="Project Info" className="border-none shadow-sm p-8 bg-white">
-                 <div className="space-y-6">
-                    <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Client</label>
-                       <select value={project.client} onChange={(e) => setProject({...project, client: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
-                          <option>Acme Corp</option>
-                          <option>Tech Solutions</option>
-                          <option>Global Media</option>
-                       </select>
-                    </div>
-                    <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Project Category</label>
-                       <select value={project.category} onChange={(e) => setProject({...project, category: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
-                          <option>Development</option>
-                          <option>Design</option>
-                          <option>Marketing</option>
-                       </select>
-                    </div>
-                    <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Budget</label>
-                       <input type="text" value={project.budget} onChange={(e) => setProject({...project, budget: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none" />
-                    </div>
-                 </div>
-              </Card>
-
-              <Card title="Project Status" className="border-none shadow-sm p-8 bg-white">
-                 <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</label>
-                    <select value={project.status} onChange={(e) => setProject({...project, status: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
-                       <option>In Progress</option>
-                       <option>Not Started</option>
-                       <option>Finished</option>
-                       <option>On Hold</option>
-                    </select>
-                 </div>
-              </Card>
-           </div>
-        </form>
-      </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card title="General Details" className="border-none bg-white p-8 shadow-sm lg:col-span-2">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <label className="space-y-1.5 md:col-span-2"><span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Project Name</span><input required value={form.project_name} onChange={(e) => update("project_name", e.target.value)} className="w-full rounded-xl border-none bg-gray-50 p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-primary" /></label>
+              <label className="space-y-1.5"><span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Client</span><select value={form.client_id} onChange={(e) => update("client_id", e.target.value)} className="w-full rounded-xl border-none bg-gray-50 p-3 text-xs font-bold"><option value="">No client</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label className="space-y-1.5"><span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Department</span><select value={form.department_id} onChange={(e) => update("department_id", e.target.value)} className="w-full rounded-xl border-none bg-gray-50 p-3 text-xs font-bold"><option value="">No department</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label className="space-y-1.5"><span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Start Date</span><input required type="date" value={form.start_date} onChange={(e) => update("start_date", e.target.value)} className="w-full rounded-xl border-none bg-gray-50 p-3 text-xs font-bold" /></label>
+              <label className="space-y-1.5"><span className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">Deadline <span><input type="checkbox" checked={form.without_deadline} onChange={(e) => update("without_deadline", e.target.checked)} /> No deadline</span></span><input required={!form.without_deadline} disabled={form.without_deadline} type="date" value={form.deadline} onChange={(e) => update("deadline", e.target.value)} className="w-full rounded-xl border-none bg-gray-50 p-3 text-xs font-bold disabled:opacity-50" /></label>
+              <label className="space-y-1.5 md:col-span-2"><span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Project Summary</span><textarea value={form.project_summary} onChange={(e) => update("project_summary", e.target.value)} className="h-32 w-full rounded-xl border-none bg-gray-50 p-3 text-xs font-bold" /></label>
+            </div>
+          </Card>
+          <Card title="Project Status" className="h-fit border-none bg-white p-8 shadow-sm">
+            <select value={form.status} onChange={(e) => update("status", e.target.value as ProjectForm["status"])} className="w-full rounded-xl border-none bg-gray-50 p-3 text-xs font-bold uppercase">
+              <option value="not started">Not Started</option><option value="in progress">In Progress</option><option value="on hold">On Hold</option><option value="canceled">Canceled</option><option value="finished">Finished</option>
+            </select>
+          </Card>
+        </div>
+      </form>
     </DashboardLayout>
   );
 }
