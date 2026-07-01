@@ -36,6 +36,7 @@ const taskSchema = z.object({
   due_date: z.string().min(1, "Due date is required"),
   assigned_user_id: z.string().min(1, "Please assign this task to an employee"),
   category_id: z.string().optional(),
+  label: z.enum(["", "bug", "feature", "improvement", "support"]),
   priority: z.enum(["high", "medium", "low"]),
   status: z.string().min(1, "Status is required"),
   is_private: z.boolean(),
@@ -69,6 +70,7 @@ export default function CreateTaskPage() {
       due_date: "",
       assigned_user_id: "",
       category_id: "",
+      label: "",
       priority: "medium",
       status: "incomplete",
       is_private: false,
@@ -84,7 +86,6 @@ export default function CreateTaskPage() {
 
   useEffect(() => {
     if (!canCreateTask) {
-      setLoadingOptions(false);
       return;
     }
 
@@ -119,6 +120,7 @@ export default function CreateTaskPage() {
         status: data.status,
         is_private: data.is_private,
         description: data.description,
+        label: data.label || null,
         task_users: [{ id: data.assigned_user_id }]
       };
 
@@ -176,34 +178,33 @@ export default function CreateTaskPage() {
 
         <Card className="p-8 max-w-4xl mx-auto shadow-sm border-gray-100 relative min-h-[400px]">
           {loadingOptions && (
-             <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
-               <RefreshCw className="h-8 w-8 text-primary animate-spin mb-4" />
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading options...</p>
-             </div>
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
+              <RefreshCw className="h-8 w-8 text-primary animate-spin mb-4" />
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading options...</p>
+            </div>
           )}
 
           <form className="space-y-8" onSubmit={handleSubmit(onSubmit)}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Task Title <span className="text-red-500">*</span></label>
-                <input 
-                   type="text" 
-                   {...register("heading")}
-                   placeholder="e.g. Design Homepage" 
-                   className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${
-                     errors.heading ? "border-red-500" : "border-gray-200"
-                   }`} 
+                <input
+                  type="text"
+                  {...register("heading")}
+                  placeholder="e.g. Design Homepage"
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${errors.heading ? "border-red-500" : "border-gray-200"
+                    }`}
                 />
                 {errors.heading && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.heading.message}</p>}
               </div>
-              
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project</label>
-                <select 
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project <span className="text-red-500">*</span></label>
+                <select
                   {...register("project_id")}
                   className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">Select Project (Optional)</option>
+                  <option value="">Select Project</option>
                   {projects.map((proj) => (
                     <option key={proj.id} value={proj.id}>{proj.project_name}</option>
                   ))}
@@ -211,33 +212,31 @@ export default function CreateTaskPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Start Date</label>
-                <input 
-                  type="date" 
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Start Date <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
                   {...register("start_date")}
-                  className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all" 
+                  className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all"
                 />
               </div>
-              
+
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Due Date <span className="text-red-500">*</span></label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   {...register("due_date")}
-                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${
-                    errors.due_date ? "border-red-500" : "border-gray-200"
-                  }`} 
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${errors.due_date ? "border-red-500" : "border-gray-200"
+                    }`}
                 />
                 {errors.due_date && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.due_date.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Assigned To <span className="text-red-500">*</span></label>
-                <select 
+                <select
                   {...register("assigned_user_id")}
-                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer ${
-                    errors.assigned_user_id ? "border-red-500" : "border-gray-200"
-                  }`}
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer ${errors.assigned_user_id ? "border-red-500" : "border-gray-200"
+                    }`}
                 >
                   <option value="">Select Employee</option>
                   {employees.map((emp) => (
@@ -248,12 +247,12 @@ export default function CreateTaskPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Task Category</label>
-                <select 
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Task Category <span className="text-red-500">*</span></label>
+                <select
                   {...register("category_id")}
                   className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">--</option>
+                  <option value="">Select Category</option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.category_name}</option>
                   ))}
@@ -261,12 +260,25 @@ export default function CreateTaskPage() {
               </div>
 
               <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Task Label <span className="text-red-500">*</span></label>
+                <select
+                  {...register("label")}
+                  className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
+                >
+                  <option value="">Select Label</option>
+                  <option value="bug">Bug</option>
+                  <option value="feature">Feature</option>
+                  <option value="improvement">Improvement</option>
+                  <option value="support">Support</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Priority <span className="text-red-500">*</span></label>
-                <select 
+                <select
                   {...register("priority")}
-                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer ${
-                    errors.priority ? "border-red-500" : "border-gray-200"
-                  }`}
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer ${errors.priority ? "border-red-500" : "border-gray-200"
+                    }`}
                 >
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
@@ -274,24 +286,13 @@ export default function CreateTaskPage() {
                 </select>
                 {errors.priority && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.priority.message}</p>}
               </div>
-              
-              <div className="space-y-1.5 flex items-end pb-2">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    {...register("is_private")}
-                    className="rounded border-gray-300 text-primary focus:ring-primary/20"
-                  />
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Private Task</span>
-                </label>
-              </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Description</label>
-              <textarea 
+              <textarea
                 {...register("description")}
-                className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none h-32 transition-all" 
+                className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none h-32 transition-all"
                 placeholder="Enter task details..."
               ></textarea>
             </div>
