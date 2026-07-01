@@ -5,24 +5,73 @@ import Link from "next/link";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import { Plus, RefreshCw, Edit, Trash2, Eye, FileText, AlertTriangle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import api from "@/lib/api";
 
-const contracts = [
-  { id: 1, subject: "Web Development Agreement", client: "John Anderson", amount: "$5,000.00", startDate: "2026-05-01", endDate: "2026-12-31", type: "Fixed Price" },
-  { id: 2, subject: "SEO Services Contract", client: "Sarah Williams", amount: "$1,200.00/mo", startDate: "2026-05-15", endDate: "2027-05-14", type: "Monthly" },
-  { id: 3, subject: "Graphic Design Retainer", client: "Michael Brown", amount: "$800.00", startDate: "2026-06-01", endDate: "2026-09-30", type: "Retainer" },
-  { id: 4, subject: "Consulting Agreement", client: "Emily Davis", amount: "$2,500.00", startDate: "2026-04-01", endDate: "2026-06-30", type: "One Time" },
-  { id: 5, subject: "App Maintenance Contract", client: "Robert Wilson", amount: "$350.00/mo", startDate: "2026-05-01", endDate: "2027-05-01", type: "Maintenance" },
-];
+type ContractRecord = {
+  id: number;
+  subject: string;
+  client: string;
+  amount: string;
+  startDate: string;
+  endDate: string;
+  type: string;
+  description?: string;
+};
+
+type ApiContract = {
+  id: number;
+  subject: string;
+  client_id: number;
+  contract_type_id?: number | null;
+  amount: number | string;
+  start_date: string;
+  end_date: string;
+  description?: string;
+};
+
+type ApiClient = { id: number; name: string };
 
 export default function ContractsPage() {
-  const [records, setRecords] = useState(contracts);
+  const [records, setRecords] = useState<ContractRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [clientFilter, setClientFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [viewingContract, setViewingContract] = useState<(typeof contracts)[number] | null>(null);
-  const [deletingContract, setDeletingContract] = useState<(typeof contracts)[number] | null>(null);
+  const [viewingContract, setViewingContract] = useState<ContractRecord | null>(null);
+  const [deletingContract, setDeletingContract] = useState<ContractRecord | null>(null);
+
+  useEffect(() => {
+    const loadContracts = async () => {
+      try {
+        const [contractResponse, clientResponse] = await Promise.all([
+          api.get("/contract"),
+          api.get("/client?per_page=100"),
+        ]);
+        const clients = (clientResponse.data.data || []) as ApiClient[];
+        const clientNames = new Map(clients.map((client) => [Number(client.id), client.name]));
+        const contracts = (contractResponse.data.data || []) as ApiContract[];
+        setRecords(contracts.map((contract) => ({
+          id: contract.id,
+          subject: contract.subject,
+          client: clientNames.get(Number(contract.client_id)) || `Client #${contract.client_id}`,
+          amount: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(contract.amount || 0)),
+          startDate: contract.start_date,
+          endDate: contract.end_date,
+          type: contract.contract_type_id ? `Type #${contract.contract_type_id}` : "Unspecified",
+          description: contract.description,
+        })));
+      } catch (err) {
+        console.error("Fetch Contracts Error:", err);
+        setError("Failed to load contracts from the database.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadContracts();
+  }, []);
 
   const filteredContracts = records.filter((contract) => {
     const startMatch = !dateFrom || contract.startDate >= dateFrom;
@@ -33,8 +82,10 @@ export default function ContractsPage() {
   });
   const clientOptions = Array.from(new Set(records.map((contract) => contract.client)));
   const typeOptions = Array.from(new Set(records.map((contract) => contract.type)));
-  const expiringSoon = records.filter((contract) => contract.endDate >= "2026-05-01" && contract.endDate <= "2026-06-30").length;
-  const expired = records.filter((contract) => contract.endDate < "2026-05-01").length;
+  const today = new Date().toISOString().slice(0, 10);
+  const soon = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  const expiringSoon = records.filter((contract) => contract.endDate >= today && contract.endDate <= soon).length;
+  const expired = records.filter((contract) => contract.endDate < today).length;
 
   const resetFilters = () => {
     setDateFrom("");
@@ -43,10 +94,16 @@ export default function ContractsPage() {
     setTypeFilter("all");
   };
 
-  const deleteContract = () => {
+  const deleteContract = async () => {
     if (!deletingContract) return;
-    setRecords((current) => current.filter((contract) => contract.id !== deletingContract.id));
-    setDeletingContract(null);
+    try {
+      await api.delete(`/contract/${deletingContract.id}`);
+      setRecords((current) => current.filter((contract) => contract.id !== deletingContract.id));
+      setDeletingContract(null);
+    } catch (err) {
+      console.error("Delete Contract Error:", err);
+      setError("Failed to delete contract.");
+    }
   };
 
   return (

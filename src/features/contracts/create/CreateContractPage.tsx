@@ -8,11 +8,14 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { getStoredUser } from "@/lib/session";
+
+type SelectOption = { id: number | string; name: string };
 
 export default function CreateContractPage() {
   const router = useRouter();
-  const [clients, setClients] = useState<any[]>([]);
-  const [contractTypes, setContractTypes] = useState<any[]>([]);
+  const [clients, setClients] = useState<SelectOption[]>([]);
+  const [contractTypes, setContractTypes] = useState<SelectOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -34,19 +37,19 @@ export default function CreateContractPage() {
 
   useEffect(() => {
     const fetchOptions = async () => {
-      try {
-        const [clientRes, typeRes] = await Promise.all([
+      const [clientResult, typeResult] = await Promise.allSettled([
           api.get("/client"),
           api.get("/contract-type"),
-        ]);
-        setClients(clientRes.data.data || []);
-        setContractTypes(typeRes.data.data || []);
-      } catch {
-        setClients([{ id: 1, name: "Acme Corp" }]);
-        setContractTypes([{ id: 1, name: "Fixed Price" }, { id: 2, name: "Hourly" }]);
-      } finally {
-        setLoadingOptions(false);
+      ]);
+      if (clientResult.status === "fulfilled") {
+        setClients(clientResult.value.data.data || []);
       }
+      if (typeResult.status === "fulfilled") {
+        setContractTypes(typeResult.value.data.data || []);
+      } else {
+        setContractTypes([{ id: 1, name: "Fixed Price" }, { id: 2, name: "Hourly" }]);
+      }
+      setLoadingOptions(false);
     };
     fetchOptions();
   }, []);
@@ -61,24 +64,24 @@ export default function CreateContractPage() {
     setError("");
     try {
       const payload = {
+        company_id: getStoredUser()?.company_id || null,
         subject: formData.subject,
-        client: { id: formData.client_id },
-        contract_type: { id: formData.contract_type_id },
+        client_id: Number(formData.client_id),
+        contract_type_id: Number(formData.contract_type_id),
         amount: parseFloat(formData.amount),
         start_date: formData.start_date,
         end_date: formData.end_date,
         description: formData.description,
       };
 
-      if (localStorage.getItem("token") === "mock_token_12345") {
-        setTimeout(() => { router.push("/contracts"); router.refresh(); }, 800);
-        return;
-      }
       await api.post("/contract", payload);
       router.push("/contracts");
       router.refresh();
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data?.error || "Failed to create contract.");
+    } catch (err: unknown) {
+      const response = typeof err === "object" && err && "response" in err
+        ? (err as { response?: { data?: { message?: string; error?: string } } }).response
+        : undefined;
+      setError(response?.data?.message || response?.data?.error || "Failed to create contract.");
     } finally {
       setSaving(false);
     }
@@ -132,7 +135,7 @@ export default function CreateContractPage() {
                 <select name="client_id" value={formData.client_id} onChange={handleChange}
                   className="w-full border-gray-200 rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none appearance-none cursor-pointer" required>
                   <option value="">Select Client</option>
-                  {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
 
@@ -141,7 +144,7 @@ export default function CreateContractPage() {
                 <select name="contract_type_id" value={formData.contract_type_id} onChange={handleChange}
                   className="w-full border-gray-200 rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none appearance-none cursor-pointer" required>
                   <option value="">Select Type</option>
-                  {contractTypes.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  {contractTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
 
