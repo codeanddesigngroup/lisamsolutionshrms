@@ -117,7 +117,7 @@ export default function CreateContractPage() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Subject <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <FileSignature className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400" />
