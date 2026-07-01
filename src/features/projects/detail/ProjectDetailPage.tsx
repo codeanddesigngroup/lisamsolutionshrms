@@ -173,7 +173,7 @@ export default function ProjectDetailPage() {
               {activeTab === "overview" && (
                  <>
                     <Card title="Project Summary" className="border-none shadow-sm bg-white p-8 text-gray-800">
-                       <div className="text-sm text-gray-600 leading-relaxed font-medium" dangerouslySetInnerHTML={{ __html: project.project_summary || "No summary provided." }} />
+                       <div className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-gray-600">{project.project_summary || "No summary provided."}</div>
                        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-gray-50">
                           <div>
                              <p className="text-[9px] text-gray-300 font-black uppercase tracking-widest mb-1">Start Date</p>
@@ -184,8 +184,8 @@ export default function ProjectDetailPage() {
                              <p className="text-xs font-bold text-red-400">{project.deadline || "No Deadline"}</p>
                           </div>
                           <div>
-                             <p className="text-[9px] text-gray-300 font-black uppercase tracking-widest mb-1">Total Budget</p>
-                             <p className="text-xs font-black text-gray-900">$0</p>
+                             <p className="text-[9px] text-gray-300 font-black uppercase tracking-widest mb-1">Department</p>
+                             <p className="text-xs font-black text-gray-900">{project.department?.name || "N/A"}</p>
                           </div>
                           <div>
                              <p className="text-[9px] text-gray-300 font-black uppercase tracking-widest mb-1">Status</p>
