@@ -16,11 +16,11 @@ import { Client } from "@/types";
 const clientSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
-  password: z.string().optional().or(z.literal("")),
   company_name: z.string().min(2, "Company name is required"),
   website: z.string().url("Invalid URL").optional().or(z.literal("")),
   mobile: z.string().optional(),
   address: z.string().optional(),
+  status: z.enum(["active", "deactive"]),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
@@ -63,6 +63,7 @@ export default function EditClientPage() {
           website: data.client_detail?.website || "",
           mobile: data.client_detail?.mobile || "",
           address: data.client_detail?.address || "",
+          status: data.status === "deactive" ? "deactive" : "active",
         });
       } catch (err) {
         console.error("Fetch Client Error:", err);
@@ -80,6 +81,7 @@ export default function EditClientPage() {
       const payload: Record<string, unknown> = {
         name: data.name,
         email: data.email,
+        status: data.status,
         client_detail: {
           company_name: data.company_name,
           website: data.website,
@@ -88,10 +90,6 @@ export default function EditClientPage() {
         }
       };
       
-      if (data.password) {
-        payload.password = data.password;
-      }
-
       await api.put(`/client/${params.id}`, payload);
       showToast("Client updated successfully!");
       router.push(`/clients/${params.id}`);
@@ -212,15 +210,6 @@ export default function EditClientPage() {
                           className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none" 
                        />
                     </div>
-                    <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Update Password (Optional)</label>
-                       <input 
-                          type="password" 
-                          placeholder="Leave blank to keep current"
-                          {...register("password")}
-                          className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none" 
-                       />
-                    </div>
                  </div>
               </Card>
            </div>
@@ -230,9 +219,14 @@ export default function EditClientPage() {
                  <div className="h-32 w-32 rounded-3xl bg-blue-50 flex items-center justify-center text-blue-500 shadow-inner border border-blue-50 mx-auto mb-6 text-3xl font-black uppercase">
                     {client.client_detail?.company_name?.charAt(0) || client.name.charAt(0)}
                  </div>
-                 <div className="bg-green-50 text-green-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-100">
-                    Active Partner
-                 </div>
+                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account Status</label>
+                 <select
+                    {...register("status")}
+                    className="w-full rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs font-black uppercase tracking-widest text-gray-700 outline-none focus:ring-1 focus:ring-primary"
+                 >
+                    <option value="active">Active</option>
+                    <option value="deactive">Disabled</option>
+                 </select>
               </Card>
 
               <Card title="Quick Stats" className="border-none shadow-sm p-8 bg-white">

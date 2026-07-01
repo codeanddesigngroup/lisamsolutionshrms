@@ -3,7 +3,7 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { ArrowLeft, Save, User, Building, Mail, Phone, Globe, RefreshCw, Key } from "lucide-react";
+import { ArrowLeft, Save, User, Building, Mail, Phone, Globe, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/context/ToastContext";
+import { getStoredUser } from "@/lib/session";
 
 const getApiErrorMessage = (err: unknown, fallback: string) => {
   if (typeof err === "object" && err && "response" in err) {
@@ -24,7 +25,6 @@ const getApiErrorMessage = (err: unknown, fallback: string) => {
 const clientSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
   company_name: z.string().optional(),
   website: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
   mobile: z.string().optional(),
@@ -47,7 +47,6 @@ export default function CreateClientPage() {
     defaultValues: {
       name: "",
       email: "",
-      password: "",
       company_name: "",
       website: "",
       mobile: "",
@@ -58,10 +57,11 @@ export default function CreateClientPage() {
   const onSubmit = async (data: ClientFormValues) => {
     setSaving(true);
     try {
+      const companyId = getStoredUser()?.company_id;
       const payload = {
         name: data.name,
         email: data.email,
-        password: data.password,
+        ...(companyId ? { company_id: companyId } : {}),
         client_detail: {
           company_name: data.company_name,
           website: data.website,
@@ -139,23 +139,6 @@ export default function CreateClientPage() {
                   />
                   {errors.email && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.email.message}</p>}
                 </div>
-              </div>
-
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Password <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400" />
-                  <input 
-                    {...register("password")}
-                    type="password" 
-                    placeholder="Password" 
-                    className={`w-full border rounded p-2.5 pl-9 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${
-                      errors.password ? "border-red-500" : "border-gray-200"
-                    }`} 
-                  />
-                  {errors.password && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.password.message}</p>}
-                </div>
-                <p className="text-[9px] text-gray-400 mt-1 font-bold uppercase tracking-widest">Client will use this to login to their portal</p>
               </div>
 
               <div className="space-y-1.5">
