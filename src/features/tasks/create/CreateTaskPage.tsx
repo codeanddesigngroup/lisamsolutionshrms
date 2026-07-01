@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/context/ToastContext";
@@ -20,6 +20,7 @@ type OptionRecord = {
   project_name?: string;
   category_name?: string;
   status?: string;
+  department_id?: number | string | null;
 };
 
 const getApiErrorMessage = (err: unknown, fallback: string) => {
@@ -61,6 +62,7 @@ export default function CreateTaskPage() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -78,6 +80,12 @@ export default function CreateTaskPage() {
       description: "",
     },
   });
+
+  const selectedProjectId = useWatch({ control, name: "project_id" });
+  const selectedProject = projects.find((project) => String(project.id) === selectedProjectId);
+  const departmentEmployees = selectedProject?.department_id
+    ? employees.filter((employee) => String(employee.department_id) === String(selectedProject.department_id))
+    : [];
 
   useEffect(() => {
     if (!user || canCreateTask) return;
@@ -245,8 +253,8 @@ export default function CreateTaskPage() {
                   className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer ${errors.assigned_user_id ? "border-red-500" : "border-gray-200"
                     }`}
                 >
-                  <option value="">Select Employee</option>
-                  {employees.map((emp) => (
+                  <option value="">{selectedProject ? "Select Employee" : "Select a project first"}</option>
+                  {departmentEmployees.map((emp) => (
                     <option key={emp.id} value={emp.id}>{emp.name}</option>
                   ))}
                 </select>
