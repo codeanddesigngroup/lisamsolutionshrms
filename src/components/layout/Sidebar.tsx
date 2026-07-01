@@ -84,12 +84,7 @@ const menuItems: MenuItem[] = [
   {
     icon: Users,
     label: "Clients",
-    href: "/clients",
-    submenu: [
-      { label: "Clients", href: "/clients" },
-      { label: "Client Contacts", href: "/client-contacts" },
-      { label: "Client Notes", href: "/notes" },
-    ],
+    href: "/clients"
   },
   {
     icon: UserSquare2,
