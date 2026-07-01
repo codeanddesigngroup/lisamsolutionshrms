@@ -75,6 +75,10 @@ export interface Project {
   deadline: string;
   status: 'not started' | 'in progress' | 'on hold' | 'canceled' | 'finished';
   client?: Client;
+  department?: {
+    id: number;
+    name: string;
+  };
   members?: Employee[];
   total_earnings?: number;
 }

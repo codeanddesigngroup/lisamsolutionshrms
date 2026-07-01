@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/context/ToastContext";
+import { getStoredUser } from "@/lib/session";
 
 type OptionRecord = {
   id: number | string;
@@ -33,6 +34,7 @@ const projectSchema = z.object({
   deadline: z.string().optional(),
   without_deadline: z.boolean(),
   client_id: z.string().optional(),
+  department_id: z.string().optional(),
   project_summary: z.string().optional(),
   status: z.enum(["not started", "in progress", "on hold", "canceled", "finished"]),
 }).refine((data) => {
@@ -51,6 +53,7 @@ export default function CreateProjectPage() {
   const router = useRouter();
   const { showToast } = useToast();
   const [clients, setClients] = useState<OptionRecord[]>([]);
+  const [departments, setDepartments] = useState<OptionRecord[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -67,6 +70,7 @@ export default function CreateProjectPage() {
       deadline: "",
       without_deadline: false,
       client_id: "",
+      department_id: "",
       project_summary: "",
       status: "not started",
     },
@@ -78,8 +82,12 @@ export default function CreateProjectPage() {
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const clientRes = await api.get("/client");
+        const [clientRes, departmentRes] = await Promise.all([
+          api.get("/client"),
+          api.get("/departments"),
+        ]);
         setClients(clientRes.data.data || []);
+        setDepartments(departmentRes.data.data || []);
       } catch (err) {
         console.error("Failed to fetch project options:", err);
         showToast("Failed to load project options", "error");
@@ -95,6 +103,7 @@ export default function CreateProjectPage() {
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
+        company_id: getStoredUser()?.company_id || null,
         project_name: data.project_name,
         start_date: data.start_date,
         status: data.status,
@@ -107,12 +116,12 @@ export default function CreateProjectPage() {
         payload.without_deadline = true;
       }
 
-      if (data.category_id) {
-        payload.category = { id: data.category_id };
+      if (data.client_id) {
+        payload.client_id = Number(data.client_id);
       }
 
-      if (data.client_id) {
-        payload.client = { id: data.client_id };
+      if (data.department_id) {
+        payload.department_id = Number(data.department_id);
       }
 
       await api.post("/project", payload);
@@ -151,85 +160,95 @@ export default function CreateProjectPage() {
 
         <Card className="p-8 max-w-4xl mx-auto shadow-sm border-gray-100 relative min-h-[400px]">
           {loadingOptions && (
-             <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
-               <RefreshCw className="h-8 w-8 text-primary animate-spin mb-4" />
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading options...</p>
-             </div>
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center">
+              <RefreshCw className="h-8 w-8 text-primary animate-spin mb-4" />
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading options...</p>
+            </div>
           )}
 
           <form className="space-y-8" onSubmit={handleSubmit(onSubmit)}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project Name <span className="text-red-500">*</span></label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   {...register("project_name")}
-                  placeholder="e.g. Website Redesign" 
-                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${
-                    errors.project_name ? "border-red-500" : "border-gray-200"
-                  }`} 
+                  placeholder="e.g. Website Redesign"
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${errors.project_name ? "border-red-500" : "border-gray-200"
+                    }`}
                 />
                 {errors.project_name && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.project_name.message}</p>}
-              </div>
-              
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Start Date <span className="text-red-500">*</span></label>
-                <input 
-                  type="date" 
-                  {...register("start_date")}
-                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${
-                    errors.start_date ? "border-red-500" : "border-gray-200"
-                  }`} 
-                />
-                {errors.start_date && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.start_date.message}</p>}
-              </div>
-              
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                    Deadline {!withoutDeadline && <span className="text-red-500">*</span>}
-                  </label>
-                  <label className="flex items-center space-x-1 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      {...register("without_deadline")}
-                      className="rounded border-gray-300 text-primary focus:ring-primary/20"
-                    />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">No Deadline</span>
-                  </label>
-                </div>
-                <input 
-                  type="date" 
-                  {...register("deadline")}
-                  disabled={withoutDeadline}
-                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all disabled:opacity-50 disabled:bg-gray-50 ${
-                    errors.deadline ? "border-red-500" : "border-gray-200"
-                  }`} 
-                />
-                {errors.deadline && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.deadline.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Client</label>
-                <select 
+                <select
                   {...register("client_id")}
                   className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">--</option>
+                  <option value="">Select client</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>{client.name}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status <span className="text-red-500">*</span></label>
-                <select 
-                  {...register("status")}
-                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer ${
-                    errors.status ? "border-red-500" : "border-gray-200"
-                  }`}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Start Date <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  {...register("start_date")}
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all ${errors.start_date ? "border-red-500" : "border-gray-200"
+                    }`}
+                />
+                {errors.start_date && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.start_date.message}</p>}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    Deadline {!withoutDeadline && <span className="text-red-500">*</span>}
+                  </label>
+                  <label className="flex items-center space-x-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register("without_deadline")}
+                      className="rounded border-gray-300 text-primary focus:ring-primary/20"
+                    />
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">No Deadline</span>
+                  </label>
+                </div>
+                <input
+                  type="date"
+                  {...register("deadline")}
+                  disabled={withoutDeadline}
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all disabled:opacity-50 disabled:bg-gray-50 ${errors.deadline ? "border-red-500" : "border-gray-200"
+                    }`}
+                />
+                {errors.deadline && <p className="text-[9px] text-red-500 mt-1 font-bold">{errors.deadline.message}</p>}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project Department</label>
+                <select
+                  {...register("department_id")}
+                  className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
                 >
+                  <option value="">Select department</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>{department.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status <span className="text-red-500">*</span></label>
+                <select
+                  {...register("status")}
+                  className={`w-full border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer ${errors.status ? "border-red-500" : "border-gray-200"
+                    }`}
+                >
+                  <option value="Select status">Select status</option>
                   <option value="not started">Not Started</option>
                   <option value="in progress">In Progress</option>
                   <option value="on hold">On Hold</option>
@@ -242,9 +261,9 @@ export default function CreateProjectPage() {
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project Summary</label>
-              <textarea 
+              <textarea
                 {...register("project_summary")}
-                className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none h-32 transition-all" 
+                className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none h-32 transition-all"
                 placeholder="Enter project details..."
               ></textarea>
             </div>

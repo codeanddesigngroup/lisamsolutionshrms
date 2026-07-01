@@ -20,8 +20,6 @@ const statusColors: Record<string, string> = {
   "canceled": "bg-red-100 text-red-500",
 };
 
-const memberColors = ["bg-blue-400", "bg-green-400", "bg-yellow-400", "bg-purple-400", "bg-red-400", "bg-pink-400", "bg-indigo-400", "bg-orange-400"];
-
 export default function ProjectsPage() {
   const { showToast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -58,6 +56,7 @@ export default function ProjectsPage() {
       proj.project_name,
       proj.status,
       proj.client?.name,
+      proj.department?.name,
       proj.deadline,
       ...(proj.members || []).map((member) => member.name),
     ].filter(Boolean).join(" ").toLowerCase();
@@ -184,9 +183,8 @@ export default function ProjectsPage() {
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Project Name</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Client</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Members</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Department</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Deadline</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Budget</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
                   <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Action</th>
                 </tr>
@@ -202,26 +200,14 @@ export default function ProjectsPage() {
                        <span className="text-[10px] font-black text-primary/70 uppercase tracking-tight">{proj.client?.name || 'N/A'}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex -space-x-2">
-                        {proj.members?.slice(0, 4).map((m, i) => (
-                          <div key={i} className={`h-7 w-7 rounded-full border-2 border-white ${memberColors[i % memberColors.length]} flex items-center justify-center text-white text-[9px] font-black`} title={m.name}>
-                            {m.name.split(' ').map((n: string) => n[0]).join('')}
-                          </div>
-                        ))}
-                        {(proj.members?.length || 0) > 4 && (
-                          <div className="h-7 w-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-gray-500 text-[8px] font-black">
-                            +{(proj.members?.length || 0) - 4}
-                          </div>
-                        )}
-                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-tight text-gray-500">
+                        {proj.department?.name || 'N/A'}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                         {proj.deadline ? new Date(proj.deadline).toLocaleDateString() : 'No Deadline'}
                       </p>
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-gray-700">
-                      {proj.total_earnings ? `$${proj.total_earnings}` : '$0'}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${statusColors[proj.status.toLowerCase()] || "bg-gray-100 text-gray-500"}`}>
