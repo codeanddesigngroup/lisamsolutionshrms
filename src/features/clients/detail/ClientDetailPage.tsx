@@ -17,7 +17,6 @@ import {
   Mail,
   MapPin,
   Phone,
-  Plus,
   RefreshCw,
   ShieldCheck,
   TrendingUp,
@@ -593,20 +592,6 @@ export default function ClientDetailPage() {
           </div>
 
           <div className="space-y-6">
-            <Card title="Quick Actions" className="border-none bg-white p-6 shadow-sm">
-              <div className="grid grid-cols-1 gap-3">
-                <Link href={`/projects/create?client=${client.id}`} className="flex h-11 items-center justify-center rounded-xl bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-700 transition-all hover:bg-primary hover:text-white">
-                  <Plus className="mr-2 h-4 w-4" /> New Project
-                </Link>
-                <Link href={`/invoices/create?client=${client.id}`} className="flex h-11 items-center justify-center rounded-xl bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-700 transition-all hover:bg-primary hover:text-white">
-                  <FileText className="mr-2 h-4 w-4" /> Create Invoice
-                </Link>
-                <Link href={`mailto:${client.email}`} className="flex h-11 items-center justify-center rounded-xl bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-700 transition-all hover:bg-primary hover:text-white">
-                  <Mail className="mr-2 h-4 w-4" /> Send Message
-                </Link>
-              </div>
-            </Card>
-
             <Card title="Contact Snapshot" className="border-none bg-white p-6 shadow-sm">
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
