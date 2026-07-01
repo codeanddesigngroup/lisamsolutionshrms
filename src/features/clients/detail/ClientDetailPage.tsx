@@ -46,7 +46,6 @@ type LooseRecord = {
   total?: number | string;
   amount?: number | string;
   price?: number | string;
-  members?: unknown[];
   invoice_number?: string;
   invoice?: { invoice_number?: string };
   paid_on?: string;
@@ -86,23 +85,6 @@ const tabs = [
   { id: "notes", label: "Notes", icon: FileText },
   { id: "documents", label: "Documents", icon: FolderOpen },
   { id: "gdpr", label: "GDPR", icon: ShieldCheck },
-];
-
-const starterProjects = [
-  {
-    id: "starter-project-1",
-    project_name: "Website Retainer",
-    deadline: "2026-06-15",
-    status: "in progress",
-    members: [{ name: "Project Lead" }],
-  },
-  {
-    id: "starter-project-2",
-    project_name: "HR Portal Rollout",
-    deadline: "2026-07-01",
-    status: "not started",
-    members: [{ name: "Implementation" }],
-  },
 ];
 
 const starterInvoices = [
@@ -243,8 +225,14 @@ export default function ClientDetailPage() {
   useEffect(() => {
     const fetchClient = async () => {
       try {
-        const response = await api.get(`/client/${params.id}`);
-        setClient(response.data.data);
+        const [clientResponse, projectResponse] = await Promise.all([
+          api.get(`/client/${params.id}`),
+          api.get(`/project?client_id=${params.id}`),
+        ]);
+        setClient({
+          ...clientResponse.data.data,
+          projects: projectResponse.data.data || [],
+        });
         setError(null);
       } catch (err: unknown) {
         console.error("Fetch Client Error:", err);
@@ -263,7 +251,7 @@ export default function ClientDetailPage() {
     const payments = getCollection(source.payments, starterPayments);
 
     return {
-      projects: getCollection(source.projects, starterProjects),
+      projects: getCollection(source.projects, []),
       invoices,
       payments,
       contacts: getCollection(source.contacts, starterContacts),
@@ -449,10 +437,6 @@ export default function ClientDetailPage() {
                     ),
                   },
                   { header: "Deadline", accessor: (record) => record.deadline || record.due_date || "N/A" },
-                  {
-                    header: "Members",
-                    accessor: (record) => `${Array.isArray(record.members) ? record.members.length : 0} members`,
-                  },
                   {
                     header: "Status",
                     accessor: (record) => (
