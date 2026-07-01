@@ -21,6 +21,7 @@ type OptionRecord = {
   category_name?: string;
   status?: string;
   department_id?: number | string | null;
+  designation?: { id: number | string; name: string } | null;
 };
 
 const getApiErrorMessage = (err: unknown, fallback: string) => {
@@ -53,7 +54,6 @@ export default function CreateTaskPage() {
   const { user, hasPermission } = useAuth();
   const [projects, setProjects] = useState<OptionRecord[]>([]);
   const [employees, setEmployees] = useState<OptionRecord[]>([]);
-  const [categories, setCategories] = useState<OptionRecord[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
@@ -86,6 +86,13 @@ export default function CreateTaskPage() {
   const departmentEmployees = selectedProject?.department_id
     ? employees.filter((employee) => String(employee.department_id) === String(selectedProject.department_id))
     : [];
+  const departmentDesignations = Array.from(
+    new Map(
+      departmentEmployees
+        .filter((employee) => employee.designation?.id && employee.designation?.name)
+        .map((employee) => [String(employee.designation!.id), employee.designation!]),
+    ).values(),
+  );
 
   useEffect(() => {
     if (!user || canCreateTask) return;
@@ -99,10 +106,9 @@ export default function CreateTaskPage() {
     }
 
     const fetchOptions = async () => {
-      const [projectResult, employeeResult, categoryResult] = await Promise.allSettled([
+      const [projectResult, employeeResult] = await Promise.allSettled([
           api.get("/project"),
-          api.get("/employee"),
-          api.get("/task-category")
+          api.get("/employee")
       ]);
 
       if (projectResult.status === "fulfilled") {
@@ -115,9 +121,6 @@ export default function CreateTaskPage() {
 
       if (employeeResult.status === "fulfilled") {
         setEmployees(employeeResult.value.data.data || []);
-      }
-      if (categoryResult.status === "fulfilled") {
-        setCategories(categoryResult.value.data.data || []);
       }
       setLoadingOptions(false);
     };
@@ -262,14 +265,14 @@ export default function CreateTaskPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Task Category <span className="text-red-500">*</span></label>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Task Category</label>
                 <select
                   {...register("category_id")}
                   className="w-full border-gray-200 border rounded p-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">Select Category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.category_name}</option>
+                  <option value="">{selectedProject ? "Select Designation" : "Select a project first"}</option>
+                  {departmentDesignations.map((designation) => (
+                    <option key={designation.id} value={designation.id}>{designation.name}</option>
                   ))}
                 </select>
               </div>
