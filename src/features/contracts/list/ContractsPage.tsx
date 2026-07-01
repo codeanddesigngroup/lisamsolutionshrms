@@ -31,6 +31,7 @@ type ApiContract = {
 };
 
 type ApiClient = { id: number; name: string };
+type ApiContractType = { id: number; name: string };
 
 export default function ContractsPage() {
   const [records, setRecords] = useState<ContractRecord[]>([]);
@@ -50,12 +51,15 @@ export default function ContractsPage() {
   useEffect(() => {
     const loadContracts = async () => {
       try {
-        const [contractResponse, clientResponse] = await Promise.all([
+        const [contractResponse, clientResponse, typeResponse] = await Promise.all([
           api.get("/contract"),
           api.get("/client?per_page=100"),
+          api.get("/contract-type"),
         ]);
         const clients = (clientResponse.data.data || []) as ApiClient[];
         const clientNames = new Map(clients.map((client) => [Number(client.id), client.name]));
+        const types = (typeResponse.data.data || []) as ApiContractType[];
+        const typeNames = new Map(types.map((type) => [Number(type.id), type.name]));
         const contracts = (contractResponse.data.data || []) as ApiContract[];
         setRecords(contracts.map((contract) => ({
           id: contract.id,
@@ -64,7 +68,7 @@ export default function ContractsPage() {
           amount: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(contract.amount || 0)),
           startDate: contract.start_date,
           endDate: contract.end_date,
-          type: contract.contract_type_id ? `Type #${contract.contract_type_id}` : "Unspecified",
+          type: contract.contract_type_id ? (typeNames.get(Number(contract.contract_type_id)) || "Unspecified") : "Unspecified",
           description: contract.description,
         })));
       } catch (err) {

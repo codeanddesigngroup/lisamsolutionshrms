@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button";
 import { ArrowLeft, Save, RefreshCw, FileSignature, DollarSign, Calendar as CalendarIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { getStoredUser } from "@/lib/session";
 
@@ -14,6 +14,8 @@ type SelectOption = { id: number | string; name: string };
 
 export default function CreateContractPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
   const [clients, setClients] = useState<SelectOption[]>([]);
   const [contractTypes, setContractTypes] = useState<SelectOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
@@ -37,9 +39,10 @@ export default function CreateContractPage() {
 
   useEffect(() => {
     const fetchOptions = async () => {
-      const [clientResult, typeResult] = await Promise.allSettled([
+      const [clientResult, typeResult, contractResult] = await Promise.allSettled([
           api.get("/client"),
           api.get("/contract-type"),
+          editId ? api.get(`/contract/${editId}`) : Promise.resolve(null),
       ]);
       if (clientResult.status === "fulfilled") {
         setClients(clientResult.value.data.data || []);
@@ -49,10 +52,24 @@ export default function CreateContractPage() {
       } else {
         setContractTypes([{ id: 1, name: "Fixed Price" }, { id: 2, name: "Hourly" }]);
       }
+      if (editId && contractResult.status === "fulfilled" && contractResult.value) {
+        const contract = contractResult.value.data.data;
+        setFormData({
+          subject: String(contract.subject || ""),
+          client_id: String(contract.client_id || ""),
+          contract_type_id: String(contract.contract_type_id || ""),
+          amount: String(contract.amount || ""),
+          start_date: String(contract.start_date || ""),
+          end_date: String(contract.end_date || ""),
+          description: String(contract.description || ""),
+        });
+      } else if (editId) {
+        setError("Failed to load the contract for editing.");
+      }
       setLoadingOptions(false);
     };
     fetchOptions();
-  }, []);
+  }, [editId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -74,7 +91,11 @@ export default function CreateContractPage() {
         description: formData.description,
       };
 
-      await api.post("/contract", payload);
+      if (editId) {
+        await api.put(`/contract/${editId}`, payload);
+      } else {
+        await api.post("/contract", payload);
+      }
       router.push("/contracts");
       router.refresh();
     } catch (err: unknown) {
@@ -92,13 +113,13 @@ export default function CreateContractPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between bg-white px-6 py-4 shadow-sm -mx-6 -mt-6 mb-6 border-b border-gray-100">
           <div>
-            <h1 className="text-base font-semibold text-gray-700 uppercase tracking-widest font-black">Create Contract</h1>
+            <h1 className="text-base font-semibold text-gray-700 uppercase tracking-widest font-black">{editId ? "Edit Contract" : "Create Contract"}</h1>
             <div className="text-xs text-gray-500 flex items-center space-x-1 mt-1">
               <Link href="/dashboard" className="hover:text-primary transition-colors font-bold uppercase tracking-tighter">Home</Link>
               <span>/</span>
               <Link href="/contracts" className="hover:text-primary transition-colors font-bold uppercase tracking-tighter">Contracts</Link>
               <span>/</span>
-              <span className="text-gray-700 font-bold uppercase tracking-tighter">Create</span>
+              <span className="text-gray-700 font-bold uppercase tracking-tighter">{editId ? "Edit" : "Create"}</span>
             </div>
           </div>
           <Link href="/contracts">
@@ -191,7 +212,7 @@ export default function CreateContractPage() {
               <Button type="submit" disabled={saving || loadingOptions}
                 className="bg-primary text-white text-[10px] font-black px-8 h-10 uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center">
                 {saving ? <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-2" />}
-                {saving ? "Saving..." : "Save Contract"}
+                {saving ? "Saving..." : editId ? "Update Contract" : "Save Contract"}
               </Button>
             </div>
           </form>
