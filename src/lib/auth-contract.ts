@@ -280,7 +280,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin", "employee"],
   },
   {
-    prefixes: ["/clients", "/client-contacts", "/client-settings"],
+    prefixes: ["/clients", "/client-settings"],
     roles: ["admin", "employee"],
   },
   {
@@ -312,7 +312,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin", "employee", "client"],
   },
   {
-    prefixes: ["/products", "/contracts", "/notes"],
+    prefixes: ["/products", "/contracts"],
     roles: ["admin", "employee", "client"],
   },
 ];
@@ -334,7 +334,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/leaves"], anyOf: ["leaves.view", "leaves.manage"] },
   { prefixes: ["/holidays/create"], anyOf: ["holidays.create", "holidays.manage"] },
   { prefixes: ["/holidays"], anyOf: ["holidays.view", "holidays.manage"] },
-  { prefixes: ["/clients", "/client-contacts", "/client-settings"], anyOf: ["clients.view", "clients.manage"] },
+  { prefixes: ["/clients", "/client-settings"], anyOf: ["clients.view", "clients.manage"] },
   { prefixes: ["/invoices", "/estimates", "/proposals", "/credit-notes", "/payments", "/expenses", "/invoice-recurring", "/expenses-recurring"], anyOf: ["finance.view", "finance.manage"] },
   { prefixes: ["/leads", "/lead-form", "/lead-settings"], anyOf: ["leads.view", "leads.manage"] },
   { prefixes: ["/recruitment"], anyOf: ["recruitment.view", "recruitment.manage"] },

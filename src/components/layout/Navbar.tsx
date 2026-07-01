@@ -32,7 +32,6 @@ const navbarTitleRules: NavbarTitleRule[] = [
   { prefix: "/lead-form", title: "Lead Form", section: "Sales" },
   { prefix: "/lead-settings", title: "Lead Settings", section: "Sales" },
   { prefix: "/clients", title: "Clients", section: "Clients" },
-  { prefix: "/client-contacts", title: "Client Contacts", section: "Clients" },
   { prefix: "/client-settings", title: "Client Settings", section: "Clients" },
   { prefix: "/employees", title: "Employees", section: "HR" },
   { prefix: "/teams", title: "Departments", section: "HR" },
@@ -80,7 +79,6 @@ const navbarTitleRules: NavbarTitleRule[] = [
   { prefix: "/taxes", title: "Tax Settings", section: "Finance" },
   { prefix: "/profile", title: "My Profile", section: "Account" },
   { prefix: "/products", title: "Products", section: "Products" },
-  { prefix: "/notes", title: "Notes", section: "Notes" },
 ];
 
 const titleCase = (value: string) =>
