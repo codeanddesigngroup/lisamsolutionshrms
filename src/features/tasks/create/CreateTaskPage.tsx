@@ -19,6 +19,7 @@ type OptionRecord = {
   name?: string;
   project_name?: string;
   category_name?: string;
+  status?: string;
 };
 
 const getApiErrorMessage = (err: unknown, fallback: string) => {
@@ -90,21 +91,27 @@ export default function CreateTaskPage() {
     }
 
     const fetchOptions = async () => {
-      try {
-        const [projRes, empRes, catRes] = await Promise.all([
+      const [projectResult, employeeResult, categoryResult] = await Promise.allSettled([
           api.get("/project"),
           api.get("/employee"),
           api.get("/task-category")
-        ]);
-        setProjects(projRes.data.data || []);
-        setEmployees(empRes.data.data || []);
-        setCategories(catRes.data.data || []);
-      } catch (err) {
-        console.error("Failed to fetch task options:", err);
-        showToast("Failed to load task options", "error");
-      } finally {
-        setLoadingOptions(false);
+      ]);
+
+      if (projectResult.status === "fulfilled") {
+        const databaseProjects = (projectResult.value.data.data || []) as OptionRecord[];
+        setProjects(databaseProjects.filter((project) => project.status?.trim().toLowerCase() === "in progress"));
+      } else {
+        console.error("Failed to fetch database projects:", projectResult.reason);
+        showToast("Failed to load projects", "error");
       }
+
+      if (employeeResult.status === "fulfilled") {
+        setEmployees(employeeResult.value.data.data || []);
+      }
+      if (categoryResult.status === "fulfilled") {
+        setCategories(categoryResult.value.data.data || []);
+      }
+      setLoadingOptions(false);
     };
     fetchOptions();
   }, [canCreateTask, showToast]);
