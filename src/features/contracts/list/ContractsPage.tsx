@@ -36,6 +36,10 @@ export default function ContractsPage() {
   const [records, setRecords] = useState<ContractRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dateWindow] = useState(() => ({
+    today: new Date().toISOString().slice(0, 10),
+    soon: new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10),
+  }));
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [clientFilter, setClientFilter] = useState("all");
@@ -82,10 +86,8 @@ export default function ContractsPage() {
   });
   const clientOptions = Array.from(new Set(records.map((contract) => contract.client)));
   const typeOptions = Array.from(new Set(records.map((contract) => contract.type)));
-  const today = new Date().toISOString().slice(0, 10);
-  const soon = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
-  const expiringSoon = records.filter((contract) => contract.endDate >= today && contract.endDate <= soon).length;
-  const expired = records.filter((contract) => contract.endDate < today).length;
+  const expiringSoon = records.filter((contract) => contract.endDate >= dateWindow.today && contract.endDate <= dateWindow.soon).length;
+  const expired = records.filter((contract) => contract.endDate < dateWindow.today).length;
 
   const resetFilters = () => {
     setDateFrom("");
@@ -177,6 +179,7 @@ export default function ContractsPage() {
 
         {/* Data Table */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          {error && <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-600">{error}</div>}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -191,6 +194,13 @@ export default function ContractsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
+                {loading && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      Loading contracts...
+                    </td>
+                  </tr>
+                )}
                 {filteredContracts.map((contract) => (
                   <tr key={contract.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-xs text-gray-500">{contract.id}</td>
@@ -213,7 +223,7 @@ export default function ContractsPage() {
                     </td>
                   </tr>
                 ))}
-                {filteredContracts.length === 0 && (
+                {!loading && filteredContracts.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
                       No contracts found for selected filters
@@ -241,7 +251,7 @@ export default function ContractsPage() {
       <Modal isOpen={Boolean(deletingContract)} onClose={() => setDeletingContract(null)} title="Delete Contract" size="sm">
         <div className="py-6 text-center">
           <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-red-500" />
-          <p className="mb-6 text-xs font-bold text-gray-500">This will remove the selected contract from the local list.</p>
+          <p className="mb-6 text-xs font-bold text-gray-500">This will permanently remove the selected contract from the database.</p>
           <div className="flex gap-3">
             <Button onClick={() => setDeletingContract(null)} className="flex-1 bg-gray-100 text-gray-500">Cancel</Button>
             <Button onClick={deleteContract} className="flex-1 bg-red-500 text-white">Delete</Button>
