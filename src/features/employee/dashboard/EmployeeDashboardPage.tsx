@@ -33,14 +33,25 @@ type ShiftSummary = {
   late_grace_minutes?: number;
   half_day_mark_time?: string;
   min_hours?: number;
+  shift_hours?: number | string;
 };
 
 type EmployeeRecord = {
   id: number | string;
   name: string;
   email?: string;
+  employee_id?: number | string;
+  gender?: string;
+  joining_date?: string;
+  mobile?: string;
+  status?: string;
   role?: string;
+  designation?: { name?: string };
+  department?: { name?: string; team_name?: string };
   employee_detail?: {
+    employee_id?: number | string;
+    joining_date?: string;
+    mobile?: string;
     designation?: { name?: string };
     department?: { name?: string; team_name?: string };
     shift_type_id?: number | string | null;
@@ -171,7 +182,13 @@ function getLeaveEmployeeId(row: LeaveRecord) {
 
 function getShiftLabel(shift?: ShiftSummary) {
   if (!shift) return "No shift assigned";
-  return `${shift.shift_name || "Assigned Shift"} - ${shift.start_time || "--:--"} to ${shift.end_time || "--:--"}`;
+  return `${getShiftName(shift)} - ${shift.start_time || "--:--"} to ${shift.end_time || "--:--"}`;
+}
+
+function getShiftName(shift?: ShiftSummary) {
+  const name = shift?.shift_name || shift?.type || shift?.code;
+  if (!name) return "Assigned Shift";
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 function formatDate(value?: string) {
@@ -208,24 +225,31 @@ export default function EmployeeDashboard() {
   }, []);
 
   useEffect(() => {
+    if (user?.id === undefined || user?.id === null || String(user.id).trim() === "") {
+      return;
+    }
+
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
         const userScope = user?.id ? `user_id=${encodeURIComponent(String(user.id))}` : "";
-        const [employeeResponse, attendanceResponse, leaveResponse, taskResponse, eventResponse] = await Promise.all([
-          api.get("/employee"),
+        const employeeResponse = await api.get(`/employee/${encodeURIComponent(String(user.id))}`);
+        const employee = extractRecord<EmployeeRecord>(employeeResponse.data);
+        setEmployees(employee ? [employee] : []);
+
+        const [attendanceResponse, leaveResponse, taskResponse, eventResponse] = await Promise.allSettled([
           api.get("/attendance"),
           api.get("/leave"),
           api.get(user?.id ? `/task?include=project,users&user_id=${encodeURIComponent(String(user.id))}` : "/task?include=project,users"),
           api.get(userScope ? `/event?${userScope}` : "/event"),
         ]);
-        setEmployees(extractRecords<EmployeeRecord>(employeeResponse.data));
-        setAttendance(extractRecords<AttendanceRecord>(attendanceResponse.data));
-        setLeaves(extractRecords<LeaveRecord>(leaveResponse.data));
-        setTasks(extractRecords<TaskRecord>(taskResponse.data));
-        setEvents(extractRecords<EventRecord>(eventResponse.data));
+
+        if (attendanceResponse.status === "fulfilled") setAttendance(extractRecords<AttendanceRecord>(attendanceResponse.value.data));
+        if (leaveResponse.status === "fulfilled") setLeaves(extractRecords<LeaveRecord>(leaveResponse.value.data));
+        if (taskResponse.status === "fulfilled") setTasks(extractRecords<TaskRecord>(taskResponse.value.data));
+        if (eventResponse.status === "fulfilled") setEvents(extractRecords<EventRecord>(eventResponse.value.data));
       } catch {
-        showToast("Failed to load employee dashboard data.", "error");
+        showToast("Failed to load your employee profile.", "error");
       } finally {
         setLoading(false);
       }
@@ -254,6 +278,9 @@ export default function EmployeeDashboard() {
 
   const assignedShift = currentEmployee?.employee_detail?.shift_type;
   const employeeId = currentEmployee?.id ? String(currentEmployee.id) : "";
+  const employeeDetail = currentEmployee?.employee_detail;
+  const designation = currentEmployee?.designation?.name || employeeDetail?.designation?.name || "Not assigned";
+  const department = currentEmployee?.department?.name || currentEmployee?.department?.team_name || employeeDetail?.department?.name || employeeDetail?.department?.team_name || "Not assigned";
 
   const myAttendance = useMemo(
     () => attendance.filter((row) => String(getAttendanceEmployeeId(row)) === employeeId),
@@ -313,7 +340,7 @@ export default function EmployeeDashboard() {
   const summaryStats = [
     { label: "My Leaves", value: String(activeLeaves), icon: Calendar, color: "text-blue-600", bg: "bg-blue-50" },
     { label: "Attendance", value: `${attendanceRate}%`, icon: UserCheck, color: "text-purple-600", bg: "bg-purple-50" },
-    { label: "My Shift", value: assignedShift?.code || "None", icon: Timer, color: "text-green-600", bg: "bg-green-50" },
+    { label: "My Shift", value: assignedShift ? getShiftName(assignedShift) : "None", icon: Timer, color: "text-green-600", bg: "bg-green-50" },
     { label: "Events", value: String(upcomingEvents.length), icon: Calendar, color: "text-pink-600", bg: "bg-pink-50" },
     { label: "Pending Requests", value: String(pendingLeaves), icon: AlertCircle, color: "text-orange-600", bg: "bg-orange-50" },
   ];
@@ -449,6 +476,33 @@ export default function EmployeeDashboard() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
+            <Card className="border-none bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-50 pb-4">
+                <h3 className="flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-800">
+                  <UserCheck className="mr-2 h-4 w-4 text-primary" />
+                  My Profile
+                </h3>
+                <span className={`rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest ${currentEmployee?.status === "active" ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"}`}>
+                  {currentEmployee?.status || "Unknown"}
+                </span>
+              </div>
+              <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  ["Employee ID", String(employeeDetail?.employee_id || currentEmployee?.employee_id || currentEmployee?.id || "--")],
+                  ["Email", currentEmployee?.email || user?.email || "--"],
+                  ["Mobile", employeeDetail?.mobile || currentEmployee?.mobile || "--"],
+                  ["Department", department],
+                  ["Designation", designation],
+                  ["Joining Date", currentEmployee?.joining_date || employeeDetail?.joining_date || "--"],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">{label}</p>
+                    <p className="mt-1 break-words text-xs font-bold text-gray-800">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
             <Card className="overflow-hidden border-none bg-white p-0 shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-50 px-6 py-5">
                 <h3 className="flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-800">
@@ -543,7 +597,7 @@ export default function EmployeeDashboard() {
                 <div className="mt-8 grid grid-cols-2 gap-4 border-t border-white/10 pt-6">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Shift</p>
-                    <p className="text-sm font-black">{assignedShift?.code || "None"}</p>
+                    <p className="text-sm font-black">{assignedShift ? getShiftName(assignedShift) : "None"}</p>
                   </div>
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Timing</p>
@@ -555,7 +609,7 @@ export default function EmployeeDashboard() {
                   </div>
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Min Hours</p>
-                    <p className="text-sm font-black">{assignedShift?.min_hours ?? 0} hrs</p>
+                    <p className="text-sm font-black">{assignedShift?.min_hours ?? assignedShift?.shift_hours ?? 0} hrs</p>
                   </div>
                 </div>
 
