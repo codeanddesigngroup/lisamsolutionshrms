@@ -433,7 +433,7 @@ export default function EmployeeDashboard() {
               </div>
               <p className="mt-1 flex items-center text-xs font-bold uppercase tracking-widest text-gray-400">
                 <MapPin className="mr-1.5 h-3 w-3 text-primary" />
-                Remote Workspace - {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                {department} · {designation} - {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </p>
               <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-primary">{getShiftLabel(assignedShift)}</p>
             </div>
