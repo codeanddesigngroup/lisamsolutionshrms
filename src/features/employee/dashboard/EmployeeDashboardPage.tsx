@@ -62,11 +62,17 @@ type EmployeeRecord = {
 type AttendanceRecord = {
   id: number | string;
   employee_id?: number | string;
+  employeeId?: number | string;
   user_id?: number | string;
   date?: string;
+  workDate?: string;
   status?: string;
   clock_in?: string;
   clock_out?: string;
+  checkIn?: string;
+  checkOut?: string;
+  deviceSerial?: string;
+  workedHours?: number;
 };
 
 type LeaveRecord = {
@@ -134,46 +140,13 @@ function localDateString(date = new Date()) {
   return localDate.toISOString().slice(0, 10);
 }
 
-function payloadTime(date = new Date()) {
-  return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
 function displayTime(value?: string) {
   if (!value) return "--:--";
-  const [hours = "0", minutes = "0"] = value.split(":");
+  const timeValue = value.includes(" ") ? value.split(" ").pop() || value : value;
+  const [hours = "0", minutes = "0"] = timeValue.split(":");
   const date = new Date();
   date.setHours(Number(hours), Number(minutes), 0, 0);
   return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-}
-
-function minutesFromTime(value?: string) {
-  if (!value) return null;
-  const [hours = "0", minutes = "0"] = value.split(":");
-  const total = Number(hours) * 60 + Number(minutes);
-  return Number.isFinite(total) ? total : null;
-}
-
-function normalizedShiftMinute(value?: string, shift?: ShiftSummary) {
-  const minutes = minutesFromTime(value);
-  const start = minutesFromTime(shift?.start_time);
-  const end = minutesFromTime(shift?.end_time);
-  if (minutes === null) return null;
-  if (start !== null && end !== null && end <= start && minutes < start) return minutes + 1440;
-  return minutes;
-}
-
-function calculateAttendanceFlags(clockIn: string, shift?: ShiftSummary) {
-  const clockMinute = normalizedShiftMinute(clockIn, shift);
-  const shiftStart = normalizedShiftMinute(shift?.start_time, shift);
-  const halfDayMark = normalizedShiftMinute(shift?.half_day_mark_time, shift);
-  const halfDay = clockMinute !== null && halfDayMark !== null && clockMinute >= halfDayMark;
-  const late =
-    !halfDay &&
-    clockMinute !== null &&
-    shiftStart !== null &&
-    clockMinute > shiftStart + Number(shift?.late_grace_minutes || 0);
-
-  return { late, half_day: halfDay };
 }
 
 function statusText(value?: string) {
@@ -181,7 +154,19 @@ function statusText(value?: string) {
 }
 
 function getAttendanceEmployeeId(row: AttendanceRecord) {
-  return row.employee_id || row.user_id || "unknown";
+  return row.employeeId || row.employee_id || row.user_id || "unknown";
+}
+
+function getAttendanceDate(row: AttendanceRecord) {
+  return row.workDate || row.date || "";
+}
+
+function getCheckIn(row: AttendanceRecord) {
+  return row.checkIn || row.clock_in || "";
+}
+
+function getCheckOut(row: AttendanceRecord) {
+  return row.checkOut || row.clock_out || "";
 }
 
 function getLeaveEmployeeId(row: LeaveRecord) {
@@ -227,7 +212,6 @@ export default function EmployeeDashboard() {
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [isOnBreak, setIsOnBreak] = useState(false);
   const [clockInTime, setClockInTime] = useState<string | null>(null);
-  const [activeAttendanceId, setActiveAttendanceId] = useState<number | string | null>(null);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
 
   useEffect(() => {
@@ -251,7 +235,7 @@ export default function EmployeeDashboard() {
         setEmployees(employee ? [employee] : []);
 
         const [attendanceResponse, leaveResponse, taskResponse, eventResponse] = await Promise.allSettled([
-          api.get("/attendance"),
+          api.get(`/attendance?employeeId=${encodeURIComponent(String(employee?.employee_id || employee?.employee_detail?.employee_id || employee?.id || user.id))}`),
           api.get(`/leave?employee_id=${encodeURIComponent(String(user.id))}`),
           api.get(user?.id ? `/task?include=project,users&user_id=${encodeURIComponent(String(user.id))}` : "/task?include=project,users"),
           api.get(userScope ? `/event?${userScope}` : "/event"),
@@ -292,12 +276,13 @@ export default function EmployeeDashboard() {
   const assignedShift = currentEmployee?.employee_detail?.shift_type;
   const employeeId = currentEmployee?.id ? String(currentEmployee.id) : "";
   const employeeDetail = currentEmployee?.employee_detail;
+  const deviceEmployeeId = String(employeeDetail?.employee_id || currentEmployee?.employee_id || "");
   const designation = currentEmployee?.designation?.name || employeeDetail?.designation?.name || "Not assigned";
   const department = currentEmployee?.department?.name || currentEmployee?.department?.team_name || employeeDetail?.department?.name || employeeDetail?.department?.team_name || "Not assigned";
 
   const myAttendance = useMemo(
-    () => attendance.filter((row) => String(getAttendanceEmployeeId(row)) === employeeId),
-    [attendance, employeeId],
+    () => attendance.filter((row) => String(getAttendanceEmployeeId(row)) === deviceEmployeeId),
+    [attendance, deviceEmployeeId],
   );
 
   const myLeaves = useMemo(
@@ -325,25 +310,36 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     if (!currentEmployee) return;
 
-    const todaysOpenRecord = myAttendance.find(
-      (row) => row.date === localDateString() && Boolean(row.clock_in) && !row.clock_out,
-    );
-
-    if (todaysOpenRecord) {
-      const timeoutId = window.setTimeout(() => {
-      setIsClockedIn(true);
-      setClockInTime(displayTime(todaysOpenRecord.clock_in));
-      setActiveAttendanceId(todaysOpenRecord.id);
-      }, 0);
-
-      return () => window.clearTimeout(timeoutId);
-    }
+    const todaysRecord = myAttendance.find((row) => getAttendanceDate(row) === localDateString());
+    const checkIn = getCheckIn(todaysRecord || { id: "" });
+    const checkOut = getCheckOut(todaysRecord || { id: "" });
+    const timeoutId = window.setTimeout(() => {
+      setIsClockedIn(Boolean(checkIn && !checkOut));
+      setClockInTime(checkIn ? displayTime(checkIn) : null);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [currentEmployee, myAttendance]);
+
+  useEffect(() => {
+    if (!deviceEmployeeId) return;
+
+    const refreshDeviceAttendance = async () => {
+      try {
+        const response = await api.get(`/attendance?employeeId=${encodeURIComponent(deviceEmployeeId)}`);
+        setAttendance(extractRecords<AttendanceRecord>(response.data));
+      } catch {
+        // Keep the last successful device attendance state visible.
+      }
+    };
+
+    const intervalId = window.setInterval(() => void refreshDeviceAttendance(), 15000);
+    return () => window.clearInterval(intervalId);
+  }, [deviceEmployeeId]);
 
   const attendanceRate = useMemo(() => {
     const measurableRows = myAttendance.filter((row) => !["holiday", "weekend"].includes(statusText(row.status)));
     if (measurableRows.length === 0) return 0;
-    const presentRows = measurableRows.filter((row) => ["present", "late", "half-day", "half day"].includes(statusText(row.status)) || Boolean(row.clock_in));
+    const presentRows = measurableRows.filter((row) => ["present", "late", "half-day", "half day"].includes(statusText(row.status)) || Boolean(getCheckIn(row)));
     return Math.round((presentRows.length / measurableRows.length) * 100);
   }, [myAttendance]);
 
@@ -362,65 +358,18 @@ export default function EmployeeDashboard() {
   ];
 
   const handleClockToggle = async () => {
-    if (!currentEmployee) {
-      showToast("Employee profile was not found for this login.", "error");
+    if (!deviceEmployeeId) {
+      showToast("No attendance device ID is assigned to your employee profile.", "error");
       return;
     }
 
-    const now = new Date();
-    const clockTime = payloadTime(now);
-    const { late, half_day: halfDay } = calculateAttendanceFlags(clockTime, assignedShift);
-    const status = late ? "late" : halfDay ? "half-day" : "present";
-
     setAttendanceSaving(true);
     try {
-      if (!isClockedIn) {
-        const response = await api.post("/attendance", {
-          employee_id: currentEmployee.id,
-          user_id: currentEmployee.id,
-          date: localDateString(now),
-          status,
-          clock_in: clockTime,
-          clock_in_ip: "browser",
-          working_from: "remote",
-          late,
-          half_day: halfDay,
-          shift_type_id: currentEmployee.employee_detail?.shift_type_id || assignedShift?.id || null,
-          shift_type: assignedShift,
-          source: "employee-dashboard",
-        });
-        const created = extractRecord<AttendanceRecord>(response.data);
-        setActiveAttendanceId(created?.id || null);
-        setIsClockedIn(true);
-        setClockInTime(displayTime(clockTime));
-        showToast(late ? "Clock-in recorded with late mark." : "Clock-in recorded successfully.", "success");
-      } else {
-        const payload = {
-          employee_id: currentEmployee.id,
-          user_id: currentEmployee.id,
-          date: localDateString(now),
-          clock_out: clockTime,
-          clock_out_ip: "browser",
-          action: "clock_out",
-          source: "employee-dashboard",
-        };
-
-        if (activeAttendanceId) {
-          await api.patch(`/attendance/${activeAttendanceId}`, payload);
-        } else {
-          await api.post("/attendance", payload);
-        }
-
-        setIsClockedIn(false);
-        setIsOnBreak(false);
-        setClockInTime(null);
-        setActiveAttendanceId(null);
-        showToast("Clock-out recorded successfully.", "success");
-      }
+      const response = await api.get(`/attendance?employeeId=${encodeURIComponent(deviceEmployeeId)}`);
+      setAttendance(extractRecords<AttendanceRecord>(response.data));
+      showToast("Device attendance refreshed.", "success");
     } catch {
-      showToast("Attendance endpoint is not ready. Your action stayed local for now.", "error");
-      setIsClockedIn((current) => !current);
-      setClockInTime(!isClockedIn ? displayTime(clockTime) : null);
+      showToast("Could not refresh device attendance.", "error");
     } finally {
       setAttendanceSaving(false);
     }
@@ -471,7 +420,7 @@ export default function EmployeeDashboard() {
               }`}
             >
               {attendanceSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Timer className={`h-4 w-4 ${isClockedIn ? "animate-pulse" : ""}`} />}
-              <span>{isClockedIn ? "Clock Out" : "Clock In"}</span>
+              <span>{attendanceSaving ? "Refreshing" : "Device Attendance"}</span>
             </button>
           </div>
         </div>
@@ -643,7 +592,7 @@ export default function EmployeeDashboard() {
                   <div>
                     <p className="text-3xl font-black">{isClockedIn ? (isOnBreak ? "ON BREAK" : "ON DUTY") : "OFF DUTY"}</p>
                     <p className="mt-1 text-[10px] font-bold uppercase tracking-widest opacity-80">
-                      {isClockedIn ? `Clocked in at ${clockInTime}` : "You have not clocked in yet"}
+                      {isClockedIn ? `Device clock-in at ${clockInTime}` : "Clock in or out using your attendance device"}
                     </p>
                   </div>
                   <div className={`flex h-12 w-12 items-center justify-center rounded-full border-4 border-white/20 ${isClockedIn ? "animate-pulse" : ""}`}>
