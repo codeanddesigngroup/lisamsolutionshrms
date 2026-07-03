@@ -242,11 +242,10 @@ export default function ChatPage() {
     const loadChat = async () => {
       setLoading(true);
       try {
-        const [conversationRes, messageRes, employeeRes, clientRes, adminRes] = await Promise.all([
+        const [conversationRes, messageRes, employeeRes, adminRes] = await Promise.all([
           api.get("/chat-conversations"),
           api.get("/chat-messages"),
           api.get("/employees"),
-          api.get("/clients"),
           api.get("/admins"),
         ]);
 
@@ -264,16 +263,6 @@ export default function ChatPage() {
             status: String(employee.status || "online") === "active" ? "online" : "offline",
           } as ChatMember;
         });
-
-        const clientMembers = asList<Record<string, unknown>>(clientRes.data).map((client) => ({
-          key: memberKeyFor("client", client.id as number | string),
-          id: client.id as number | string,
-          type: "client" as const,
-          name: String(client.name || client.email || `Client ${client.id}`),
-          role: String((client.client_detail as { company_name?: string } | undefined)?.company_name || "Client"),
-          avatar: String(client.avatar || client.image || ""),
-          status: "online" as const,
-        }));
 
         const adminMembers = asList<Record<string, unknown>>(adminRes.data).map((admin) => ({
           key: memberKeyFor("admin", admin.id as number | string),
@@ -295,11 +284,15 @@ export default function ChatPage() {
           status: "online",
         };
 
-        const members = [currentMember, ...adminMembers, ...employeeMembers, ...clientMembers].filter(
+        const members = [currentMember, ...adminMembers, ...employeeMembers].filter(
           (member, index, list) => list.findIndex((item) => item.key === member.key) === index,
         );
 
-        const storedConversations = asList<ChatConversation>(conversationRes.data);
+        const storedConversations = asList<ChatConversation>(conversationRes.data).filter(
+          (conversation) =>
+            !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
+            !conversation.participants.some((participant) => participant.type === "client"),
+        );
         const directConversations = members
           .filter((member) => member.key !== currentUserKey)
           .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.includes(currentUserKey) && conversation.participant_keys.includes(member.key)))
@@ -337,7 +330,13 @@ export default function ChatPage() {
     const refreshChat = async () => {
       try {
         const [conversationRes, messageRes] = await Promise.all([api.get("/chat-conversations"), api.get("/chat-messages")]);
-        setConversations(asList<ChatConversation>(conversationRes.data));
+        setConversations(
+          asList<ChatConversation>(conversationRes.data).filter(
+            (conversation) =>
+              !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
+              !conversation.participants.some((participant) => participant.type === "client"),
+          ),
+        );
         setMessages(asList<ChatMessage>(messageRes.data));
       } catch {
         // Keep the last successful chat state while connectivity recovers.
