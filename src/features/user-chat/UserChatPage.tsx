@@ -108,6 +108,14 @@ type ChatConversation = {
   created_at?: string;
 };
 
+type ConfirmationDialog = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => Promise<void> | void;
+};
+
 const roleLabel: Record<MemberType, string> = {
   admin: "Admin",
   employee: "Employee",
@@ -163,6 +171,8 @@ export default function ChatPage() {
   const isAdminRole = user?.role === "admin";
   const canCreateMessages = isAdminRole || hasPermission("messages.create");
   const canEditMessages = isAdminRole || hasPermission("messages.edit");
+  const canDeleteOwnMessages = isAdminRole || hasPermission("messages.delete") || hasPermission("messages.manage");
+  const hasGroupDeletePermission = isAdminRole || hasPermission("messages.delete");
   const canManageMessages = isAdminRole || hasPermission("messages.manage");
   const canCreateGroups = canCreateMessages;
 
@@ -185,10 +195,22 @@ export default function ChatPage() {
   const [newGroupDescription, setNewGroupDescription] = useState("");
   const [newGroupAvatar, setNewGroupAvatar] = useState("");
   const [selectedMemberKeys, setSelectedMemberKeys] = useState<string[]>([]);
+  const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialog | null>(null);
+  const [confirmationBusy, setConfirmationBusy] = useState(false);
+  const [showConversationMenu, setShowConversationMenu] = useState(false);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
     [activeConversationId, conversations],
+  );
+  const canDeleteActiveGroup = Boolean(
+    activeConversation?.type === "group" &&
+    (isAdminRole || (hasGroupDeletePermission && activeConversation.created_by === currentUserKey)),
+  );
+  const canLeaveActiveGroup = Boolean(
+    activeConversation?.type === "group" &&
+    activeConversation.participant_keys.includes(currentUserKey) &&
+    activeConversation.created_by !== currentUserKey,
   );
 
   const activeMessages = useMemo(() => {
@@ -400,6 +422,7 @@ export default function ChatPage() {
 
   const handleSelectConversation = async (conversation: ChatConversation) => {
     setActiveConversationId(conversation.id);
+    setShowConversationMenu(false);
     setShowSidebar(false);
     if (conversation.unread_by?.includes(currentUserKey)) {
       await persistConversation({
@@ -486,15 +509,24 @@ export default function ChatPage() {
     await addMessage(message);
   };
 
-  const handleDeleteMessage = async (message: ChatMessage) => {
-    if (!canManageMessages) return;
-    const updated = { ...message, body: "This message was deleted.", attachments: [], deleted_at: new Date().toISOString() };
-    setMessages((current) => current.map((item) => (item.id === message.id ? updated : item)));
-    try {
-      await api.put(`/chat-messages/${message.id}`, { ...updated, company_id: user?.company_id });
-    } catch {
-      showToast("Message deleted locally, but backend sync failed.", "info");
-    }
+  const handleDeleteMessage = (message: ChatMessage) => {
+    const isOwnMessage = message.sender_key === currentUserKey;
+    if ((!isOwnMessage || !canDeleteOwnMessages) && !canManageMessages) return;
+    setConfirmationDialog({
+      title: "Delete message?",
+      description: "This message will be removed from the conversation. This action cannot be undone.",
+      confirmLabel: "Delete Message",
+      danger: true,
+      onConfirm: async () => {
+        const updated = { ...message, body: "This message was deleted.", attachments: [], deleted_at: new Date().toISOString() };
+        setMessages((current) => current.map((item) => (item.id === message.id ? updated : item)));
+        try {
+          await api.put(`/chat-messages/${message.id}`, { ...updated, company_id: user?.company_id });
+        } catch {
+          showToast("Message deleted locally, but backend sync failed.", "info");
+        }
+      },
+    });
   };
 
   const toggleReaction = async (message: ChatMessage, reactionKey: ChatReaction["key"]) => {
@@ -641,14 +673,86 @@ export default function ChatPage() {
     });
   };
 
-  const archiveActiveConversation = async () => {
+  const archiveActiveConversation = () => {
     if (!activeConversation) return;
-    await persistConversation({
-      ...activeConversation,
-      archived_by: Array.from(new Set([...(activeConversation.archived_by || []), currentUserKey])),
+    setConfirmationDialog({
+      title: "Archive conversation?",
+      description: `“${displayName || activeConversation.name}” will be hidden from your chat list.`,
+      confirmLabel: "Archive",
+      onConfirm: async () => {
+        await persistConversation({
+          ...activeConversation,
+          archived_by: Array.from(new Set([...(activeConversation.archived_by || []), currentUserKey])),
+        });
+        setActiveConversationId(null);
+        setShowGroupSettings(false);
+      },
     });
-    setActiveConversationId(null);
-    setShowGroupSettings(false);
+  };
+
+  const deleteActiveGroup = () => {
+    if (!activeConversation || activeConversation.type !== "group" || !canDeleteActiveGroup) return;
+    setConfirmationDialog({
+      title: "Delete group?",
+      description: `“${activeConversation.name}” and all of its messages will be permanently deleted.`,
+      confirmLabel: "Delete Group",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.delete(`/chat-conversations/${activeConversation.id}`, {
+            data: { actor_key: currentUserKey, actor_role: user?.role },
+          });
+          setConversations((current) => current.filter((conversation) => conversation.id !== activeConversation.id));
+          setMessages((current) => current.filter((message) => message.conversation_id !== activeConversation.id));
+          setActiveConversationId(null);
+          setShowGroupSettings(false);
+          showToast("Group deleted successfully.", "success");
+        } catch {
+          showToast("Failed to delete group.", "error");
+        }
+      },
+    });
+  };
+
+  const leaveActiveGroup = () => {
+    if (!activeConversation || activeConversation.type !== "group") return;
+    if (!activeConversation.participant_keys.includes(currentUserKey)) return;
+    if (activeConversation.created_by === currentUserKey) {
+      showToast("Group creators cannot leave. Delete the group instead.", "error");
+      return;
+    }
+
+    setConfirmationDialog({
+      title: "Leave group?",
+      description: `You will stop receiving messages from “${activeConversation.name}”.`,
+      confirmLabel: "Leave Group",
+      danger: true,
+      onConfirm: async () => {
+        await persistConversation({
+          ...activeConversation,
+          participant_keys: activeConversation.participant_keys.filter((key) => key !== currentUserKey),
+          participants: activeConversation.participants.filter((member) => member.key !== currentUserKey),
+          admin_keys: (activeConversation.admin_keys || []).filter((key) => key !== currentUserKey),
+          unread_by: (activeConversation.unread_by || []).filter((key) => key !== currentUserKey),
+          muted_by: (activeConversation.muted_by || []).filter((key) => key !== currentUserKey),
+          archived_by: (activeConversation.archived_by || []).filter((key) => key !== currentUserKey),
+        });
+        setActiveConversationId(null);
+        setShowGroupSettings(false);
+        showToast("You left the group.", "success");
+      },
+    });
+  };
+
+  const confirmPendingAction = async () => {
+    if (!confirmationDialog) return;
+    setConfirmationBusy(true);
+    try {
+      await confirmationDialog.onConfirm();
+      setConfirmationDialog(null);
+    } finally {
+      setConfirmationBusy(false);
+    }
   };
 
   const displayName = activeConversation
@@ -790,9 +894,28 @@ export default function ChatPage() {
                   <button type="button" onClick={archiveActiveConversation} className="p-2.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl">
                     <Archive className="h-5 w-5" />
                   </button>
-                  <button type="button" className="p-2.5 text-gray-400 hover:text-primary hover:bg-gray-50 rounded-xl">
-                    <MoreVertical className="h-5 w-5" />
-                  </button>
+                  <div className="relative">
+                    <button type="button" onClick={() => setShowConversationMenu((current) => !current)} className="p-2.5 text-gray-400 hover:text-primary hover:bg-gray-50 rounded-xl" aria-label="Conversation actions">
+                      <MoreVertical className="h-5 w-5" />
+                    </button>
+                    {showConversationMenu && (
+                      <div className="absolute right-0 top-12 z-40 min-w-44 rounded-xl border border-gray-100 bg-white p-2 shadow-xl">
+                        {canLeaveActiveGroup && (
+                          <button type="button" onClick={() => { setShowConversationMenu(false); leaveActiveGroup(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-red-600 hover:bg-red-50">
+                            <UserMinus className="h-4 w-4" /> Leave Group
+                          </button>
+                        )}
+                        {canDeleteActiveGroup && (
+                          <button type="button" onClick={() => { setShowConversationMenu(false); deleteActiveGroup(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-red-600 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4" /> Delete Group
+                          </button>
+                        )}
+                        {!canLeaveActiveGroup && !canDeleteActiveGroup && (
+                          <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">No actions available</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </header>
 
@@ -913,7 +1036,7 @@ export default function ChatPage() {
                                   <Edit className="h-3 w-3" />
                                 </button>
                               )}
-                              {canManageMessages && (
+                              {((isMe && canDeleteOwnMessages) || canManageMessages) && (
                                 <button type="button" onClick={() => handleDeleteMessage(message)} className="rounded p-1 hover:bg-white hover:text-red-500" title="Delete">
                                   <Trash2 className="h-3 w-3" />
                                 </button>
@@ -1053,6 +1176,8 @@ export default function ChatPage() {
         currentUserKey={currentUserKey}
         canManage={canManageActiveGroup}
         canEditInfo={canEditActiveGroupInfo}
+        canDelete={canDeleteActiveGroup}
+        canLeave={canLeaveActiveGroup}
         settingsAvatarInputRef={settingsAvatarInputRef}
         onClose={() => setShowGroupSettings(false)}
         onAvatarUpload={(files) => handleGroupAvatarUpload(files, "settings")}
@@ -1061,7 +1186,21 @@ export default function ChatPage() {
         onAddMember={addGroupMember}
         onRemoveMember={removeGroupMember}
         onToggleAdmin={toggleGroupAdmin}
+        onDelete={deleteActiveGroup}
+        onLeave={leaveActiveGroup}
       />
+
+      <Modal isOpen={Boolean(confirmationDialog)} onClose={() => !confirmationBusy && setConfirmationDialog(null)} title={confirmationDialog?.title || "Confirm action"} size="sm">
+        <div className="space-y-6">
+          <p className="text-sm font-medium leading-relaxed text-gray-600">{confirmationDialog?.description}</p>
+          <div className="flex justify-end gap-3">
+            <Button type="button" disabled={confirmationBusy} onClick={() => setConfirmationDialog(null)} className="h-10 border border-gray-200 bg-white px-5 text-[10px] font-black uppercase tracking-widest text-gray-600">Cancel</Button>
+            <Button type="button" disabled={confirmationBusy} onClick={confirmPendingAction} className={`h-10 px-5 text-[10px] font-black uppercase tracking-widest text-white ${confirmationDialog?.danger ? "bg-red-500 hover:bg-red-600" : "bg-primary hover:bg-primary/90"}`}>
+              {confirmationBusy ? "Please wait..." : confirmationDialog?.confirmLabel}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {imagePreview && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4" onClick={() => setImagePreview(null)}>
@@ -1109,6 +1248,8 @@ function GroupSettingsModal({
   currentUserKey,
   canManage,
   canEditInfo,
+  canDelete,
+  canLeave,
   settingsAvatarInputRef,
   onClose,
   onAvatarUpload,
@@ -1117,6 +1258,8 @@ function GroupSettingsModal({
   onAddMember,
   onRemoveMember,
   onToggleAdmin,
+  onDelete,
+  onLeave,
 }: {
   isOpen: boolean;
   conversation: ChatConversation | null;
@@ -1124,6 +1267,8 @@ function GroupSettingsModal({
   currentUserKey: string;
   canManage: boolean;
   canEditInfo: boolean;
+  canDelete: boolean;
+  canLeave: boolean;
   settingsAvatarInputRef: React.RefObject<HTMLInputElement | null>;
   onClose: () => void;
   onAvatarUpload: (files: FileList | null) => void;
@@ -1132,6 +1277,8 @@ function GroupSettingsModal({
   onAddMember: (memberKey: string) => void;
   onRemoveMember: (memberKey: string) => void;
   onToggleAdmin: (memberKey: string) => void;
+  onDelete: () => void;
+  onLeave: () => void;
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -1180,6 +1327,26 @@ function GroupSettingsModal({
               <p className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /> Admin-controlled member and media settings.</p>
             </div>
           </div>
+
+          {canDelete && (
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
+              <h3 className="text-xs font-black uppercase tracking-widest text-red-700">Delete Group</h3>
+              <p className="mt-2 text-[10px] font-medium text-red-500">Permanently deletes this group and all of its messages.</p>
+              <Button type="button" onClick={onDelete} className="mt-4 h-10 w-full bg-red-500 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-600">
+                <Trash2 className="mr-2 h-4 w-4" /> Delete Group
+              </Button>
+            </div>
+          )}
+
+          {canLeave && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+              <h3 className="text-xs font-black uppercase tracking-widest text-amber-700">Leave Group</h3>
+              <p className="mt-2 text-[10px] font-medium text-amber-600">You will no longer receive messages from this group.</p>
+              <Button type="button" onClick={onLeave} className="mt-4 h-10 w-full bg-amber-500 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-600">
+                <UserMinus className="mr-2 h-4 w-4" /> Leave Group
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="space-y-5">
