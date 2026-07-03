@@ -175,6 +175,18 @@ export default function LeaveSettingsPage() {
     }
   };
 
+  const handleDeleteQuota = async (quotaId: number | string) => {
+    if (!window.confirm("Delete this employee leave assignment?")) return;
+
+    try {
+      await api.delete(`/leave-quotas/${quotaId}`);
+      setLeaveQuotas((current) => current.filter((quota) => quota.id !== quotaId));
+      showToast("Employee leave assignment deleted.", "success");
+    } catch {
+      showToast("Failed to delete employee leave assignment.", "error");
+    }
+  };
+
   const employeeName = (employeeId: number | string) => employees.find((employee) => String(employee.id) === String(employeeId))?.name || `Employee #${employeeId}`;
   const leaveTypeName = (leaveTypeId: number | string) => leaveTypes.find((type) => String(type.id) === String(leaveTypeId))?.type_name || `Leave Type #${leaveTypeId}`;
 
@@ -343,9 +355,9 @@ export default function LeaveSettingsPage() {
                  {leaveQuotas.length > 0 && (
                    <div className="mt-6 overflow-x-auto border-t border-gray-50 pt-5">
                      <table className="w-full min-w-[520px]">
-                       <thead><tr className="text-left text-[9px] font-black uppercase tracking-widest text-gray-400"><th className="pb-3">Employee</th><th className="pb-3">Leave Type</th><th className="pb-3 text-right">Total Leaves</th></tr></thead>
+                       <thead><tr className="text-left text-[9px] font-black uppercase tracking-widest text-gray-400"><th className="pb-3">Employee</th><th className="pb-3">Leave Type</th><th className="pb-3 text-right">Total Leaves</th><th className="pb-3 text-right">Action</th></tr></thead>
                        <tbody className="divide-y divide-gray-50">
-                         {leaveQuotas.map((quota) => <tr key={quota.id} className="text-[10px] font-bold text-gray-600"><td className="py-3">{quota.employee?.name || employeeName(quota.employee_id)}</td><td className="py-3">{quota.leave_type?.type_name || leaveTypeName(quota.leave_type_id)}</td><td className="py-3 text-right font-black text-primary">{Number(quota.no_of_leaves || 0)}</td></tr>)}
+                         {leaveQuotas.map((quota) => <tr key={quota.id} className="text-[10px] font-bold text-gray-600"><td className="py-3">{quota.employee?.name || employeeName(quota.employee_id)}</td><td className="py-3">{quota.leave_type?.type_name || leaveTypeName(quota.leave_type_id)}</td><td className="py-3 text-right font-black text-primary">{Number(quota.no_of_leaves || 0)}</td><td className="py-3 text-right"><button type="button" onClick={() => handleDeleteQuota(quota.id)} className="rounded-lg bg-red-50 p-2 text-red-500 transition-colors hover:bg-red-500 hover:text-white" title="Delete assignment"><Trash2 className="h-3.5 w-3.5" /></button></td></tr>)}
                        </tbody>
                      </table>
                    </div>
