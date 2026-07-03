@@ -71,8 +71,16 @@ type AttendanceRecord = {
 
 type LeaveRecord = {
   id: number | string;
+  employee_id?: number | string;
   user_id?: number | string;
   status?: string;
+  leave_date?: string;
+  end_date?: string;
+  duration?: string;
+  reason?: string;
+  action_reason?: string;
+  leave_type?: { type_name?: string; name?: string };
+  type?: { type_name?: string; name?: string } | string;
   user?: { id?: number | string; name?: string };
   employee?: { id?: number | string; name?: string };
 };
@@ -177,7 +185,12 @@ function getAttendanceEmployeeId(row: AttendanceRecord) {
 }
 
 function getLeaveEmployeeId(row: LeaveRecord) {
-  return row.user?.id || row.employee?.id || row.user_id || "unknown";
+  return row.employee_id || row.user?.id || row.employee?.id || row.user_id || "unknown";
+}
+
+function getLeaveType(leave: LeaveRecord) {
+  if (typeof leave.type === "string") return leave.type;
+  return leave.leave_type?.type_name || leave.leave_type?.name || leave.type?.type_name || leave.type?.name || "Leave";
 }
 
 function getShiftLabel(shift?: ShiftSummary) {
@@ -239,7 +252,7 @@ export default function EmployeeDashboard() {
 
         const [attendanceResponse, leaveResponse, taskResponse, eventResponse] = await Promise.allSettled([
           api.get("/attendance"),
-          api.get("/leave"),
+          api.get(`/leave?employee_id=${encodeURIComponent(String(user.id))}`),
           api.get(user?.id ? `/task?include=project,users&user_id=${encodeURIComponent(String(user.id))}` : "/task?include=project,users"),
           api.get(userScope ? `/event?${userScope}` : "/event"),
         ]);
@@ -336,6 +349,9 @@ export default function EmployeeDashboard() {
 
   const pendingLeaves = myLeaves.filter((leave) => statusText(leave.status) === "pending").length;
   const activeLeaves = myLeaves.filter((leave) => !["rejected", "cancelled"].includes(statusText(leave.status))).length;
+  const recentLeaves = [...myLeaves]
+    .sort((a, b) => String(b.leave_date || "").localeCompare(String(a.leave_date || "")))
+    .slice(0, 5);
 
   const summaryStats = [
     { label: "My Leaves", value: String(activeLeaves), icon: Calendar, color: "text-blue-600", bg: "bg-blue-50" },
@@ -500,6 +516,47 @@ export default function EmployeeDashboard() {
                     <p className="mt-1 break-words text-xs font-bold text-gray-800">{value}</p>
                   </div>
                 ))}
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden border-none bg-white p-0 shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-50 px-6 py-5">
+                <h3 className="flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-800">
+                  <Calendar className="mr-2 h-4 w-4 text-primary" />
+                  My Leave Details
+                </h3>
+                <Link href="/leaves" className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline">View All</Link>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {recentLeaves.length > 0 ? recentLeaves.map((leave) => {
+                  const status = statusText(leave.status) || "pending";
+                  const statusClass = status === "approved"
+                    ? "bg-green-50 text-green-600"
+                    : status === "rejected" || status === "cancelled"
+                      ? "bg-red-50 text-red-600"
+                      : "bg-orange-50 text-orange-600";
+
+                  return (
+                    <div key={leave.id} className="px-6 py-5">
+                      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-bold text-gray-800">{getLeaveType(leave)}</p>
+                            <span className={`rounded-full px-2.5 py-1 text-[8px] font-black uppercase tracking-widest ${statusClass}`}>{status}</span>
+                          </div>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            {formatDate(leave.leave_date)}{leave.end_date && leave.end_date !== leave.leave_date ? ` - ${formatDate(leave.end_date)}` : ""}
+                            {leave.duration ? ` · ${leave.duration}` : ""}
+                          </p>
+                          <p className="mt-2 text-xs text-gray-600">{leave.reason || "No reason provided"}</p>
+                          {leave.action_reason && <p className="mt-1 text-[10px] font-semibold text-gray-400">Response: {leave.action_reason}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <div className="px-6 py-10 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">No leave requests yet</div>
+                )}
               </div>
             </Card>
 

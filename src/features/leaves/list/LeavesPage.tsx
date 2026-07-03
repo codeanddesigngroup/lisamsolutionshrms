@@ -21,17 +21,31 @@ import { useAuth } from "@/context/AuthContext";
 
 type LeaveRecord = {
   id: number | string;
+  employee_id?: number | string;
+  leave_type_id?: number | string;
   user?: { id?: number | string; name?: string };
   employee?: { id?: number | string; name?: string };
   date?: string;
   leave_date?: string;
+  end_date?: string;
   reason?: string;
+  action_reason?: string;
   status: string;
-  type?: string;
-  leave_type?: { type_name?: string };
+  duration?: string;
+  type?: string | { id?: number | string; type_name?: string };
+  leave_type?: { id?: number | string; type_name?: string; color?: string };
+};
+
+type LeaveQuota = {
+  id: number | string;
+  leave_type_id: number | string;
+  no_of_leaves: number | string;
+  leave_type?: { id?: number | string; type_name?: string; color?: string };
 };
 
 const getLeaveUserId = (leave: LeaveRecord) => String(leave.user?.id || leave.employee?.id || "");
+
+const leaveUnits = (leave: LeaveRecord) => leave.duration?.toLowerCase().includes("half") ? 0.5 : 1;
 
 export default function LeaveDashboardPage() {
   const { showToast } = useToast();
@@ -42,17 +56,24 @@ export default function LeaveDashboardPage() {
   
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
+  const [leaveQuotas, setLeaveQuotas] = useState<LeaveQuota[]>([]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await api.get("/leave");
+      const [response, quotaResponse] = await Promise.all([
+        api.get(user?.role === "employee" && user.id ? `/leave?employee_id=${encodeURIComponent(String(user.id))}` : "/leave"),
+        user?.role === "employee" && user.id
+          ? api.get(`/leave-quotas?employee_id=${encodeURIComponent(String(user.id))}`)
+          : Promise.resolve(null),
+      ]);
       const leaveList = (response.data.data || []) as LeaveRecord[];
       const scopedLeaves = canManageCompanyLeaves
         ? leaveList
         : leaveList.filter((leave) => getLeaveUserId(leave) === String(user?.id) || leave.user?.name === user?.name || leave.employee?.name === user?.name);
       setLeaves(scopedLeaves);
       setPendingLeaves(scopedLeaves.filter((leave) => leave.status === "pending"));
+      setLeaveQuotas((quotaResponse?.data?.data || []) as LeaveQuota[]);
     } catch (err) {
       console.error("Fetch Leaves Error:", err);
       showToast("Failed to load leaves", "error");
@@ -105,6 +126,26 @@ export default function LeaveDashboardPage() {
     }
   };
 
+  const leaveBalances = leaveQuotas.map((quota) => {
+    const typeId = String(quota.leave_type_id || quota.leave_type?.id || "");
+    const matchingLeaves = leaves.filter((leave) => {
+      const leaveTypeId = leave.leave_type_id || leave.leave_type?.id || (typeof leave.type === "object" ? leave.type.id : undefined);
+      return String(leaveTypeId || "") === typeId;
+    });
+    const allocated = Number(quota.no_of_leaves || 0);
+    const used = matchingLeaves.filter((leave) => leave.status === "approved").reduce((total, leave) => total + leaveUnits(leave), 0);
+    const pending = matchingLeaves.filter((leave) => leave.status === "pending").reduce((total, leave) => total + leaveUnits(leave), 0);
+
+    return {
+      id: quota.id,
+      name: quota.leave_type?.type_name || "Leave",
+      allocated,
+      used,
+      pending,
+      remaining: Math.max(allocated - used, 0),
+    };
+  });
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-full overflow-x-hidden pb-10">
@@ -118,7 +159,7 @@ export default function LeaveDashboardPage() {
             <div>
               <div className="flex items-center space-x-2">
                  <h4 className="m-0">
-                   Leave Calendar
+                   Leaves
                  </h4>
                  <span className="label label-warning">
                     {pendingLeaves.length} Pending
@@ -154,6 +195,93 @@ export default function LeaveDashboardPage() {
              </Button>
           </div>
         </div>
+
+        {!canManageCompanyLeaves && (
+          <Card className="p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h4 className="m-0">My Leave Balances</h4>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Current assigned leave allowance</p>
+              </div>
+              <Calendar className="h-5 w-5 text-primary" />
+            </div>
+            {leaveBalances.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-2">
+                {leaveBalances.map((balance) => (
+                  <div key={balance.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <p className="text-xs font-black text-gray-800">{balance.name}</p>
+                    <div className="mt-4 grid grid-cols-3 gap-2 border-t border-gray-200 pt-4 text-center">
+                      <div><p className="text-lg font-black text-gray-700">{balance.allocated}</p><p className="text-[8px] font-black uppercase tracking-wider text-gray-400">Total Leaves</p></div>
+                      <div><p className="text-lg font-black text-orange-500">{balance.used}</p><p className="text-[8px] font-black uppercase tracking-wider text-gray-400">Taken</p></div>
+                      <div><p className="text-lg font-black text-green-600">{balance.remaining}</p><p className="text-[8px] font-black uppercase tracking-wider text-gray-400">Remaining</p></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-gray-200 py-8 text-center text-xs font-bold text-gray-400">
+                No leave balances have been assigned yet.
+              </div>
+            )}
+          </Card>
+        )}
+
+        {!canManageCompanyLeaves && (
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+              <div>
+                <h4 className="m-0">My Leave Records</h4>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">All submitted leave requests</p>
+              </div>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black text-primary">{leaves.length} Records</span>
+            </div>
+            {leaves.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left">
+                  <thead className="bg-gray-50 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                    <tr>
+                      <th className="px-6 py-3">Leave Type</th>
+                      <th className="px-6 py-3">Date</th>
+                      <th className="px-6 py-3">Duration</th>
+                      <th className="px-6 py-3">Reason</th>
+                      <th className="px-6 py-3">Status</th>
+                      <th className="px-6 py-3">Response</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {leaves.map((leave) => {
+                      const leaveType = leave.leave_type?.type_name || (typeof leave.type === "object" ? leave.type.type_name : leave.type) || "Leave";
+                      const status = leave.status?.toLowerCase() || "pending";
+                      const statusClass = status === "approved"
+                        ? "bg-green-50 text-green-600"
+                        : status === "rejected" || status === "cancelled"
+                          ? "bg-red-50 text-red-600"
+                          : "bg-orange-50 text-orange-600";
+
+                      return (
+                        <tr key={leave.id} className="text-xs text-gray-600">
+                          <td className="px-6 py-4 font-black text-gray-800">{leaveType}</td>
+                          <td className="px-6 py-4 font-semibold">
+                            {leave.leave_date || leave.date || "--"}
+                            {leave.end_date && leave.end_date !== (leave.leave_date || leave.date) ? ` to ${leave.end_date}` : ""}
+                          </td>
+                          <td className="px-6 py-4 capitalize">{leave.duration || "single"}</td>
+                          <td className="max-w-[220px] px-6 py-4">{leave.reason || "--"}</td>
+                          <td className="px-6 py-4">
+                            <span className={`rounded-full px-2.5 py-1 text-[8px] font-black uppercase tracking-widest ${statusClass}`}>{status}</span>
+                          </td>
+                          <td className="max-w-[220px] px-6 py-4 text-gray-400">{leave.action_reason || "--"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-12 text-center text-xs font-bold text-gray-400">No leave records found for your account.</div>
+            )}
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
            
