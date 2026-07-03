@@ -94,7 +94,6 @@ export default function EmployeeDetailPage() {
   const [documents, setDocuments] = useState<HRRecord[]>([]);
   const [activities, setActivities] = useState<HRRecord[]>([]);
   const [attendanceRows, setAttendanceRows] = useState<HRRecord[]>([]);
-  const [leaveTypes, setLeaveTypes] = useState<HRRecord[]>([]);
   const [leaveQuotas, setLeaveQuotas] = useState<HRRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +112,9 @@ export default function EmployeeDetailPage() {
       };
 
       const employeeResponse = await api.get(`/employee/${params.id}`);
+      const employeeData = employeeResponse.data.data as HRRecord;
+      const employeeId = String(employeeData.id || params.id);
+      const employeeName = String(employeeData.name || "");
       const [
         allProjects,
         allTasks,
@@ -120,22 +122,17 @@ export default function EmployeeDetailPage() {
         allDocs,
         allActivities,
         allAttendance,
-        allLeaveTypes,
         allQuotas,
       ] = await Promise.all([
         safeGet("/projects"),
         safeGet("/tasks"),
-        safeGet("/leaves"),
+        safeGet(`/leaves?employee_id=${encodeURIComponent(employeeId)}`),
         safeGet("/employee-docs"),
         safeGet("/user-activities"),
         safeGet("/attendance"),
-        safeGet("/leave-type"),
-        safeGet("/leave-quotas"),
+        safeGet(`/leave-quotas?employee_id=${encodeURIComponent(employeeId)}`),
       ]);
 
-      const employeeData = employeeResponse.data.data as HRRecord;
-      const employeeId = String(employeeData.id || params.id);
-      const employeeName = String(employeeData.name || "");
       const belongsToEmployee = (record: HRRecord) =>
         getEmployeeId(record) === employeeId || record.user?.name === employeeName || record.employee?.name === employeeName;
 
@@ -146,7 +143,6 @@ export default function EmployeeDetailPage() {
       setDocuments(allDocs.filter((row) => belongsToEmployee(row)));
       setActivities(allActivities.filter((row) => belongsToEmployee(row)).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))));
       setAttendanceRows(allAttendance.filter((row) => getAttendanceEmployeeId(row) === employeeId || row.employee?.name === employeeName));
-      setLeaveTypes(allLeaveTypes);
       setLeaveQuotas(allQuotas.filter((quota) => getLeaveEmployeeId(quota) === employeeId));
     } catch (err: unknown) {
       const apiError = err as ApiError;
@@ -180,9 +176,7 @@ export default function EmployeeDetailPage() {
   const derived = useMemo(() => {
     const completedTasks = tasks.filter((task) => ["completed", "done"].includes(String(task.status || "").toLowerCase()));
     const approvedLeaveUnits = leaves.filter((leave) => leave.status === "approved").reduce((total, leave) => total + leaveUnits(leave), 0);
-    const quotaTotal = leaveQuotas.length > 0
-      ? leaveQuotas.reduce((total, quota) => total + Number(quota.no_of_leaves || quota.leaves || 0), 0)
-      : leaveTypes.reduce((total, type) => total + Number(type.no_of_leaves || type.leave_number || type.leaves || 0), 0);
+    const quotaTotal = leaveQuotas.reduce((total, quota) => total + Number(quota.no_of_leaves || quota.leaves || 0), 0);
     const presentEntries = attendanceRows.filter((row) => ["present", "late", "half-day"].includes(calculateAttendanceStatus(row, row.shift_type)));
     const attendanceRate = attendanceRows.length > 0 ? Math.round((presentEntries.length / attendanceRows.length) * 100) : 0;
 
@@ -194,19 +188,18 @@ export default function EmployeeDetailPage() {
       activeProjects: projects.filter((project) => !["finished", "completed", "archived"].includes(String(project.status || "").toLowerCase())).length,
       attendanceRate,
     };
-  }, [attendanceRows, leaveQuotas, leaveTypes, leaves, projects, tasks]);
+  }, [attendanceRows, leaveQuotas, leaves, projects, tasks]);
 
   const leaveBalanceRows = useMemo(() => {
-    return leaveTypes.map((type) => {
-      const typeId = String(type.id);
-      const quota = leaveQuotas.find((item) => String(item.leave_type_id || item.type_id) === typeId);
-      const total = Number(quota?.no_of_leaves || type.no_of_leaves || type.leave_number || type.leaves || 0);
+    return leaveQuotas.map((quota) => {
+      const typeId = String(quota.leave_type_id || quota.type_id || quota.leave_type?.id || "");
+      const total = Number(quota.no_of_leaves || quota.leaves || 0);
       const typeLeaves = leaves.filter((leave) => getLeaveTypeId(leave) === typeId);
       const approved = typeLeaves.filter((leave) => leave.status === "approved").reduce((sum, leave) => sum + leaveUnits(leave), 0);
       const pending = typeLeaves.filter((leave) => leave.status === "pending").reduce((sum, leave) => sum + leaveUnits(leave), 0);
-      return { id: typeId, name: type.type_name || type.name || "Leave", total, approved, pending, remaining: Math.max(0, total - approved) };
-    }).filter((row) => row.total > 0 || row.approved > 0 || row.pending > 0);
-  }, [leaveQuotas, leaveTypes, leaves]);
+      return { id: quota.id || typeId, name: quota.leave_type?.type_name || quota.type?.type_name || "Leave", total, approved, pending, remaining: Math.max(0, total - approved) };
+    });
+  }, [leaveQuotas, leaves]);
 
   if (loading) {
     return (
