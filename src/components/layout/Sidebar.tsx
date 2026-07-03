@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { canUserAccessPath, type AuthUser, type UserRole } from "@/lib/auth-contract";
+import { canUserAccessPath, userHasPermission, type AuthUser, type UserRole } from "@/lib/auth-contract";
 import { isSaasBillingEnabled } from "@/lib/product-config";
 import { useAuth } from "@/context/AuthContext";
 import logo from "../../../public/logo.png";
@@ -285,6 +285,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       .filter((item) => allowedMenus.includes(item.label))
       .filter((item) => !hiddenSidebarLabels.has(item.label))
       .filter((item) => isSaasBillingEnabled || item.label !== "Billing")
+      .filter((item) => userRole !== "employee" || item.label !== "Messages" || userHasPermission(hydratedUser, "messages.view"))
       .filter((item) => canOpenItem(hydratedUser, userRole, item))
       .map((item) => {
         const roleDashboardHref =

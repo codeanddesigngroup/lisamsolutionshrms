@@ -157,7 +157,7 @@ export default function EditEmployeePage() {
             ? data.permissions
             : Array.isArray(data.permission_record?.permission_keys) && data.permission_record.permission_keys.length > 0
               ? data.permission_record.permission_keys
-              : rolePermissions.employee;
+              : ["dashboard.view", "profile.*"] as PermissionKey[];
         const detail = data.employee_detail || {};
         setEmployee(data);
         setPermissionState(permissions);

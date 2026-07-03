@@ -80,7 +80,7 @@ const staticPermissionModules = [
   { key: "payroll", label: "Payroll", group: "Finance", actions: ["View", "Create", "Edit", "Approve", "Export", "Manage"], enabled: ["View"] },
   { key: "recruitment", label: "Recruitment", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
   { key: "reports", label: "Reports", group: "Core", actions: ["View", "Export"], enabled: [] },
-  { key: "messages", label: "Messages", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View", "Create", "Edit", "Delete", "Manage"] },
+  { key: "messages", label: "Messages", group: "Communication", actions: ["View", "Create", "Edit", "Manage"], enabled: [] },
   { key: "events", label: "Events", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
   { key: "notices", label: "Notice Board", group: "Communication", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
   { key: "billing", label: "Billing", group: "Finance", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },

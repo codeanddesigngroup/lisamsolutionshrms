@@ -15,6 +15,7 @@ import {
   Check,
   CheckCheck,
   Download,
+  Edit,
   FileText,
   Heart,
   Image as ImageIcon,
@@ -150,7 +151,7 @@ const getDirectAvatar = (conversation: ChatConversation, currentUserKey: string)
 const getMessageStatus = (message: ChatMessage, currentUserKey: string) => message.status_by?.[currentUserKey] || "sent";
 
 export default function ChatPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -160,6 +161,10 @@ export default function ChatPage() {
   const currentUserKey = useMemo(() => getCurrentUserKey(user?.role, user?.id), [user?.id, user?.role]);
   const currentUserName = user?.name || "Current User";
   const isAdminRole = user?.role === "admin";
+  const canCreateMessages = isAdminRole || hasPermission("messages.create");
+  const canEditMessages = isAdminRole || hasPermission("messages.edit");
+  const canManageMessages = isAdminRole || hasPermission("messages.manage");
+  const canCreateGroups = canCreateMessages;
 
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -196,21 +201,21 @@ export default function ChatPage() {
 
   const canManageActiveGroup = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "group") return false;
-    return isAdminRole || Boolean(activeConversation.admin_keys?.includes(currentUserKey));
-  }, [activeConversation, currentUserKey, isAdminRole]);
+    return canManageMessages;
+  }, [activeConversation, canManageMessages]);
 
   const canEditActiveGroupInfo = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "group") return false;
-    if (canManageActiveGroup) return true;
-    return !activeConversation.settings?.only_admins_can_edit_info;
-  }, [activeConversation, canManageActiveGroup]);
+    return canEditMessages && activeConversation.participant_keys.includes(currentUserKey);
+  }, [activeConversation, canEditMessages, currentUserKey]);
 
   const canSendInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
+    if (!canCreateMessages) return false;
     if (activeConversation.archived_by?.includes(currentUserKey)) return false;
     if (activeConversation.type === "group" && activeConversation.settings?.only_admins_can_send && !canManageActiveGroup) return false;
     return activeConversation.participant_keys.includes(currentUserKey);
-  }, [activeConversation, canManageActiveGroup, currentUserKey]);
+  }, [activeConversation, canCreateMessages, canManageActiveGroup, currentUserKey]);
 
   const canUploadInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
@@ -405,7 +410,8 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!activeConversation || !canSendInActiveConversation) return;
+    if (!activeConversation) return;
+    if (editingMessage ? !canEditMessages : !canSendInActiveConversation) return;
     if (!draft.trim() && !editingMessage) return;
 
     if (editingMessage) {
@@ -481,7 +487,7 @@ export default function ChatPage() {
   };
 
   const handleDeleteMessage = async (message: ChatMessage) => {
-    if (message.sender_key !== currentUserKey && !canManageActiveGroup) return;
+    if (!canManageMessages) return;
     const updated = { ...message, body: "This message was deleted.", attachments: [], deleted_at: new Date().toISOString() };
     setMessages((current) => current.map((item) => (item.id === message.id ? updated : item)));
     try {
@@ -492,6 +498,7 @@ export default function ChatPage() {
   };
 
   const toggleReaction = async (message: ChatMessage, reactionKey: ChatReaction["key"]) => {
+    if (!canCreateMessages) return;
     const reactions = message.reactions || [];
     const existing = reactions.find((reaction) => reaction.key === reactionKey);
     const nextReactions = existing
@@ -532,8 +539,8 @@ export default function ChatPage() {
   };
 
   const handleCreateGroup = async () => {
-    if (!isAdminRole) {
-      showToast("Only admins can create chat groups.", "error");
+    if (!canCreateGroups) {
+      showToast("You do not have permission to create chat groups.", "error");
       return;
     }
     if (!newGroupName.trim() || selectedMemberKeys.length === 0) {
@@ -659,10 +666,10 @@ export default function ChatPage() {
               <div>
                 <h1 className="text-base font-black text-gray-800 uppercase tracking-widest">Messages</h1>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1">
-                  {isAdminRole ? "Admin group controls enabled" : "Groups are created by admins"}
+                  {canCreateGroups ? "Group creation enabled" : "Group creation requires permission"}
                 </p>
               </div>
-              {isAdminRole ? (
+              {canCreateGroups ? (
                 <button
                   type="button"
                   onClick={() => setShowCreateGroup(true)}
@@ -672,7 +679,7 @@ export default function ChatPage() {
                   <Plus className="h-4 w-4" />
                 </button>
               ) : (
-                <div title="Only admins can create groups" className="h-10 w-10 rounded-xl bg-gray-100 text-gray-300 flex items-center justify-center">
+                <div title="You do not have permission to create groups" className="h-10 w-10 rounded-xl bg-gray-100 text-gray-300 flex items-center justify-center">
                   <Lock className="h-4 w-4" />
                 </div>
               )}
@@ -873,6 +880,7 @@ export default function ChatPage() {
                                   key={reaction.key}
                                   type="button"
                                   onClick={() => toggleReaction(message, reaction.key)}
+                                  disabled={!canCreateMessages}
                                   className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-black ${active ? "border-primary/20 bg-primary/10 text-primary" : "border-gray-100 bg-white text-gray-400"}`}
                                 >
                                   <ReactionIcon className="h-3 w-3" />
@@ -889,18 +897,23 @@ export default function ChatPage() {
                           {isMe && !deleted && (getMessageStatus(message, currentUserKey) === "seen" ? <CheckCheck className="h-3 w-3 text-blue-500" /> : <Check className="h-3 w-3" />)}
                           {!deleted && (
                             <>
-                              <button type="button" onClick={() => setReplyingTo(message)} className="rounded p-1 hover:bg-white hover:text-primary" title="Reply">
-                                <Reply className="h-3 w-3" />
-                              </button>
-                              {(["like", "heart", "laugh"] as const).map((reactionKey) => {
-                                const ReactionIcon = reactionMeta[reactionKey].icon;
-                                return (
-                                  <button key={reactionKey} type="button" onClick={() => toggleReaction(message, reactionKey)} className="rounded p-1 hover:bg-white hover:text-primary" title={reactionMeta[reactionKey].label}>
-                                    <ReactionIcon className="h-3 w-3" />
+                              {canCreateMessages && (
+                                <>
+                                  <button type="button" onClick={() => setReplyingTo(message)} className="rounded p-1 hover:bg-white hover:text-primary" title="Reply">
+                                    <Reply className="h-3 w-3" />
                                   </button>
-                                );
-                              })}
-                              {(isMe || canManageActiveGroup) && (
+                                  {(["like", "heart", "laugh"] as const).map((reactionKey) => {
+                                    const ReactionIcon = reactionMeta[reactionKey].icon;
+                                    return <button key={reactionKey} type="button" onClick={() => toggleReaction(message, reactionKey)} className="rounded p-1 hover:bg-white hover:text-primary" title={reactionMeta[reactionKey].label}><ReactionIcon className="h-3 w-3" /></button>;
+                                  })}
+                                </>
+                              )}
+                              {isMe && canEditMessages && (
+                                <button type="button" onClick={() => { setEditingMessage(message); setDraft(message.body); }} className="rounded p-1 hover:bg-white hover:text-primary" title="Edit">
+                                  <Edit className="h-3 w-3" />
+                                </button>
+                              )}
+                              {canManageMessages && (
                                 <button type="button" onClick={() => handleDeleteMessage(message)} className="rounded p-1 hover:bg-white hover:text-red-500" title="Delete">
                                   <Trash2 className="h-3 w-3" />
                                 </button>
@@ -930,7 +943,7 @@ export default function ChatPage() {
               <footer className="border-t border-gray-200 bg-white p-4 md:p-6">
                 {!canSendInActiveConversation && (
                   <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                    This group only allows admins to send messages.
+                    You do not have permission to send messages in this conversation.
                   </div>
                 )}
                 <div className="flex items-center gap-2 rounded-2xl border-2 border-gray-200 bg-white p-2 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10">
@@ -1023,7 +1036,7 @@ export default function ChatPage() {
           </div>
 
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs font-medium leading-relaxed text-blue-700">
-            Only admins can create groups. After creation, the admin can promote group admins. Group admins can remove members and manage group settings.
+            Admins and employees with message creation permission can create groups. Group admins can remove members and manage group settings.
           </div>
 
           <div className="flex justify-end gap-3">

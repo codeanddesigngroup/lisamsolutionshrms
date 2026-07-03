@@ -12,6 +12,7 @@ import {
   saveSession,
 } from "@/lib/session";
 import { canUserAccessPath, getDefaultRouteForRole, getDefaultRouteForUser, isPublicPath, userHasPermission, type AuthUser, type PermissionKey } from "@/lib/auth-contract";
+import api from "@/lib/api";
 import { useToast } from "./ToastContext";
 
 interface AuthContextType {
@@ -47,6 +48,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.replace(`/unauthorized?from=${encodeURIComponent(pathname)}`);
     }
   }, [isLoading, pathname, router, user]);
+
+  useEffect(() => {
+    if (user?.role !== "employee" || user.id === undefined || user.id === null) return;
+
+    const syncEmployeePermissions = async () => {
+      try {
+        const response = await api.get(`/employee/${encodeURIComponent(String(user.id))}`);
+        const permissions = Array.isArray(response.data?.data?.permissions) ? response.data.data.permissions as string[] : [];
+
+        setUser((currentUser) => {
+          if (!currentUser || currentUser.role !== "employee") return currentUser;
+          const currentPermissions = [...(currentUser.permissions || [])].sort();
+          const nextPermissions = [...permissions].sort();
+          if (JSON.stringify(currentPermissions) === JSON.stringify(nextPermissions)) return currentUser;
+
+          const updatedUser = { ...currentUser, permissions };
+          saveSession(getStoredToken() || "", updatedUser, true);
+          return updatedUser;
+        });
+      } catch {
+        // Keep the current session during temporary API failures.
+      }
+    };
+
+    const handleFocus = () => void syncEmployeePermissions();
+    void syncEmployeePermissions();
+    const intervalId = window.setInterval(() => void syncEmployeePermissions(), 5000);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [user?.id, user?.role]);
 
   const login = (token: string, user: AuthUser, remember = false, redirectTo?: string) => {
     if (user.impersonator_role === "super_admin" && user.role === "admin" && user.company_id && user.company_id !== null) {
