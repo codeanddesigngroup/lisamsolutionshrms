@@ -644,12 +644,29 @@ export default function ChatPage() {
     if (!activeConversation || activeConversation.type !== "group" || !canManageActiveGroup) return;
     const member = directory.find((item) => item.key === memberKey);
     if (!member || activeConversation.participant_keys.includes(member.key)) return;
+    const participantKeys = [...activeConversation.participant_keys, member.key];
     await persistConversation({
       ...activeConversation,
-      participant_keys: [...activeConversation.participant_keys, member.key],
+      participant_keys: participantKeys,
       participants: [...activeConversation.participants, member],
       unread_by: Array.from(new Set([...(activeConversation.unread_by || []), member.key])),
     });
+    try {
+      await api.post("/chat-messages", {
+        id: `system-${Date.now()}`,
+        conversation_id: activeConversation.id,
+        sender_key: "system",
+        sender_name: "System",
+        body: `${currentUserName} added ${member.name} to the group.`,
+        attachments: [],
+        reactions: [],
+        status_by: Object.fromEntries(participantKeys.map((key) => [key, key === currentUserKey ? "seen" : "delivered"])),
+        created_at: new Date().toISOString(),
+        company_id: user?.company_id,
+      });
+    } catch {
+      showToast("Member added, but the notification could not be posted.", "info");
+    }
   };
 
   const removeGroupMember = async (memberKey: string) => {
@@ -728,15 +745,33 @@ export default function ChatPage() {
       confirmLabel: "Leave Group",
       danger: true,
       onConfirm: async () => {
+        const remainingParticipantKeys = activeConversation.participant_keys.filter((key) => key !== currentUserKey);
         await persistConversation({
           ...activeConversation,
-          participant_keys: activeConversation.participant_keys.filter((key) => key !== currentUserKey),
+          participant_keys: remainingParticipantKeys,
           participants: activeConversation.participants.filter((member) => member.key !== currentUserKey),
           admin_keys: (activeConversation.admin_keys || []).filter((key) => key !== currentUserKey),
           unread_by: (activeConversation.unread_by || []).filter((key) => key !== currentUserKey),
           muted_by: (activeConversation.muted_by || []).filter((key) => key !== currentUserKey),
           archived_by: (activeConversation.archived_by || []).filter((key) => key !== currentUserKey),
         });
+        const createdAt = new Date().toISOString();
+        try {
+          await api.post("/chat-messages", {
+            id: `system-${Date.now()}`,
+            conversation_id: activeConversation.id,
+            sender_key: "system",
+            sender_name: "System",
+            body: `${currentUserName} left the group.`,
+            attachments: [],
+            reactions: [],
+            status_by: Object.fromEntries(remainingParticipantKeys.map((key) => [key, "delivered"])),
+            created_at: createdAt,
+            company_id: user?.company_id,
+          });
+        } catch {
+          showToast("You left the group, but the notification could not be posted.", "info");
+        }
         setActiveConversationId(null);
         setShowGroupSettings(false);
         showToast("You left the group.", "success");
@@ -1066,7 +1101,9 @@ export default function ChatPage() {
               <footer className="border-t border-gray-200 bg-white p-4 md:p-6">
                 {!canSendInActiveConversation && (
                   <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                    You do not have permission to send messages in this conversation.
+                    {!canCreateMessages
+                      ? "View-only access. Ask an admin for messages.create permission to send messages."
+                      : "Group settings currently allow only group admins to send messages."}
                   </div>
                 )}
                 <div className="flex items-center gap-2 rounded-2xl border-2 border-gray-200 bg-white p-2 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10">
