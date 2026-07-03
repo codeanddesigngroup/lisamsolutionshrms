@@ -144,8 +144,15 @@ export default function EditEmployeePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [empRes, deptRes, desigRes, shiftRes] = await Promise.all([
-          api.get(`/employee/${params.id}`),
+        const employeeId = Array.isArray(params.id) ? params.id[0] : params.id;
+        if (!employeeId || !/^\d+$/.test(String(employeeId))) {
+          setEmployee(null);
+          showToast("A valid employee ID is required.", "error");
+          return;
+        }
+
+        const empRes = await api.get(`/employees/${encodeURIComponent(String(employeeId))}`);
+        const [deptRes, desigRes, shiftRes] = await Promise.allSettled([
           api.get("/departments"),
           api.get("/designations"),
           api.get("/shift-types"),
@@ -161,9 +168,9 @@ export default function EditEmployeePage() {
         const detail = data.employee_detail || {};
         setEmployee(data);
         setPermissionState(permissions);
-        setDepartments(deptRes.data.data || []);
-        setDesignations(desigRes.data.data || []);
-        setShiftTypes(shiftRes.data.data || []);
+        setDepartments(deptRes.status === "fulfilled" ? deptRes.value.data.data || [] : []);
+        setDesignations(desigRes.status === "fulfilled" ? desigRes.value.data.data || [] : []);
+        setShiftTypes(shiftRes.status === "fulfilled" ? shiftRes.value.data.data || [] : []);
 
         reset({
           name: data.name,
