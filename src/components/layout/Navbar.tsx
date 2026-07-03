@@ -203,10 +203,6 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
 
           {showUserDropdown && (
             <div className="absolute right-0 top-12 z-50 w-56 bg-white text-gray-800 shadow-lg border border-[#f2f2f3]">
-              <div className="p-5 border-b border-gray-50 bg-gray-50/30 rounded-t-2xl">
-                <p className="text-xs font-black text-gray-800">{displayName}</p>
-                <p className="text-[10px] text-gray-400 font-medium">{displayEmail}</p>
-              </div>
               <div className="p-2">
                 <Link href={profileHref} className="flex items-center space-x-3 px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-primary transition-all">
                   <User className="h-4 w-4" />
