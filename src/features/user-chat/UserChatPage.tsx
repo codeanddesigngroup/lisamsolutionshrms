@@ -242,11 +242,12 @@ export default function ChatPage() {
     const loadChat = async () => {
       setLoading(true);
       try {
-        const [conversationRes, messageRes, employeeRes, clientRes] = await Promise.all([
+        const [conversationRes, messageRes, employeeRes, clientRes, adminRes] = await Promise.all([
           api.get("/chat-conversations"),
           api.get("/chat-messages"),
           api.get("/employees"),
           api.get("/clients"),
+          api.get("/admins"),
         ]);
 
         const employeeMembers = asList<Record<string, unknown>>(employeeRes.data).map((employee) => {
@@ -274,6 +275,16 @@ export default function ChatPage() {
           status: "online" as const,
         }));
 
+        const adminMembers = asList<Record<string, unknown>>(adminRes.data).map((admin) => ({
+          key: memberKeyFor("admin", admin.id as number | string),
+          id: admin.id as number | string,
+          type: "admin" as const,
+          name: String(admin.name || admin.email || `Admin ${admin.id}`),
+          role: "Admin",
+          avatar: String(admin.avatar || admin.image || ""),
+          status: String(admin.status || "active") === "active" ? "online" as const : "offline" as const,
+        }));
+
         const currentMember: ChatMember = {
           key: currentUserKey,
           id: user?.id || 1,
@@ -284,13 +295,31 @@ export default function ChatPage() {
           status: "online",
         };
 
-        const members = [currentMember, ...employeeMembers, ...clientMembers].filter(
+        const members = [currentMember, ...adminMembers, ...employeeMembers, ...clientMembers].filter(
           (member, index, list) => list.findIndex((item) => item.key === member.key) === index,
         );
 
+        const storedConversations = asList<ChatConversation>(conversationRes.data);
+        const directConversations = members
+          .filter((member) => member.key !== currentUserKey)
+          .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.includes(currentUserKey) && conversation.participant_keys.includes(member.key)))
+          .map((member) => ({
+            id: `direct-${[currentUserKey, member.key].sort().join("-")}`,
+            type: "direct" as const,
+            name: member.name,
+            participant_keys: [currentUserKey, member.key],
+            participants: [currentMember, member],
+            unread_by: [],
+            muted_by: [],
+            archived_by: [],
+            created_by: currentUserKey,
+            created_at: new Date().toISOString(),
+          }));
+
         setDirectory(members);
-        setConversations(asList<ChatConversation>(conversationRes.data));
+        setConversations([...storedConversations, ...directConversations]);
         setMessages(asList<ChatMessage>(messageRes.data));
+        await Promise.allSettled(directConversations.map((conversation) => api.post("/chat-conversations", { ...conversation, company_id: user?.company_id })));
       } catch (error) {
         console.error("Chat load error", error);
         showToast("Chat data could not be loaded.", "error");
@@ -300,7 +329,24 @@ export default function ChatPage() {
     };
 
     loadChat();
-  }, [currentUserKey, currentUserName, showToast, user?.id, user?.role]);
+  }, [currentUserKey, currentUserName, showToast, user?.company_id, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (!user?.company_id) return;
+
+    const refreshChat = async () => {
+      try {
+        const [conversationRes, messageRes] = await Promise.all([api.get("/chat-conversations"), api.get("/chat-messages")]);
+        setConversations(asList<ChatConversation>(conversationRes.data));
+        setMessages(asList<ChatMessage>(messageRes.data));
+      } catch {
+        // Keep the last successful chat state while connectivity recovers.
+      }
+    };
+
+    const intervalId = window.setInterval(() => void refreshChat(), 3000);
+    return () => window.clearInterval(intervalId);
+  }, [user?.company_id]);
 
   useEffect(() => {
     if (!activeConversationId && visibleConversations[0]) {
@@ -319,7 +365,7 @@ export default function ChatPage() {
   const persistConversation = async (conversation: ChatConversation) => {
     setConversations((current) => current.map((item) => (item.id === conversation.id ? conversation : item)));
     try {
-      await api.put(`/chat-conversations/${conversation.id}`, conversation);
+      await api.put(`/chat-conversations/${conversation.id}`, { ...conversation, company_id: user?.company_id });
     } catch {
       showToast("Chat settings were saved locally, but backend sync failed.", "info");
     }
@@ -342,7 +388,7 @@ export default function ChatPage() {
     );
 
     try {
-      await api.post("/chat-messages", message);
+      await api.post("/chat-messages", { ...message, company_id: user?.company_id });
     } catch {
       showToast("Message saved locally, but backend sync failed.", "info");
     }
@@ -373,7 +419,7 @@ export default function ChatPage() {
       setEditingMessage(null);
       setDraft("");
       try {
-        await api.put(`/chat-messages/${editingMessage.id}`, updated);
+        await api.put(`/chat-messages/${editingMessage.id}`, { ...updated, company_id: user?.company_id });
       } catch {
         showToast("Edit saved locally, but backend sync failed.", "info");
       }
@@ -440,7 +486,7 @@ export default function ChatPage() {
     const updated = { ...message, body: "This message was deleted.", attachments: [], deleted_at: new Date().toISOString() };
     setMessages((current) => current.map((item) => (item.id === message.id ? updated : item)));
     try {
-      await api.put(`/chat-messages/${message.id}`, updated);
+      await api.put(`/chat-messages/${message.id}`, { ...updated, company_id: user?.company_id });
     } catch {
       showToast("Message deleted locally, but backend sync failed.", "info");
     }
@@ -468,7 +514,7 @@ export default function ChatPage() {
     const updated = { ...message, reactions: nextReactions };
     setMessages((current) => current.map((item) => (item.id === message.id ? updated : item)));
     try {
-      await api.put(`/chat-messages/${message.id}`, updated);
+      await api.put(`/chat-messages/${message.id}`, { ...updated, company_id: user?.company_id });
     } catch {
       showToast("Reaction saved locally, but backend sync failed.", "info");
     }
@@ -532,7 +578,7 @@ export default function ChatPage() {
     setSelectedMemberKeys([]);
 
     try {
-      await api.post("/chat-conversations", conversation);
+      await api.post("/chat-conversations", { ...conversation, company_id: user?.company_id });
     } catch {
       showToast("Group created locally, but backend sync failed.", "info");
     }
