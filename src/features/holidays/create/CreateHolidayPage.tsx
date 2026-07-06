@@ -8,9 +8,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export default function CreateHolidayPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -28,15 +30,12 @@ export default function CreateHolidayPage() {
     setSaving(true);
     setError("");
     try {
-      if (localStorage.getItem("token") === "mock_token_12345") {
-        setTimeout(() => { router.push("/holidays"); router.refresh(); }, 800);
-        return;
-      }
-      await api.post("/holiday", formData);
+      await api.post("/holidays", { ...formData, company_id: user?.company_id, occasion: formData.occassion });
       router.push("/holidays");
       router.refresh();
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data?.error || "Failed to create holiday.");
+    } catch (err: unknown) {
+      const apiError = err as { response?: { data?: { message?: string; error?: string } } };
+      setError(apiError.response?.data?.message || apiError.response?.data?.error || "Failed to create holiday.");
     } finally {
       setSaving(false);
     }

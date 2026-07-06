@@ -93,8 +93,9 @@ const buildCalendarCells = (year: number, monthIndex: number): CalendarCell[] =>
 
 export default function HolidaysPage() {
   const { showToast } = useToast();
-  const { user } = useAuth();
-  const canManageHolidays = user?.role === "admin";
+  const { user, hasPermission } = useAuth();
+  const canCreateHolidays = hasPermission("holidays.create") || hasPermission("holidays.manage");
+  const canDeleteHolidays = hasPermission("holidays.delete") || hasPermission("holidays.manage");
 
   const [loading, setLoading] = useState(true);
   const [holidays, setHolidays] = useState<HolidayRecord[]>([]);
@@ -105,6 +106,8 @@ export default function HolidaysPage() {
   const [showMarkModal, setShowMarkModal] = useState(false);
   const [newHolidays, setNewHolidays] = useState<NewHoliday[]>([{ date: "", occasion: "" }]);
   const [markDays, setMarkDays] = useState<string[]>(["0"]);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | string | null>(null);
 
   const currentMonthIndex = months.indexOf(activeMonth);
 
@@ -112,24 +115,14 @@ export default function HolidaysPage() {
     setLoading(true);
     try {
       const response = await api.get("/holidays");
-      let data = (response.data.data || []) as HolidayRecord[];
-
-      if (data.length === 0) {
-        data = [
-          { id: 1, date: `${year}-01-01`, occassion: "New Year's Day" },
-          { id: 2, date: `${year}-05-01`, occassion: "Labor Day" },
-          { id: 3, date: `${year}-12-25`, occassion: "Christmas" },
-        ];
-      }
-
-      setHolidays(data);
+      setHolidays((response.data.data || []) as HolidayRecord[]);
     } catch (err) {
       console.error("Fetch Holidays Error:", err);
       showToast("Failed to load holidays", "error");
     } finally {
       setLoading(false);
     }
-  }, [showToast, year]);
+  }, [showToast]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -185,18 +178,21 @@ export default function HolidaysPage() {
   }, [yearHolidays]);
 
   const handleDelete = async (id: number | string) => {
-    if (!canManageHolidays) {
-      showToast("Only admins can manage holidays.", "error");
+    if (!canDeleteHolidays) {
+      showToast("You do not have permission to delete holidays.", "error");
       return;
     }
 
     try {
-      await api.delete(`/holidays/${id}`);
+      setDeletingId(id);
+      await api.delete(`/holidays/${id}`, { params: { company_id: user?.company_id } });
       setHolidays((current) => current.filter((holiday) => String(holiday.id) !== String(id)));
       showToast("Holiday deleted successfully", "success");
     } catch (err) {
       console.error("Delete Holiday Error:", err);
       showToast("Failed to delete holiday", "error");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -209,8 +205,8 @@ export default function HolidaysPage() {
   };
 
   const handleSaveHolidays = async () => {
-    if (!canManageHolidays) {
-      showToast("Only admins can manage holidays.", "error");
+    if (!canCreateHolidays) {
+      showToast("You do not have permission to create holidays.", "error");
       return;
     }
 
@@ -221,17 +217,12 @@ export default function HolidaysPage() {
     }
 
     try {
-      const created = await Promise.all(
-        validHolidays.map(async (holiday) => {
-          const payload = { date: holiday.date, occassion: holiday.occasion.trim(), occasion: holiday.occasion.trim() };
-          try {
-            const response = await api.post("/holiday", payload);
-            return response.data?.data || { id: `${holiday.date}-${Date.now()}`, ...payload };
-          } catch {
-            return { id: `${holiday.date}-${Date.now()}`, ...payload };
-          }
-        }),
-      );
+      setSaving(true);
+      const response = await api.post("/holidays/bulk", {
+        company_id: user?.company_id,
+        holidays: validHolidays.map((holiday) => ({ date: holiday.date, occasion: holiday.occasion.trim() })),
+      });
+      const created = (response.data.data || []) as HolidayRecord[];
 
       setHolidays((current) => [...created, ...current]);
       showToast("Holidays saved successfully", "success");
@@ -240,12 +231,14 @@ export default function HolidaysPage() {
     } catch (err) {
       console.error("Save Holidays Error:", err);
       showToast("Failed to save holidays", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleMarkHolidays = async () => {
-    if (!canManageHolidays) {
-      showToast("Only admins can manage holidays.", "error");
+    if (!canCreateHolidays) {
+      showToast("You do not have permission to create holidays.", "error");
       return;
     }
 
@@ -255,38 +248,20 @@ export default function HolidaysPage() {
     }
 
     try {
-      const existingDates = new Set(holidays.map(getHolidayDate));
-      const datesToCreate: Array<{ date: string; occassion: string; occasion: string }> = [];
-      const cursor = new Date(year, 0, 1);
-
-      while (cursor.getFullYear() === year) {
-        if (markDays.includes(String(cursor.getDay()))) {
-          const date = toDateKey(cursor);
-          if (!existingDates.has(date)) {
-            const dayName = cursor.toLocaleDateString("en-US", { weekday: "long" });
-            datesToCreate.push({ date, occassion: dayName, occasion: dayName });
-          }
-        }
-        cursor.setDate(cursor.getDate() + 1);
-      }
-
-      const created = await Promise.all(
-        datesToCreate.map(async (payload) => {
-          try {
-            const response = await api.post("/holiday", payload);
-            return response.data?.data || { id: `${payload.date}-${Date.now()}`, ...payload };
-          } catch {
-            return { id: `${payload.date}-${Date.now()}`, ...payload };
-          }
-        }),
-      );
-
-      setHolidays((current) => [...created, ...current]);
+      setSaving(true);
+      await api.post("/holidays/bulk", {
+        company_id: user?.company_id,
+        year,
+        weekdays: markDays.map(Number),
+      });
+      await fetchHolidays();
       showToast("Holidays marked successfully", "success");
       setShowMarkModal(false);
     } catch (err) {
       console.error("Mark Holidays Error:", err);
       showToast("Failed to mark holidays", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -315,9 +290,9 @@ export default function HolidaysPage() {
                   onChange={(event) => setYear(Number(event.target.value))}
                   className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs font-black text-gray-700 outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
                 >
-                  <option value={2026}>2026</option>
-                  <option value={2025}>2025</option>
-                  <option value={2024}>2024</option>
+                  {Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 3 + index).map((optionYear) => (
+                    <option key={optionYear} value={optionYear}>{optionYear}</option>
+                  ))}
                 </select>
               </div>
 
@@ -330,7 +305,7 @@ export default function HolidaysPage() {
                 {viewMode === "calendar" ? "View List" : "View Calendar"}
               </button>
 
-              {canManageHolidays && (
+              {canCreateHolidays && (
                 <>
                   <button
                     type="button"
@@ -479,10 +454,11 @@ export default function HolidaysPage() {
                                 <p className="m-0 min-w-0 text-[10px] font-black uppercase leading-snug tracking-widest text-amber-800">
                                   {getHolidayTitle(holiday)}
                                 </p>
-                                {canManageHolidays && (
+                                {canDeleteHolidays && (
                                   <button
                                     type="button"
                                     onClick={() => handleDelete(holiday.id)}
+                                    disabled={deletingId === holiday.id}
                                     className="shrink-0 rounded-lg p-1 text-amber-500 transition hover:bg-red-500 hover:text-white"
                                     aria-label={`Delete ${getHolidayTitle(holiday)}`}
                                   >
@@ -521,10 +497,11 @@ export default function HolidaysPage() {
                             {formatHolidayDate(dateKey)} / {parsedDate?.toLocaleDateString("en-US", { weekday: "long" }) || "-"}
                           </p>
                         </div>
-                        {canManageHolidays && (
+                        {canDeleteHolidays && (
                           <button
                             type="button"
                             onClick={() => handleDelete(holiday.id)}
+                            disabled={deletingId === holiday.id}
                             className="rounded-xl border border-red-100 bg-white p-2 text-red-500 transition hover:bg-red-500 hover:text-white"
                             aria-label={`Delete ${getHolidayTitle(holiday)}`}
                           >
@@ -610,9 +587,10 @@ export default function HolidaysPage() {
             <button
               type="button"
               onClick={handleSaveHolidays}
+              disabled={saving}
               className="h-10 rounded-xl bg-primary px-5 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-primary/90"
             >
-              Save Holidays
+              {saving ? "Saving..." : "Save Holidays"}
             </button>
           </div>
         </div>
@@ -659,9 +637,10 @@ export default function HolidaysPage() {
             <button
               type="button"
               onClick={handleMarkHolidays}
+              disabled={saving}
               className="h-10 rounded-xl bg-primary px-5 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-primary/90"
             >
-              Save Changes
+              {saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </div>
