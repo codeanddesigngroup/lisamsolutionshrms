@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
 
     if (!user && !isPublicPath(pathname)) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      router.replace("/login");
       return;
     }
 

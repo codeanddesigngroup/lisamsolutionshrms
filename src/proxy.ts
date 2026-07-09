@@ -20,9 +20,7 @@ export function proxy(request: NextRequest) {
   const role = normalizeRole(request.cookies.get(ROLE_COOKIE)?.value);
 
   if (!token || !role) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (!canRoleAccessPath(role, pathname)) {
