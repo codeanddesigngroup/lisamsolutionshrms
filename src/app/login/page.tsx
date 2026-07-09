@@ -1,5 +1,10 @@
 import LoginPage from "@/features/auth/login/LoginPage";
+import { Suspense } from "react";
 
 export default function Page() {
-  return <LoginPage />;
+  return (
+    <Suspense fallback={null}>
+      <LoginPage />
+    </Suspense>
+  );
 }

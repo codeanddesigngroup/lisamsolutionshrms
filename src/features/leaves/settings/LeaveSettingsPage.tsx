@@ -27,6 +27,8 @@ const leaveColorClasses: Record<string, string> = {
   purple: "bg-purple-500 shadow-purple-500/50",
 };
 
+const getLeaveColorClass = (color?: string) => leaveColorClasses[color || "info"] || leaveColorClasses.info;
+
 type LeaveTypeRecord = { id: number | string; type_name: string; no_of_leaves?: number | string; paid?: number; color?: string };
 type EmployeeOption = { id: number | string; employee_id?: number | string; name: string };
 type LeaveQuotaRecord = { id: number | string; employee_id: number | string; leave_type_id: number | string; no_of_leaves: number | string; employee?: { name?: string }; leave_type?: { type_name?: string } };
@@ -137,7 +139,7 @@ export default function LeaveSettingsPage() {
     }
   };
 
-  const handleDeleteType = async (id: number) => {
+  const handleDeleteType = async (id: number | string) => {
     if (!confirm("Are you sure? This will remove this leave type.")) return;
     try {
       await api.delete(`/leaveType/${id}`);
@@ -390,7 +392,7 @@ export default function LeaveSettingsPage() {
                              <tr key={type.id} className="hover:bg-gray-50/30 transition-all group">
                                 <td className="px-6 py-5">
                                    <div className="flex items-center space-x-3">
-                                      <div className={`h-2 w-2 rounded-full shadow-sm ${leaveColorClasses[type.color] || leaveColorClasses.info}`}></div>
+                                      <div className={`h-2 w-2 rounded-full shadow-sm ${getLeaveColorClass(type.color)}`}></div>
                                       <span className="text-[11px] font-black text-gray-800 uppercase tracking-tight">{type.type_name}</span>
                                    </div>
                                 </td>

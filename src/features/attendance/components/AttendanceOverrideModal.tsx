@@ -26,6 +26,7 @@ export type AttendanceEmployeeOption = {
   name: string;
   email?: string;
   employee_detail?: {
+    employee_id?: number | string;
     designation?: { name?: string };
     shift_type_id?: number | string;
     shift_type?: ShiftSummary;

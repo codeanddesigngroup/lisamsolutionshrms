@@ -103,6 +103,8 @@ type EmployeeWithAccess = Employee & {
   };
 };
 
+type EmployeeDetailDraft = Partial<NonNullable<Employee["employee_detail"]>>;
+
 export default function EditEmployeePage() {
   const params = useParams();
   const router = useRouter();
@@ -165,7 +167,7 @@ export default function EditEmployeePage() {
             : Array.isArray(data.permission_record?.permission_keys) && data.permission_record.permission_keys.length > 0
               ? data.permission_record.permission_keys
               : ["dashboard.view", "profile.*"] as PermissionKey[];
-        const detail = data.employee_detail || {};
+        const detail: EmployeeDetailDraft = data.employee_detail || {};
         setEmployee(data);
         setPermissionState(permissions);
         setDepartments(deptRes.status === "fulfilled" ? deptRes.value.data.data || [] : []);
