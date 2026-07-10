@@ -391,6 +391,7 @@ export const canUserAccessPath = (user: AuthUser | null, pathname: string) =>
 export const hasPathPermission = (user: AuthUser, pathname: string) => {
   const role = normalizeRole(user.role);
   if (role === "super_admin") return true;
+  if (pathname === roleDefaultRoutes[role]) return true;
 
   const matchedRule = permissionRouteRules.find((rule) =>
     rule.prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)),

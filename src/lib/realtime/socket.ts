@@ -1,40 +1,34 @@
-/**
- * Realtime Socket Abstraction
- * Currently a mock implementation to be replaced with Pusher or Socket.io
- */
+import { io, type Socket } from "socket.io-client";
 
-type EventHandler = (data: any) => void;
+const apiUrl =
+  process.env.NEXT_PUBLIC_SOCKET_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8080/api";
 
-class SocketClient {
-  private handlers: Map<string, EventHandler[]> = new Map();
+const SOCKET_URL = apiUrl.replace(/\/api\/?$/i, "");
 
-  /**
-   * Subscribe to a specific event
-   */
-  on(event: string, handler: EventHandler) {
-    if (!this.handlers.has(event)) {
-      this.handlers.set(event, []);
-    }
-    this.handlers.get(event)?.push(handler);
+let socket: Socket | null = null;
+
+export const getChatSocket = () => {
+  if (!socket) {
+    socket = io(SOCKET_URL, {
+      autoConnect: false,
+      transports: ["websocket", "polling"],
+    });
   }
 
-  /**
-   * Unsubscribe from an event
-   */
-  off(event: string, handler: EventHandler) {
-    const eventHandlers = this.handlers.get(event);
-    if (eventHandlers) {
-      this.handlers.set(event, eventHandlers.filter(h => h !== handler));
-    }
-  }
+  return socket;
+};
 
-  /**
-   * Simulate an incoming event (for dev/mocking)
-   */
-  simulate(event: string, data: any) {
-    this.handlers.get(event)?.forEach(handler => handler(data));
-  }
-}
+export const connectChatSocket = () => {
+  const client = getChatSocket();
+  if (!client.connected) client.connect();
+  return client;
+};
 
-export const socket = new SocketClient();
-export default socket;
+export const disconnectChatSocket = () => {
+  if (socket?.connected) socket.disconnect();
+};
+
+export default getChatSocket;

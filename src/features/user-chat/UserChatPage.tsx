@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
@@ -8,6 +8,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { makeLocalUploadFiles } from "@/lib/local-upload";
+import { connectChatSocket, disconnectChatSocket, getChatSocket } from "@/lib/realtime/socket";
 import {
   Archive,
   ArrowLeft,
@@ -158,6 +159,11 @@ const getDirectAvatar = (conversation: ChatConversation, currentUserKey: string)
 
 const getMessageStatus = (message: ChatMessage, currentUserKey: string) => message.status_by?.[currentUserKey] || "sent";
 
+const isSupportedConversation = (conversation: ChatConversation, currentUserKey: string) =>
+  conversation.participant_keys.includes(currentUserKey) &&
+  !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
+  !conversation.participants.some((participant) => participant.type === "client");
+
 export default function ChatPage() {
   const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
@@ -165,6 +171,7 @@ export default function ChatPage() {
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
   const settingsAvatarInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const conversationsRef = useRef<ChatConversation[]>([]);
 
   const currentUserKey = useMemo(() => getCurrentUserKey(user?.role, user?.id), [user?.id, user?.role]);
   const currentUserName = user?.name || "Current User";
@@ -198,6 +205,10 @@ export default function ChatPage() {
   const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialog | null>(null);
   const [confirmationBusy, setConfirmationBusy] = useState(false);
   const [showConversationMenu, setShowConversationMenu] = useState(false);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
@@ -265,6 +276,27 @@ export default function ChatPage() {
     [activeConversation?.pinned_message_id, activeMessages],
   );
 
+  const mergeConversation = useCallback((conversation: ChatConversation) => {
+    if (!isSupportedConversation(conversation, currentUserKey)) return;
+    setConversations((current) => {
+      const exists = current.some((item) => item.id === conversation.id);
+      if (exists) {
+        return current.map((item) => (item.id === conversation.id ? conversation : item));
+      }
+      return [conversation, ...current];
+    });
+  }, [currentUserKey]);
+
+  const mergeMessage = useCallback((message: ChatMessage) => {
+    setMessages((current) => {
+      const exists = current.some((item) => item.id === message.id);
+      if (exists) {
+        return current.map((item) => (item.id === message.id ? message : item));
+      }
+      return [...current, message];
+    });
+  }, []);
+
   useEffect(() => {
     const loadChat = async () => {
       setLoading(true);
@@ -315,10 +347,8 @@ export default function ChatPage() {
           (member, index, list) => list.findIndex((item) => item.key === member.key) === index,
         );
 
-        const storedConversations = asList<ChatConversation>(conversationRes.data).filter(
-          (conversation) =>
-            !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
-            !conversation.participants.some((participant) => participant.type === "client"),
+        const storedConversations = asList<ChatConversation>(conversationRes.data).filter((conversation) =>
+          isSupportedConversation(conversation, currentUserKey),
         );
         const directConversations = members
           .filter((member) => member.key !== currentUserKey)
@@ -354,25 +384,66 @@ export default function ChatPage() {
   useEffect(() => {
     if (!user?.company_id) return;
 
-    const refreshChat = async () => {
-      try {
-        const [conversationRes, messageRes] = await Promise.all([api.get("/chat-conversations"), api.get("/chat-messages")]);
-        setConversations(
-          asList<ChatConversation>(conversationRes.data).filter(
-            (conversation) =>
-              !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
-              !conversation.participants.some((participant) => participant.type === "client"),
-          ),
-        );
-        setMessages(asList<ChatMessage>(messageRes.data));
-      } catch {
-        // Keep the last successful chat state while connectivity recovers.
-      }
+    const client = connectChatSocket();
+    client.emit("chat:join-company", { company_id: user.company_id, member_key: currentUserKey });
+
+    const handleConversationUpsert = ({ conversation }: { conversation?: ChatConversation }) => {
+      if (conversation) mergeConversation(conversation);
     };
 
-    const intervalId = window.setInterval(() => void refreshChat(), 3000);
-    return () => window.clearInterval(intervalId);
-  }, [user?.company_id]);
+    const handleConversationDeleted = ({ conversation_id }: { conversation_id?: string | number }) => {
+      if (!conversation_id) return;
+      setConversations((current) => current.filter((conversation) => String(conversation.id) !== String(conversation_id)));
+      setMessages((current) => current.filter((message) => String(message.conversation_id) !== String(conversation_id)));
+      setActiveConversationId((current) => (String(current) === String(conversation_id) ? null : current));
+    };
+
+    const canAccessMessage = (message: ChatMessage, conversation?: ChatConversation) => {
+      if (conversation) return isSupportedConversation(conversation, currentUserKey);
+      return conversationsRef.current.some(
+        (item) => String(item.id) === String(message.conversation_id) && item.participant_keys.includes(currentUserKey),
+      );
+    };
+
+    const handleMessageCreated = ({ message, conversation }: { message?: ChatMessage; conversation?: ChatConversation }) => {
+      if (!message || !canAccessMessage(message, conversation)) return;
+      if (conversation) mergeConversation(conversation);
+      mergeMessage(message);
+    };
+
+    const handleMessageUpdated = ({ message }: { message?: ChatMessage }) => {
+      if (message && canAccessMessage(message)) mergeMessage(message);
+    };
+
+    client.on("conversation:created", handleConversationUpsert);
+    client.on("conversation:updated", handleConversationUpsert);
+    client.on("conversation:deleted", handleConversationDeleted);
+    client.on("message:created", handleMessageCreated);
+    client.on("message:updated", handleMessageUpdated);
+
+    return () => {
+      client.off("conversation:created", handleConversationUpsert);
+      client.off("conversation:updated", handleConversationUpsert);
+      client.off("conversation:deleted", handleConversationDeleted);
+      client.off("message:created", handleMessageCreated);
+      client.off("message:updated", handleMessageUpdated);
+      disconnectChatSocket();
+    };
+  }, [currentUserKey, mergeConversation, mergeMessage, user?.company_id]);
+
+  useEffect(() => {
+    if (!user?.company_id) return;
+    const conversationIds = conversations
+      .filter((conversation) => conversation.participant_keys.includes(currentUserKey))
+      .map((conversation) => conversation.id);
+
+    if (conversationIds.length > 0) {
+      const client = getChatSocket();
+      if (client.connected) {
+        client.emit("chat:join-conversations", { conversation_ids: conversationIds });
+      }
+    }
+  }, [conversations, currentUserKey, user?.company_id]);
 
   useEffect(() => {
     if (!activeConversationId && visibleConversations[0]) {
