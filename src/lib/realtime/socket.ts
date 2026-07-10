@@ -1,8 +1,6 @@
 import { io, type Socket } from "socket.io-client";
 
-const apiUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
 
-const SOCKET_URL = apiUrl.replace(/\/api\/?$/i, "");
 
 let socket: Socket | null = null;
 
