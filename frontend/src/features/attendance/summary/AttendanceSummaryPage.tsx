@@ -136,7 +136,7 @@ export default function AttendanceSummaryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [month, year, user?.id, user?.company_id, user?.role, canManageAttendance]);
 
   const resetFilters = () => {
     setSelectedEmployee("all");
@@ -228,7 +228,7 @@ export default function AttendanceSummaryPage() {
         </div>
 
         <div className="white-box">
-          <div className={`grid grid-cols-1 gap-4 items-end ${canManageAttendance ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
+          <div className={`grid grid-cols-1 gap-4 items-end ${canManageAttendance ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
             {canManageAttendance && (
               <div>
                 <label className="block text-[12px] font-bold text-gray-600 mb-2">Employee Name</label>
@@ -255,11 +255,6 @@ export default function AttendanceSummaryPage() {
                   <option key={yearOption} value={yearOption}>{yearOption}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <Button onClick={fetchData} className="btn-success btn-block h-[34px]">
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Apply
-              </Button>
             </div>
             <div>
               <Button onClick={resetFilters} className="btn-default btn-block h-[34px]">
