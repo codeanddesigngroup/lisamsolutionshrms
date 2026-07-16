@@ -37,7 +37,6 @@ export default function CreateAdminPage() {
           setUsers(workspace.admins);
           setCompanies(workspace.companies);
           setRoles(workspace.roles);
-          const assignableRoles = workspace.roles.filter((role) => role.name.trim().toLowerCase() !== "super admin");
           const adminRoleIds = new Set(
             workspace.roles
               .filter((role) => role.name.trim().toLowerCase() === "admin")
@@ -51,15 +50,11 @@ export default function CreateAdminPage() {
           );
           const availableCompanies = workspace.companies.filter((company) => !assignedAdminCompanyIds.has(String(company.id)));
           const firstCompanyId = availableCompanies[0]?.id;
-          const defaultRoleId = assignableRoles.find((role) => role.name.toLowerCase() === "employee")?.id || assignableRoles[0]?.id;
           if (firstCompanyId) {
             setForm((current) => ({
               ...current,
               company_id: String(firstCompanyId),
-              role_id: defaultRoleId ? String(defaultRoleId) : current.role_id,
             }));
-          } else if (defaultRoleId) {
-            setForm((current) => ({ ...current, role_id: String(defaultRoleId) }));
           }
         })
         .catch((error) => {
@@ -103,11 +98,6 @@ export default function CreateAdminPage() {
     [assignedAdminCompanyIds, companies],
   );
 
-  const assignableRoles = useMemo(
-    () => roles.filter((role) => role.name.trim().toLowerCase() !== "super admin"),
-    [roles],
-  );
-
   const passwordValidationMessage = useMemo(
     () =>
       validateAdminPassword({
@@ -125,8 +115,8 @@ export default function CreateAdminPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!form.name.trim() || !form.email.trim() || !form.company_id || !form.role_id) {
-      showToast("Name, email, company, and role are required.", "error");
+    if (!form.name.trim() || !form.email.trim() || !form.company_id) {
+      showToast("Name, email, and company are required.", "error");
       return;
     }
     if (!emailPattern.test(form.email.trim())) {
@@ -147,7 +137,7 @@ export default function CreateAdminPage() {
         name: form.name.trim(),
         email: form.email.trim(),
         password: form.password.trim(),
-        role_id: form.role_id,
+        role: "admin",
         company_id: form.company_id,
         status: form.status,
         permissions,
@@ -221,23 +211,6 @@ export default function CreateAdminPage() {
                 {availableCompanies.map((company) => (
                   <option key={String(company.id)} value={String(company.id)}>
                     {getCompanyName(company)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">Role</label>
-              <select
-                required
-                value={form.role_id}
-                disabled={loading}
-                onChange={(event) => setForm((current) => ({ ...current, role_id: event.target.value }))}
-                className="form-control"
-              >
-                <option value="">Select role</option>
-                {assignableRoles.map((role) => (
-                  <option key={String(role.id)} value={String(role.id)}>
-                    {role.name}
                   </option>
                 ))}
               </select>
