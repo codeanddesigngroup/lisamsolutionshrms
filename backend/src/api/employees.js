@@ -12,6 +12,7 @@ const EmployeePermission = require('../models/EmployeePermission');
 const AttendanceRecords = require('../models/AttendanceRecords');
 const ShiftType = require('../models/ShiftType');
 const applyAssociations = require('../models/associations');
+const { processAttendanceRecords } = require('../services/attendanceService');
 
 applyAssociations();
 
@@ -100,6 +101,39 @@ const serializeEmployee = (employee) => {
   };
 };
 
+function formatDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getBackfillRange(months = 6) {
+  const end = new Date();
+  const start = new Date(end);
+  start.setUTCMonth(start.getUTCMonth() - months);
+
+  return {
+    startDate: formatDate(start),
+    endDate: formatDate(end),
+  };
+}
+
+function backfillEmployeeAttendance(employeeId) {
+  const { startDate, endDate } = getBackfillRange(6);
+
+  setImmediate(async () => {
+    try {
+      const result = await processAttendanceRecords({
+        employeeId,
+        startDate,
+        endDate,
+      });
+
+      console.log(`Employee attendance backfill completed. employeeId=${employeeId}, processed=${result.processed}`);
+    } catch (err) {
+      console.error(`Employee attendance backfill failed. employeeId=${employeeId}`, err);
+    }
+  });
+}
+
 router.post('/', async (req, res, next) => {
   const transaction = await sequelize.transaction();
   let transactionCommitted = false;
@@ -127,6 +161,7 @@ router.post('/', async (req, res, next) => {
 
     await transaction.commit();
     transactionCommitted = true;
+    backfillEmployeeAttendance(employee.employee_id);
     const createdEmployee = employee.toJSON();
     delete createdEmployee.password;
 

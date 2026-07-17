@@ -313,7 +313,7 @@ async function saveAttendanceLogs(logs) {
   return { saved, skipped };
 }
 
-async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDate } = {}) {
+async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDate, employeeId } = {}) {
   const since = new Date(Date.now() - Number(sinceMinutes || 1440) * 60 * 1000);
   const punchTime = {};
   if (startDate) punchTime[Op.gte] = new Date(`${startDate}T00:00:00.000Z`);
@@ -324,6 +324,7 @@ async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDat
   }
   const logs = await AttendanceLogs.findAll({
     where: {
+      ...(employeeId ? { employeeId: String(employeeId) } : {}),
       ...(Object.keys(punchTime).length > 0 ? { punchTime } : { created_at: { [Op.gte]: since } }),
     },
     order: [['employeeId', 'ASC'], ['punchTime', 'ASC']],
