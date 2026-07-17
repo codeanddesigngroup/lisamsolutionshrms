@@ -313,13 +313,18 @@ async function saveAttendanceLogs(logs) {
   return { saved, skipped };
 }
 
-async function processAttendanceRecords({ sinceMinutes = 1440 } = {}) {
+async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDate } = {}) {
   const since = new Date(Date.now() - Number(sinceMinutes || 1440) * 60 * 1000);
+  const punchTime = {};
+  if (startDate) punchTime[Op.gte] = new Date(`${startDate}T00:00:00.000Z`);
+  if (endDate) {
+    const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
+    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+    punchTime[Op.lt] = endExclusive;
+  }
   const logs = await AttendanceLogs.findAll({
     where: {
-      punchTime: {
-        [Op.gte]: since,
-      },
+      ...(Object.keys(punchTime).length > 0 ? { punchTime } : { created_at: { [Op.gte]: since } }),
     },
     order: [['employeeId', 'ASC'], ['punchTime', 'ASC']],
   });

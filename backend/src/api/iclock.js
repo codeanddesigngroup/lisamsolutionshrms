@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { saveCloudAttendance } = require('../services/zkCloudService');
+const { takeNextCommand } = require('../services/zkCommandQueue');
 
 const handleGetOptions = (req, res) => {
   const serial = req.query.SN || req.query.sn || 'UNKNOWN';
@@ -53,13 +54,14 @@ router.post('/iclock/fdata', (req, res) => {
   res.type('text/plain').send('OK');
 });
 
-router.get('/getrequest', (req, res) => {
-  res.type('text/plain').send('OK');
-});
+const handleGetRequest = (req, res) => {
+  const serial = req.query.SN || req.query.sn;
+  const pending = takeNextCommand(serial);
+  res.type('text/plain').send(pending?.command || 'OK');
+};
 
-router.get('/iclock/getrequest', (req, res) => {
-  res.type('text/plain').send('OK');
-});
+router.get('/getrequest', handleGetRequest);
+router.get('/iclock/getrequest', handleGetRequest);
 
 router.post('/devicecmd', (req, res) => {
   res.type('text/plain').send('OK');

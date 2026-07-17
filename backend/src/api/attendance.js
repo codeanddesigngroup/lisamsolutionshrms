@@ -150,6 +150,8 @@ router.post('/process', async (req, res, next) => {
     try {
         const result = await processAttendanceRecords({
             sinceMinutes: req.body?.sinceMinutes || req.query.sinceMinutes || 1440,
+            startDate: req.body?.startDate || req.query.startDate,
+            endDate: req.body?.endDate || req.query.endDate,
         });
 
         return res.status(200).json({
