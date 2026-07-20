@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Apple, Eye, Mail, } from "lucide-react";
+import { Apple, Eye, EyeOff, Mail, } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -26,6 +26,7 @@ function LoginFormContent() {
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const redirectTo = searchParams.get("next") || undefined;
 
   const {
@@ -117,13 +118,22 @@ function LoginFormContent() {
                     className={`login-glass-field flex items-center rounded-full border px-3 transition ${errors.password ? "border-red-400/80" : "border-slate-200"}`}
                   >
                     <input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       id="password"
                       placeholder="Enter your password"
                       {...register("password")}
                       className="login-glass-input text-[11px] font-medium"
                     />
-                    <Eye className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      className="ml-2 shrink-0 text-slate-500 transition hover:text-slate-700"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-pressed={showPassword}
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
                   </div>
                   {errors.password && <p className="mt-1.5 text-[9px] font-bold uppercase tracking-widest text-red-600">{errors.password.message}</p>}
                 </div>

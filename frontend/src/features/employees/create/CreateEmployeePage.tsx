@@ -10,6 +10,7 @@ import {
   Mail,
   Lock,
   Eye,
+  EyeOff,
   Calendar,
   Hash,
   Phone,
@@ -103,6 +104,7 @@ export default function CreateEmployeePage() {
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const selectedModuleCount = Object.values(permissionState).filter((actions) => actions.length > 0).length;
   const permissionKeys = staticPermissionModules.flatMap((moduleItem) =>
@@ -309,17 +311,20 @@ export default function CreateEmployeePage() {
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
                   <input
                     name="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     defaultValue=""
                     placeholder="Enter password"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-12 text-xs font-black tracking-tight outline-none transition-all focus:ring-2 focus:ring-primary/20"
                   />
                   <button
                     type="button"
+                    onClick={() => setShowPassword((visible) => !visible)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-primary"
-                    aria-label="Show password"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                    title={showPassword ? "Hide password" : "Show password"}
                   >
-                    <Eye className="h-4 w-4" />
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
