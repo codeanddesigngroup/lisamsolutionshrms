@@ -239,9 +239,17 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
 
     return employees.map((employee) => {
       const employeeId = String(employee.id);
+      const employeeCodes = getEmployeeMatchCodes(employee);
       const attendanceRecord = attendance.find((row) =>
         String(row.date) === date &&
-        String(row.employee_id || row.user_id || row.employee?.id || "") === employeeId
+        [
+          row.employee_id,
+          row.employee_code,
+          row.user_id,
+          row.employee?.id,
+          row.employee?.employee_id,
+          row.employee?.employee_detail?.employee_id,
+        ].some((value) => value !== undefined && value !== null && employeeCodes.includes(String(value).trim()))
       );
       const approvedLeave = leaves.find((leave) => getLeaveEmployeeId(leave) === employeeId && getLeaveDate(leave) === date && String(leave.status || "").toLowerCase() === "approved");
       const shift = getShiftForEmployee(employee, attendanceRecord);

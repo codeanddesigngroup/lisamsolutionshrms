@@ -38,6 +38,7 @@ type EmployeeOption = {
 type AttendanceRecord = {
   id: number | string;
   employee_id?: number | string;
+  employee_code?: number | string;
   user_id?: number | string;
   employee?: EmployeeOption;
   date: string;
@@ -64,6 +65,15 @@ const getDateForDay = (year: number, month: number, day: number) =>
   `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
 const getAttendanceDate = (value: string) => value.slice(0, 10);
+
+const getEmployeeMatchCodes = (employee: EmployeeOption) =>
+  [
+    employee.id,
+    employee.employee_id,
+    employee.employee_detail?.employee_id,
+  ]
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+    .map((value) => String(value).trim());
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
@@ -157,37 +167,56 @@ export default function AttendanceSummaryPage() {
       const rowDate = getAttendanceDate(row.date);
       const [, , rowDay] = rowDate.split("-").map(Number);
       if (!rowDate.startsWith(`${year}-${String(month).padStart(2, "0")}-`)) return;
-      const employeeId = String(row.employee_id || row.user_id || row.employee?.id || "");
-      map.set(`${employeeId}-${rowDay}`, row);
+
+      [
+        row.employee_id,
+        row.employee_code,
+        row.user_id,
+        row.employee?.id,
+        row.employee?.employee_id,
+        row.employee?.employee_detail?.employee_id,
+      ]
+        .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+        .forEach((value) => map.set(`${String(value).trim()}-${rowDay}`, row));
     });
     return map;
   }, [attendance, month, year]);
 
-  const getDayStatus = (employeeId: number | string, day: number) => {
+  const getAttendanceForEmployeeDay = (employee: EmployeeOption, day: number) => {
+    for (const employeeId of getEmployeeMatchCodes(employee)) {
+      const record = attendanceByEmployeeDay.get(`${employeeId}-${day}`);
+      if (record) return record;
+    }
+    return undefined;
+  };
+
+  const getDayStatus = (employee: EmployeeOption, day: number) => {
     const date = new Date(year, month - 1, day);
     const dateString = getDateForDay(year, month, day);
-    const record = attendanceByEmployeeDay.get(`${employeeId}-${day}`);
+    const record = getAttendanceForEmployeeDay(employee, day);
     if (record) {
-      const shift = record.shift_type || employees.find((employee) => String(employee.id) === String(employeeId))?.employee_detail?.shift_type;
+      const shift = record.shift_type || employee.employee_detail?.shift_type;
       return calculateAttendanceStatus(record, shift as ShiftDefinition);
     }
     if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
-    if (leaves.some((leave) => getLeaveEmployeeId(leave) === String(employeeId) && getLeaveDate(leave) === dateString && leave.status === "approved")) return "leave";
+    const employeeCodes = getEmployeeMatchCodes(employee);
+    if (leaves.some((leave) => employeeCodes.includes(getLeaveEmployeeId(leave)) && getLeaveDate(leave) === dateString && leave.status === "approved")) return "leave";
     if (!officeOpenDays.includes(date.getDay())) return "closed";
     return "empty";
   };
 
   const getDayDetail = (employee: EmployeeOption, day: number): DayDetail => {
     const date = getDateForDay(year, month, day);
-    const attendanceRecord = attendanceByEmployeeDay.get(`${employee.id}-${day}`);
+    const attendanceRecord = getAttendanceForEmployeeDay(employee, day);
     const holiday = holidays.find((item) => getHolidayDate(item) === date);
-    const leave = leaves.find((item) => getLeaveEmployeeId(item) === String(employee.id) && getLeaveDate(item) === date && item.status === "approved");
-    return { employee, day, date, status: getDayStatus(employee.id, day), attendance: attendanceRecord, holiday, leave };
+    const employeeCodes = getEmployeeMatchCodes(employee);
+    const leave = leaves.find((item) => employeeCodes.includes(getLeaveEmployeeId(item)) && getLeaveDate(item) === date && item.status === "approved");
+    return { employee, day, date, status: getDayStatus(employee, day), attendance: attendanceRecord, holiday, leave };
   };
 
-  const getTotal = (employeeId: number | string) =>
+  const getTotal = (employee: EmployeeOption) =>
     daysArray.reduce((total, day) => {
-      const status = getDayStatus(employeeId, day);
+      const status = getDayStatus(employee, day);
       if (status === "half-day") return total + 0.5;
       return ["present", "late"].includes(status) ? total + 1 : total;
     }, 0);
@@ -303,7 +332,7 @@ export default function AttendanceSummaryPage() {
                   <tr key={employee.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-[13px] font-bold border-r sticky left-0 z-10 bg-white">{employee.name}</td>
                     {daysArray.map((day) => {
-                      const status = getDayStatus(employee.id, day);
+                      const status = getDayStatus(employee, day);
                       return (
                         <td key={day} className="p-1 border-r text-center">
                           <button type="button" onClick={() => setSelectedDayDetail(getDayDetail(employee, day))} className="mx-auto flex h-6 w-6 items-center justify-center rounded-sm transition-transform hover:scale-110" title={`${employee.name} - ${day}`}>
@@ -317,7 +346,7 @@ export default function AttendanceSummaryPage() {
                         </td>
                       );
                     })}
-                    <td className="px-4 py-3 text-center font-bold text-success border-l">{getTotal(employee.id)} / {daysInMonth}</td>
+                    <td className="px-4 py-3 text-center font-bold text-success border-l">{getTotal(employee)} / {daysInMonth}</td>
                   </tr>
                 ))}
                 {!loading && visibleEmployees.length === 0 && (
