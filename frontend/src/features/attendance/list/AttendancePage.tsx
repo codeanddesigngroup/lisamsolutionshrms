@@ -50,6 +50,7 @@ type EmployeeOption = AttendanceEmployeeOption & {
 
 type AttendanceRecord = AttendanceRecordForOverride & {
   id: number | string;
+  employee_code?: string | number;
   employee?: EmployeeOption;
   manual_override?: boolean;
   override_reason?: string;
