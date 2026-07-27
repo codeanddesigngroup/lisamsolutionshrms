@@ -219,20 +219,29 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:employeeId/attendance', async (req, res, next) => {
   try {
-    const employee = await Employee.findOne({
-      where: {
-        [Op.or]: [
-          { id: Number(req.params.employeeId) || 0 },
-          { employee_id: String(req.params.employeeId) },
-        ],
-      },
-      attributes: ['id', 'company_id', 'employee_id', 'name', 'email'],
-    });
+    const numericId = Number(req.params.employeeId);
+    const attributes = ['id', 'company_id', 'employee_id', 'name', 'email'];
 
-    const attendanceEmployeeId = employee?.employee_id || String(req.params.employeeId);
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid employee database ID is required',
+      });
+    }
+
+    const employee = await Employee.findByPk(numericId, { attributes });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found',
+      });
+    }
+
+    const attendanceEmployeeId = employee.employee_id;
     const records = await AttendanceRecords.findAll({
       where: {
-        ...(employee?.company_id ? { companyId: employee.company_id } : {}),
+        ...(employee.company_id ? { companyId: employee.company_id } : {}),
         employeeId: attendanceEmployeeId,
       },
       order: [['workDate', 'DESC']],

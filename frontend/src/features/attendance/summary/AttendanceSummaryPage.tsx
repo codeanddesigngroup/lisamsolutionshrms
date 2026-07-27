@@ -66,40 +66,27 @@ const getDateForDay = (year: number, month: number, day: number) =>
 
 const getAttendanceDate = (value: string) => value.slice(0, 10);
 
-const getEmployeeMatchCodes = (employee: EmployeeOption) =>
-  [
-    employee.id,
-    employee.employee_id,
-    employee.employee_detail?.employee_id,
-  ]
-    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-    .map((value) => String(value).trim());
-
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
-  const userId = String(user.id || "");
-  return (
-    String(employee.id) === userId ||
-    String(employee.employee_id || employee.employee_detail?.employee_id || "") === userId ||
-    Boolean(user.name && employee.name === user.name) ||
-    Boolean(user.email && employee.email === user.email)
-  );
+  return String(employee.id) === String(user.id || "");
 };
 
 const isCurrentUserAttendance = (attendance: AttendanceRecord, user: { id?: number | string; name?: string; email?: string } | null) =>
-  isCurrentUserEmployee(attendance.employee, user) ||
-  String(attendance.employee_id || attendance.user_id || "") === String(user?.id || "");
+  isCurrentUserEmployee(attendance.employee, user);
 
 export default function AttendanceSummaryPage() {
   const { showToast } = useToast();
   const { user, hasPermission } = useAuth();
+  const isEmployeeSession = user?.role === "employee";
   const canManageAttendance =
-    user?.role === "admin" ||
-    hasPermission("attendance.manage") ||
-    hasPermission("attendance.edit") ||
-    hasPermission("attendance.approve") ||
-    hasPermission("attendance.export");
-  const isSelfServiceAttendance = user?.role === "employee" && !canManageAttendance;
+    !isEmployeeSession && (
+      user?.role === "admin" ||
+      hasPermission("attendance.manage") ||
+      hasPermission("attendance.edit") ||
+      hasPermission("attendance.approve") ||
+      hasPermission("attendance.export")
+    );
+  const isSelfServiceAttendance = isEmployeeSession;
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -119,20 +106,41 @@ export default function AttendanceSummaryPage() {
       const employeeList = employeeRecords as EmployeeOption[];
       const startDate = getDateForDay(year, month, 1);
       const endDate = getDateForDay(year, month, new Date(year, month, 0).getDate());
-      const attendanceList = (await attendanceService.getRecords({ companyId, startDate, endDate, limit: 500 }, employeeRecords)) as AttendanceRecord[];
+      const currentEmployee = isEmployeeSession
+        ? employeeList.find((employee) => String(employee.id) === String(user?.id || ""))
+        : undefined;
+      const attendanceDeviceEmployeeId =
+        currentEmployee?.employee_detail?.employee_id ?? currentEmployee?.employee_id;
+      const attendanceList = (await attendanceService.getRecords(
+        {
+          companyId,
+          startDate,
+          endDate,
+          limit: 500,
+          ...(isEmployeeSession && attendanceDeviceEmployeeId !== undefined
+            ? { employeeId: attendanceDeviceEmployeeId }
+            : {}),
+        },
+        employeeRecords,
+      )) as AttendanceRecord[];
       const holidayList: HolidayRecord[] = [];
       const leaveList: LeaveRecord[] = [];
 
-      const employeesWithAttendance = canManageAttendance
-        ? employeeList
-        : employeeList.filter((employee) => isCurrentUserEmployee(employee, user));
+      const employeesWithAttendance = isEmployeeSession
+        ? (currentEmployee ? [currentEmployee] : [])
+        : employeeList;
       setEmployees(employeesWithAttendance);
-      setAttendance(attendanceList.filter((row) =>
-        canManageAttendance ||
-        isCurrentUserAttendance(row, user)
-      ));
+      setAttendance(
+        isEmployeeSession
+          ? attendanceList.filter((row) => isCurrentUserAttendance(row, user))
+          : attendanceList,
+      );
       setHolidays(holidayList);
-      setLeaves(canManageAttendance ? leaveList : leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(user?.id || "") || leave.user?.name === user?.name || leave.employee?.name === user?.name));
+      setLeaves(
+        isEmployeeSession
+          ? leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(user?.id || ""))
+          : leaveList,
+      );
       setOfficeOpenDays(parseOfficeOpenDays(undefined));
     } catch (err) {
       console.error("Fetch Attendance Summary Error:", err);
@@ -168,26 +176,16 @@ export default function AttendanceSummaryPage() {
       const [, , rowDay] = rowDate.split("-").map(Number);
       if (!rowDate.startsWith(`${year}-${String(month).padStart(2, "0")}-`)) return;
 
-      [
-        row.employee_id,
-        row.employee_code,
-        row.user_id,
-        row.employee?.id,
-        row.employee?.employee_id,
-        row.employee?.employee_detail?.employee_id,
-      ]
-        .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-        .forEach((value) => map.set(`${String(value).trim()}-${rowDay}`, row));
+      const applicationEmployeeId = row.employee?.id ?? row.employee_id ?? row.user_id;
+      if (applicationEmployeeId !== undefined && applicationEmployeeId !== null) {
+        map.set(`${String(applicationEmployeeId)}-${rowDay}`, row);
+      }
     });
     return map;
   }, [attendance, month, year]);
 
   const getAttendanceForEmployeeDay = (employee: EmployeeOption, day: number) => {
-    for (const employeeId of getEmployeeMatchCodes(employee)) {
-      const record = attendanceByEmployeeDay.get(`${employeeId}-${day}`);
-      if (record) return record;
-    }
-    return undefined;
+    return attendanceByEmployeeDay.get(`${String(employee.id)}-${day}`);
   };
 
   const getDayStatus = (employee: EmployeeOption, day: number) => {
@@ -199,8 +197,7 @@ export default function AttendanceSummaryPage() {
       return calculateAttendanceStatus(record, shift as ShiftDefinition);
     }
     if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
-    const employeeCodes = getEmployeeMatchCodes(employee);
-    if (leaves.some((leave) => employeeCodes.includes(getLeaveEmployeeId(leave)) && getLeaveDate(leave) === dateString && leave.status === "approved")) return "leave";
+    if (leaves.some((leave) => getLeaveEmployeeId(leave) === String(employee.id) && getLeaveDate(leave) === dateString && leave.status === "approved")) return "leave";
     if (!officeOpenDays.includes(date.getDay())) return "closed";
     return "empty";
   };
@@ -209,8 +206,7 @@ export default function AttendanceSummaryPage() {
     const date = getDateForDay(year, month, day);
     const attendanceRecord = getAttendanceForEmployeeDay(employee, day);
     const holiday = holidays.find((item) => getHolidayDate(item) === date);
-    const employeeCodes = getEmployeeMatchCodes(employee);
-    const leave = leaves.find((item) => employeeCodes.includes(getLeaveEmployeeId(item)) && getLeaveDate(item) === date && item.status === "approved");
+    const leave = leaves.find((item) => getLeaveEmployeeId(item) === String(employee.id) && getLeaveDate(item) === date && item.status === "approved");
     return { employee, day, date, status: getDayStatus(employee, day), attendance: attendanceRecord, holiday, leave };
   };
 

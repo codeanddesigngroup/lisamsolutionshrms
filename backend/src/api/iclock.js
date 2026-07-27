@@ -1,10 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const { saveCloudAttendance } = require('../services/zkCloudService');
-const { takeNextCommand } = require('../services/zkCommandQueue');
+const { registerDevice, takeNextCommand } = require('../services/zkCommandQueue');
+const { processAttendanceRecords } = require('../services/attendanceService');
+
+function getUploadedPunchRange(punches = []) {
+  const timestamps = punches
+    .map((punch) => punch.recordTime ?? punch.punchTime ?? punch.attTime ?? punch.timestamp ?? punch.punch_time)
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .map((date) => date.getTime());
+
+  if (timestamps.length === 0) return null;
+
+  return {
+    startDate: new Date(Math.min(...timestamps)).toISOString().slice(0, 10),
+    endDate: new Date(Math.max(...timestamps)).toISOString().slice(0, 10),
+  };
+}
 
 const handleGetOptions = (req, res) => {
   const serial = req.query.SN || req.query.sn || 'UNKNOWN';
+  registerDevice(serial);
 
   res.type('text/plain').send([
     `GET OPTION FROM: ${serial}`,
@@ -25,6 +42,7 @@ const handleAttendanceLogs = async (req, res, next) => {
   try {
     const table = String(req.query.table || '').toUpperCase();
     const serial = req.query.SN || req.query.sn || null;
+    registerDevice(serial);
 
     console.log(`iClock POST received. Path: ${req.originalUrl}, table: ${table || 'N/A'}, serial: ${serial || 'N/A'}, bodyType: ${typeof req.body}`);
 
@@ -34,6 +52,15 @@ const handleAttendanceLogs = async (req, res, next) => {
     }
 
     const result = await saveCloudAttendance(req.body, serial);
+    const uploadedRange = getUploadedPunchRange(result.punches);
+
+    // DATA QUERY only reads punches from the device. Once a batch is safely
+    // stored in attendance_logs, build/update the corresponding attendance rows.
+    if (result.fetched > 0 && uploadedRange) {
+      const processed = await processAttendanceRecords(uploadedRange);
+      console.log(`Processed ${processed.processed} attendance records for uploaded device punches`);
+    }
+
     console.log(`Cloud attendance received. Fetched: ${result.fetched}, saved: ${result.saved}, skipped: ${result.skipped}`);
     res.type('text/plain').send('OK');
   } catch (err) {
@@ -56,6 +83,7 @@ router.post('/iclock/fdata', (req, res) => {
 
 const handleGetRequest = (req, res) => {
   const serial = req.query.SN || req.query.sn;
+  registerDevice(serial);
   const pending = takeNextCommand(serial);
   res.type('text/plain').send(pending?.command || 'OK');
 };

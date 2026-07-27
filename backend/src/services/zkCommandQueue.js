@@ -1,4 +1,5 @@
 const pendingCommands = new Map();
+const knownDevices = new Map();
 let nextCommandId = Date.now() % 1000000000;
 
 function normalizeSerial(serial) {
@@ -7,6 +8,25 @@ function normalizeSerial(serial) {
 
 function formatDeviceTimestamp(value, endOfDay = false) {
   return `${value} ${endOfDay ? '23:59:59' : '00:00:00'}`;
+}
+
+function registerDevice(serial) {
+  const deviceSerial = normalizeSerial(serial);
+  if (!deviceSerial || deviceSerial === 'UNKNOWN') return null;
+
+  const now = new Date();
+  const existing = knownDevices.get(deviceSerial);
+  const device = {
+    serial: deviceSerial,
+    firstSeenAt: existing?.firstSeenAt || now,
+    lastSeenAt: now,
+  };
+  knownDevices.set(deviceSerial, device);
+  return device;
+}
+
+function getKnownDevices() {
+  return Array.from(knownDevices.values());
 }
 
 function queueAttendanceSync(serial, startDate, endDate) {
@@ -34,4 +54,9 @@ function takeNextCommand(serial) {
   return next;
 }
 
-module.exports = { queueAttendanceSync, takeNextCommand };
+module.exports = {
+  getKnownDevices,
+  queueAttendanceSync,
+  registerDevice,
+  takeNextCommand,
+};

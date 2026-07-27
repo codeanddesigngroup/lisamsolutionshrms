@@ -228,23 +228,61 @@ export default function EmployeeDashboard() {
 
     const fetchDashboardData = async () => {
       setLoading(true);
+      setEmployees([]);
+      setAttendance([]);
+      setLeaves([]);
+      setTasks([]);
+      setEvents([]);
       try {
         const userScope = user?.id ? `user_id=${encodeURIComponent(String(user.id))}` : "";
         const employeeResponse = await api.get(`/employee/${encodeURIComponent(String(user.id))}`);
         const employee = extractRecord<EmployeeRecord>(employeeResponse.data);
-        setEmployees(employee ? [employee] : []);
+        const isCurrentEmployee = employee && String(employee.id) === String(user.id);
+        const currentEmployee = isCurrentEmployee ? employee : null;
+        setEmployees(currentEmployee ? [currentEmployee] : []);
 
         const [attendanceResponse, leaveResponse, taskResponse, eventResponse] = await Promise.allSettled([
-          api.get(`/attendance?employeeId=${encodeURIComponent(String(employee?.employee_id || employee?.employee_detail?.employee_id || employee?.id || user.id))}`),
+          api.get(`/employee/${encodeURIComponent(String(user.id))}/attendance`),
           api.get(`/leave?employee_id=${encodeURIComponent(String(user.id))}`),
           api.get(user?.id ? `/task?include=project,users&user_id=${encodeURIComponent(String(user.id))}` : "/task?include=project,users"),
           api.get(userScope ? `/event?${userScope}` : "/event"),
         ]);
 
-        if (attendanceResponse.status === "fulfilled") setAttendance(extractRecords<AttendanceRecord>(attendanceResponse.value.data));
-        if (leaveResponse.status === "fulfilled") setLeaves(extractRecords<LeaveRecord>(leaveResponse.value.data));
-        if (taskResponse.status === "fulfilled") setTasks(extractRecords<TaskRecord>(taskResponse.value.data));
-        if (eventResponse.status === "fulfilled") setEvents(extractRecords<EventRecord>(eventResponse.value.data));
+        const deviceEmployeeId = String(
+          currentEmployee?.employee_id ||
+          currentEmployee?.employee_detail?.employee_id ||
+          currentEmployee?.id ||
+          user.id,
+        );
+        const applicationEmployeeId = String(currentEmployee?.id || user.id);
+
+        if (attendanceResponse.status === "fulfilled") {
+          setAttendance(
+            extractRecords<AttendanceRecord>(attendanceResponse.value.data)
+              .filter((row) => String(getAttendanceEmployeeId(row)) === deviceEmployeeId),
+          );
+        }
+        if (leaveResponse.status === "fulfilled") {
+          setLeaves(
+            extractRecords<LeaveRecord>(leaveResponse.value.data)
+              .filter((leave) => String(getLeaveEmployeeId(leave)) === applicationEmployeeId),
+          );
+        }
+        if (taskResponse.status === "fulfilled") {
+          setTasks(
+            extractRecords<TaskRecord>(taskResponse.value.data)
+              .filter((task) => task.users?.some((item) => String(item.id) === applicationEmployeeId)),
+          );
+        }
+        if (eventResponse.status === "fulfilled") {
+          setEvents(
+            filterEmployeeScopedRecords(
+              extractRecords<EventRecord>(eventResponse.value.data),
+              user,
+              { includePublic: false },
+            ),
+          );
+        }
       } catch {
         showToast("Failed to load your employee profile.", "error");
       } finally {
@@ -261,17 +299,8 @@ export default function EmployeeDashboard() {
 
   const currentEmployee = useMemo(() => {
     const userId = String(user?.id || "");
-    const userEmail = user?.email?.toLowerCase();
-    const userName = user?.name?.toLowerCase();
-
-    return (
-      employees.find((employee) => String(employee.id) === userId) ||
-      employees.find((employee) => employee.email?.toLowerCase() === userEmail) ||
-      employees.find((employee) => employee.name.toLowerCase() === userName) ||
-      employees.find((employee) => employee.role === "employee") ||
-      null
-    );
-  }, [employees, user?.email, user?.id, user?.name]);
+    return employees.find((employee) => String(employee.id) === userId) || null;
+  }, [employees, user?.id]);
 
   const assignedShift = currentEmployee?.employee_detail?.shift_type;
   const employeeId = currentEmployee?.id ? String(currentEmployee.id) : "";
@@ -298,7 +327,7 @@ export default function EmployeeDashboard() {
 
   const upcomingEvents = useMemo(() => {
     const today = localDateString();
-    return filterEmployeeScopedRecords(events, user, { includePublic: true })
+    return filterEmployeeScopedRecords(events, user, { includePublic: false })
       .filter((event) => {
         const eventDate = getEventDate(event);
         return !eventDate || eventDate >= today;
@@ -325,8 +354,11 @@ export default function EmployeeDashboard() {
 
     const refreshDeviceAttendance = async () => {
       try {
-        const response = await api.get(`/attendance?employeeId=${encodeURIComponent(deviceEmployeeId)}`);
-        setAttendance(extractRecords<AttendanceRecord>(response.data));
+        const response = await api.get(`/employee/${encodeURIComponent(employeeId)}/attendance`);
+        setAttendance(
+          extractRecords<AttendanceRecord>(response.data)
+            .filter((row) => String(getAttendanceEmployeeId(row)) === deviceEmployeeId),
+        );
       } catch {
         // Keep the last successful device attendance state visible.
       }
@@ -334,7 +366,7 @@ export default function EmployeeDashboard() {
 
     const intervalId = window.setInterval(() => void refreshDeviceAttendance(), 15000);
     return () => window.clearInterval(intervalId);
-  }, [deviceEmployeeId]);
+  }, [deviceEmployeeId, employeeId]);
 
   const attendanceRate = useMemo(() => {
     const measurableRows = myAttendance.filter((row) => !["holiday", "weekend"].includes(statusText(row.status)));
@@ -365,8 +397,11 @@ export default function EmployeeDashboard() {
 
     setAttendanceSaving(true);
     try {
-      const response = await api.get(`/attendance?employeeId=${encodeURIComponent(deviceEmployeeId)}`);
-      setAttendance(extractRecords<AttendanceRecord>(response.data));
+      const response = await api.get(`/employee/${encodeURIComponent(employeeId)}/attendance`);
+      setAttendance(
+        extractRecords<AttendanceRecord>(response.data)
+          .filter((row) => String(getAttendanceEmployeeId(row)) === deviceEmployeeId),
+      );
       showToast("Device attendance refreshed.", "success");
     } catch {
       showToast("Could not refresh device attendance.", "error");

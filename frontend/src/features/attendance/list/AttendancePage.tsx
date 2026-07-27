@@ -143,18 +143,11 @@ const getEmployeeMatchCodes = (employee: EmployeeOption) =>
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
-  const userId = String(user.id || "");
-  return (
-    String(employee.id) === userId ||
-    String(employee.employee_id || employee.employee_detail?.employee_id || "") === userId ||
-    Boolean(user.name && employee.name === user.name) ||
-    Boolean(user.email && employee.email === user.email)
-  );
+  return String(employee.id) === String(user.id || "");
 };
 
 const isCurrentUserAttendance = (attendance: AttendanceRecord, user: { id?: number | string; name?: string; email?: string } | null) =>
-  isCurrentUserEmployee(attendance.employee, user) ||
-  String(attendance.employee_id || attendance.user_id || "") === String(user?.id || "");
+  isCurrentUserEmployee(attendance.employee, user);
 
 type AttendancePageProps = {
   mode?: "daily" | "date-wise";
@@ -168,15 +161,16 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const { user, hasPermission } = useAuth();
   const [hasHydrated, setHasHydrated] = useState(false);
   const hydratedUser = hasHydrated ? user : null;
+  const isEmployeeSession = hydratedUser?.role === "employee";
   const canManageAttendance =
-    hasHydrated && (
+    hasHydrated && !isEmployeeSession && (
       hydratedUser?.role === "admin" ||
       hasPermission("attendance.manage") ||
       hasPermission("attendance.edit") ||
       hasPermission("attendance.approve") ||
       hasPermission("attendance.export")
     );
-  const isSelfServiceAttendance = hydratedUser?.role === "employee" && !canManageAttendance;
+  const isSelfServiceAttendance = isEmployeeSession;
 
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -196,17 +190,40 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       const companyId = hydratedUser?.company_id ? String(hydratedUser.company_id) : "";
       const employeeRecords = await attendanceService.getEmployees({ companyId });
       const employeeList = employeeRecords as EmployeeOption[];
-      const attendanceList = (await attendanceService.getRecords({ companyId, workDate: date, limit: 500 }, employeeRecords)) as AttendanceRecord[];
+      const currentEmployee = isEmployeeSession
+        ? employeeList.find((employee) => String(employee.id) === String(hydratedUser?.id || ""))
+        : undefined;
+      const attendanceDeviceEmployeeId =
+        currentEmployee?.employee_detail?.employee_id ?? currentEmployee?.employee_id;
+      const attendanceList = (await attendanceService.getRecords(
+        {
+          companyId,
+          workDate: date,
+          limit: 500,
+          ...(isEmployeeSession && attendanceDeviceEmployeeId !== undefined
+            ? { employeeId: attendanceDeviceEmployeeId }
+            : {}),
+        },
+        employeeRecords,
+      )) as AttendanceRecord[];
       const holidayList: HolidayRecord[] = [];
       const leaveList: LeaveRecord[] = [];
 
-      const visibleEmployees = canManageAttendance
-        ? employeeList
-        : employeeList.filter((employee) => isCurrentUserEmployee(employee, hydratedUser));
+      const visibleEmployees = isEmployeeSession
+        ? (currentEmployee ? [currentEmployee] : [])
+        : employeeList;
       setEmployees(visibleEmployees);
-      setAttendance(canManageAttendance ? attendanceList : attendanceList.filter((row) => isCurrentUserAttendance(row, hydratedUser)));
+      setAttendance(
+        isEmployeeSession
+          ? attendanceList.filter((row) => isCurrentUserAttendance(row, hydratedUser))
+          : attendanceList,
+      );
       setHolidays(holidayList);
-      setLeaves(canManageAttendance ? leaveList : leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(hydratedUser?.id || "") || leave.user?.name === hydratedUser?.name || leave.employee?.name === hydratedUser?.name));
+      setLeaves(
+        isEmployeeSession
+          ? leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(hydratedUser?.id || ""))
+          : leaveList,
+      );
       setOfficeOpenDays(parseOfficeOpenDays(undefined));
     } catch (err) {
       console.error("Fetch Daily Attendance Error:", err);
@@ -240,17 +257,18 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
 
     return employees.map((employee) => {
       const employeeId = String(employee.id);
-      const employeeCodes = getEmployeeMatchCodes(employee);
+      const deviceEmployeeId = String(
+        employee.employee_detail?.employee_id ?? employee.employee_id ?? "",
+      );
       const attendanceRecord = attendance.find((row) =>
         String(row.date) === date &&
-        [
-          row.employee_id,
-          row.employee_code,
-          row.user_id,
-          row.employee?.id,
-          row.employee?.employee_id,
-          row.employee?.employee_detail?.employee_id,
-        ].some((value) => value !== undefined && value !== null && employeeCodes.includes(String(value).trim()))
+        (
+          String(row.employee?.id ?? row.employee_id ?? row.user_id ?? "") === employeeId ||
+          (
+            deviceEmployeeId !== "" &&
+            String(row.employee_code ?? row.employee?.employee_id ?? row.employee?.employee_detail?.employee_id ?? "") === deviceEmployeeId
+          )
+        )
       );
       const approvedLeave = leaves.find((leave) => getLeaveEmployeeId(leave) === employeeId && getLeaveDate(leave) === date && String(leave.status || "").toLowerCase() === "approved");
       const shift = getShiftForEmployee(employee, attendanceRecord);

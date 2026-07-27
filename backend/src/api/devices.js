@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const sequelize = require('../config/db');
-const { queueAttendanceSync } = require('../services/zkCommandQueue');
+const { getKnownDevices, queueAttendanceSync } = require('../services/zkCommandQueue');
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -53,10 +53,31 @@ router.get('/', async (req, res, next) => {
       { replacements },
     );
 
+    const deviceBySerial = new Map(
+      devices.map((device) => [String(device.serial).trim().toUpperCase(), device]),
+    );
+
+    for (const knownDevice of getKnownDevices()) {
+      const existing = deviceBySerial.get(knownDevice.serial);
+      if (existing) {
+        existing.lastSeenAt = knownDevice.lastSeenAt;
+      } else {
+        deviceBySerial.set(knownDevice.serial, {
+          ...knownDevice,
+          punchCount: 0,
+          employeeCount: 0,
+          companyCount: 0,
+        });
+      }
+    }
+
+    const discoveredDevices = Array.from(deviceBySerial.values())
+      .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt));
+
     return res.status(200).json({
       success: true,
-      count: devices.length,
-      data: devices,
+      count: discoveredDevices.length,
+      data: discoveredDevices,
     });
   } catch (err) {
     return next(err);

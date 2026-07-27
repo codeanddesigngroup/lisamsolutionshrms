@@ -42,6 +42,7 @@ export default function DevicesPage() {
   const { showToast } = useToast();
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchDevices = async () => {
     setLoading(true);
@@ -53,6 +54,46 @@ export default function DevicesPage() {
       showToast("Failed to load attendance devices", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncAttendance = async () => {
+    setSyncing(true);
+    try {
+      let devicesToSync = devices;
+
+      if (devicesToSync.length === 0) {
+        const response = await api.get("/devices");
+        devicesToSync = Array.isArray(response.data?.data) ? response.data.data : [];
+        setDevices(devicesToSync);
+      }
+
+      if (devicesToSync.length === 0) {
+        showToast("No device has contacted the attendance server yet", "error");
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        devicesToSync.map((device) => api.post(`/devices/${encodeURIComponent(device.serial)}/sync-attendance`)),
+      );
+      const queued = results.filter((result) => result.status === "fulfilled").length;
+
+      if (queued === 0) {
+        showToast("Failed to queue attendance sync", "error");
+        return;
+      }
+
+      showToast(
+        queued === devicesToSync.length
+          ? `Attendance sync queued for ${queued} device${queued === 1 ? "" : "s"}`
+          : `Attendance sync queued for ${queued} of ${devicesToSync.length} devices`,
+        queued === devicesToSync.length ? "success" : "error",
+      );
+    } catch (error) {
+      console.error("Attendance Sync Error:", error);
+      showToast("Failed to queue attendance sync", "error");
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -85,8 +126,8 @@ export default function DevicesPage() {
             </div>
           </div>
 
-          <Button className="btn-default" disabled={loading} onClick={fetchDevices}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <Button className="btn-default" disabled={loading || syncing} onClick={syncAttendance}>
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
             Sync
           </Button>
         </div>

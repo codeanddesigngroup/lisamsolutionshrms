@@ -173,7 +173,7 @@ const normalizeEmployee = (employee: NodeEmployee): AttendanceEmployee => ({
 });
 
 const findEmployeeForAttendance = (employees: AttendanceEmployee[], employeeCode: string) =>
-  employees.find((employee) => String(employee.employee_id) === employeeCode || String(employee.id) === employeeCode);
+  employees.find((employee) => String(employee.employee_id) === employeeCode);
 
 const hasCompanyScope = (companyId?: string | number) => companyId !== undefined && companyId !== null && String(companyId).trim() !== "";
 
