@@ -80,13 +80,16 @@ const attendanceRecordAttributes = [
     [fn('to_char', col('updated_at'), 'YYYY-MM-DD HH24:MI:SS'), 'updated_at'],
 ];
 
+const getQueryLimit = (value, defaultLimit = 100) =>
+    Math.min(Math.max(Number(value) || defaultLimit, 1), 10000);
+
 router.get('/', async (req, res, next) => {
     try {
         const records = await AttendanceRecords.findAll({
             attributes: attendanceRecordAttributes,
             where: getAttendanceWhere(req.query),
             order: [['workDate', 'DESC'], ['employeeId', 'ASC']],
-            limit: Math.min(Math.max(Number(req.query.limit) || 100, 1), 500),
+            limit: getQueryLimit(req.query.limit),
             raw: true,
         });
 

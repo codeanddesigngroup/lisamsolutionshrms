@@ -116,7 +116,7 @@ export default function AttendanceSummaryPage() {
           companyId,
           startDate,
           endDate,
-          limit: 500,
+          limit: 5000,
           ...(isEmployeeSession && attendanceDeviceEmployeeId !== undefined
             ? { employeeId: attendanceDeviceEmployeeId }
             : {}),
