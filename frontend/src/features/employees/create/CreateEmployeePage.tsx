@@ -27,6 +27,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { useRouter } from "next/navigation";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -99,6 +100,7 @@ const initialPermissionState = staticPermissionModules.reduce<PermissionState>((
 export default function CreateEmployeePage() {
   const { showToast } = useToast();
   const { user } = useAuth();
+  const router = useRouter();
   const [permissionState, setPermissionState] = useState<PermissionState>(initialPermissionState);
   const [designations, setDesignations] = useState<DesignationOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
@@ -218,6 +220,7 @@ export default function CreateEmployeePage() {
       form.reset();
       setPermissionState(initialPermissionState);
       showToast("Employee created successfully.", "success");
+      router.push("/employees");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to create employee.", "error");
     } finally {
@@ -243,7 +246,7 @@ export default function CreateEmployeePage() {
             </div>
           </div>
           <Link href="/employees">
-            <Button className="bg-gray-50 text-gray-500 border-none px-4 h-10 md:h-11 text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all rounded-xl">
+            <Button className="bg-gray-50 text-gray-500 border-none px-4 h-10 md:h-11 text-[9px] md:text-[10px] font-black tracking-widest hover:bg-gray-100 transition-all rounded-xl">
               <ArrowLeft className="h-4 w-4 mr-2" /> Back to Directory
             </Button>
           </Link>
@@ -265,7 +268,7 @@ export default function CreateEmployeePage() {
                     name="employee_id"
                     defaultValue=""
                     placeholder="01"
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -278,7 +281,7 @@ export default function CreateEmployeePage() {
                     name="name"
                     defaultValue=""
                     placeholder="JOHN DOE"
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -292,7 +295,7 @@ export default function CreateEmployeePage() {
                     type="email"
                     defaultValue=""
                     placeholder="JOHN@EXAMPLE.COM"
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -338,7 +341,7 @@ export default function CreateEmployeePage() {
                   <select
                     name="gender"
                     defaultValue=""
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 px-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 px-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select Gender</option>
                     <option value="male">Male</option>
@@ -363,7 +366,7 @@ export default function CreateEmployeePage() {
                   <select
                     name="designation"
                     defaultValue=""
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 px-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 px-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select Designation</option>
                     {designations.map((designation) => (
@@ -382,7 +385,7 @@ export default function CreateEmployeePage() {
                   <select
                     name="department"
                     defaultValue=""
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 px-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 px-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select Department</option>
                     {departments.map((department) => (
@@ -402,7 +405,7 @@ export default function CreateEmployeePage() {
                   <span>Shift Type</span>
                   <button
                     type="button"
-                    className="rounded-lg bg-primary/10 px-3 py-1.5 text-[8px] font-black uppercase tracking-widest text-primary transition hover:bg-primary hover:text-white"
+                    className="rounded-lg bg-primary/10 px-3 py-1.5 text-[8px] font-black tracking-widest text-primary transition hover:bg-primary hover:text-white"
                   >
                     New Shift
                   </button>
@@ -412,7 +415,7 @@ export default function CreateEmployeePage() {
                   <select
                     name="shift_type_id"
                     defaultValue=""
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-10 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-10 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select Shift</option>
                     {shifts.map((shift) => (
@@ -436,7 +439,7 @@ export default function CreateEmployeePage() {
                     name="joining_date"
                     type="date"
                     defaultValue="2026-01-01"
-                    className="w-full bg-gray-50 border-none rounded-xl py-3 pl-12 pr-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -450,7 +453,7 @@ export default function CreateEmployeePage() {
                     type="number"
                     defaultValue=""
                     placeholder="0.00"
-                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -467,7 +470,7 @@ export default function CreateEmployeePage() {
                       name="mobile"
                       defaultValue=""
                       placeholder="PHONE NUMBER"
-                      className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     />
                   </div>
                 </div>
@@ -480,12 +483,12 @@ export default function CreateEmployeePage() {
             <div className="rounded-2xl border border-gray-100 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-3">
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-700">Employee Module Permissions</h3>
+                  <h3 className="text-xs font-black tracking-widest text-gray-700">Employee Module Permissions</h3>
                   <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
                     {selectedModuleCount} modules selected
                   </p>
                 </div>
-                <span className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-gray-500">
+                <span className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[9px] font-black tracking-widest text-gray-500">
                   <UserRound className="h-3.5 w-3.5" />
                   Employee Access
                 </span>
@@ -494,13 +497,13 @@ export default function CreateEmployeePage() {
                 <table className="w-full text-left">
                   <thead className="border-b border-gray-100 bg-white">
                     <tr>
-                      <th className="min-w-56 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Module</th>
+                      <th className="min-w-56 px-4 py-3 text-[10px] font-black tracking-widest text-gray-500">Module</th>
                       {staticPermissionActions.map((action) => (
-                        <th key={action} className="px-3 py-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-500">
+                        <th key={action} className="px-3 py-3 text-center text-[10px] font-black tracking-widest text-gray-500">
                           {action}
                         </th>
                       ))}
-                      <th className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-500">All</th>
+                      <th className="px-4 py-3 text-center text-[10px] font-black tracking-widest text-gray-500">All</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -513,7 +516,7 @@ export default function CreateEmployeePage() {
                         <tr key={moduleItem.label} className="hover:bg-gray-50/60">
                           <td className="px-4 py-3">
                             <div>
-                              <p className="text-xs font-black uppercase tracking-widest text-gray-700">{moduleItem.label}</p>
+                              <p className="text-xs font-black tracking-widest text-gray-700">{moduleItem.label}</p>
                               <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{moduleItem.group}</p>
                             </div>
                           </td>
@@ -542,7 +545,7 @@ export default function CreateEmployeePage() {
                             <button
                               type="button"
                               onClick={() => toggleModulePermissions(moduleItem.label, allowedActions)}
-                              className={`mx-auto rounded-lg px-3 py-2 text-[9px] font-black uppercase tracking-widest transition ${moduleFullyEnabled ? "bg-primary text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                              className={`mx-auto rounded-lg px-3 py-2 text-[9px] font-black tracking-widest transition ${moduleFullyEnabled ? "bg-primary text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                                 }`}
                             >
                               {moduleFullyEnabled ? "On" : "Off"}

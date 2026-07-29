@@ -13,10 +13,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { useRouter } from "next/navigation";
 
 export default function CreateDesignationPage() {
   const { showToast } = useToast();
   const { user } = useAuth();
+  const router = useRouter();
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -53,6 +55,7 @@ export default function CreateDesignationPage() {
       }
 
       showToast("Designation created successfully", "success");
+      router.push("/designation");
 
       // reset form
       setName("");
