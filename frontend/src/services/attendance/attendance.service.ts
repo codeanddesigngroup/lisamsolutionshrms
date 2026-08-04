@@ -63,6 +63,16 @@ type NodeAttendanceRecord = {
   worked_hours?: number | string;
   manualOverride?: boolean;
   manual_override?: boolean;
+  lateWaived?: boolean;
+  late_waived?: boolean;
+  lateWaiverReason?: string | null;
+  late_waiver_reason?: string | null;
+  lateWaiverNote?: string | null;
+  late_waiver_note?: string | null;
+  lateWaivedBy?: string | null;
+  late_waived_by?: string | null;
+  lateWaivedAt?: string | null;
+  late_waived_at?: string | null;
 };
 
 export type AttendanceEmployee = NodeEmployee & {
@@ -99,6 +109,11 @@ export type AttendanceRecord = {
   clock_out?: string;
   worked_hours?: number;
   manual_override?: boolean;
+  late_waived?: boolean;
+  late_waiver_reason?: string | null;
+  late_waiver_note?: string | null;
+  late_waived_by?: string | null;
+  late_waived_at?: string | null;
   source?: string;
   source_type?: string;
   device_id?: string | number | null;
@@ -204,6 +219,11 @@ const normalizeAttendanceRecord = (
     clock_out: toClockTime(checkOut),
     worked_hours: Number(record.workedHours ?? record.worked_hours ?? 0),
     manual_override: record.manualOverride ?? record.manual_override ?? false,
+    late_waived: record.lateWaived ?? record.late_waived ?? false,
+    late_waiver_reason: record.lateWaiverReason ?? record.late_waiver_reason ?? null,
+    late_waiver_note: record.lateWaiverNote ?? record.late_waiver_note ?? null,
+    late_waived_by: record.lateWaivedBy ?? record.late_waived_by ?? null,
+    late_waived_at: record.lateWaivedAt ?? record.late_waived_at ?? null,
     source: "machine",
     source_type: "machine",
     device_id: deviceSerial,
@@ -275,6 +295,16 @@ export const attendanceService = {
     clock_out?: string;
   }): Promise<ApiEnvelope<NodeAttendanceRecord>> => {
     const response = await nodeApi.post<ApiEnvelope<NodeAttendanceRecord>>("/attendance/override", payload);
+    return response.data;
+  },
+
+  waiveLate: async (id: string | number, payload: { reason?: string; note?: string; waivedBy?: string } = {}): Promise<ApiEnvelope<NodeAttendanceRecord>> => {
+    const response = await nodeApi.post<ApiEnvelope<NodeAttendanceRecord>>(`/attendance/${encodeURIComponent(String(id))}/late-waiver`, payload);
+    return response.data;
+  },
+
+  revokeLateWaiver: async (id: string | number): Promise<ApiEnvelope<NodeAttendanceRecord>> => {
+    const response = await nodeApi.delete<ApiEnvelope<NodeAttendanceRecord>>(`/attendance/${encodeURIComponent(String(id))}/late-waiver`);
     return response.data;
   }
 };

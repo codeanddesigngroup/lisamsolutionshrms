@@ -44,6 +44,10 @@ type EmployeeRecord = {
   gender?: string;
   joining_date?: string;
   mobile?: string;
+  emergency_phone?: string;
+  address?: string;
+  nic?: string;
+  father_name?: string;
   status?: string;
   role?: string;
   designation?: { name?: string };
@@ -52,6 +56,10 @@ type EmployeeRecord = {
     employee_id?: number | string;
     joining_date?: string;
     mobile?: string;
+    emergency_phone?: string;
+    address?: string;
+    nic?: string;
+    father_name?: string;
     designation?: { name?: string };
     department?: { name?: string; team_name?: string };
     shift_type_id?: number | string | null;
@@ -308,6 +316,10 @@ export default function EmployeeDashboard() {
   const deviceEmployeeId = String(employeeDetail?.employee_id || currentEmployee?.employee_id || "");
   const designation = currentEmployee?.designation?.name || employeeDetail?.designation?.name || "Not assigned";
   const department = currentEmployee?.department?.name || currentEmployee?.department?.team_name || employeeDetail?.department?.name || employeeDetail?.department?.team_name || "Not assigned";
+  const fatherName = currentEmployee?.father_name || employeeDetail?.father_name || "--";
+  const nic = currentEmployee?.nic || employeeDetail?.nic || "--";
+  const emergencyPhone = currentEmployee?.emergency_phone || employeeDetail?.emergency_phone || "--";
+  const address = currentEmployee?.address || employeeDetail?.address || "--";
 
   const myAttendance = useMemo(
     () => attendance.filter((row) => String(getAttendanceEmployeeId(row)) === deviceEmployeeId),
@@ -491,6 +503,10 @@ export default function EmployeeDashboard() {
                   ["Employee ID", String(employeeDetail?.employee_id || currentEmployee?.employee_id || currentEmployee?.id || "--")],
                   ["Email", currentEmployee?.email || user?.email || "--"],
                   ["Mobile", employeeDetail?.mobile || currentEmployee?.mobile || "--"],
+                  ["Emergency Phone", emergencyPhone],
+                  ["Father Name", fatherName],
+                  ["NIC", nic],
+                  ["Address", address],
                   ["Department", department],
                   ["Designation", designation],
                   ["Joining Date", currentEmployee?.joining_date || employeeDetail?.joining_date || "--"],

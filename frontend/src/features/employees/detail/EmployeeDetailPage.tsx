@@ -231,6 +231,10 @@ export default function EmployeeDetailPage() {
   const initial = String(employee.name || "?").charAt(0);
   const designationName = detail.designation?.name || "N/A";
   const departmentName = detail.department?.team_name || detail.department?.name || "N/A";
+  const fatherName = employee.father_name || detail.father_name || "N/A";
+  const nic = employee.nic || detail.nic || "N/A";
+  const emergencyPhone = employee.emergency_phone || detail.emergency_phone || "N/A";
+  const address = employee.address || detail.address || "No address provided.";
 
   return (
     <DashboardLayout>
@@ -327,6 +331,9 @@ export default function EmployeeDetailPage() {
                     ["Designation", designationName],
                     ["Gender", employee.gender || "Not specified"],
                     ["Mobile", employee.mobile || detail.mobile || "N/A"],
+                    ["Emergency Phone", emergencyPhone],
+                    ["Father Name", fatherName],
+                    ["NIC", nic],
                     ["Slack Username", detail.slack_username ? `@${detail.slack_username}` : "N/A"],
                     ["Basic Salary", detail.hourly_rate ? `PKR ${detail.hourly_rate}` : "N/A"],
                   ].map(([label, value]) => (
@@ -338,7 +345,7 @@ export default function EmployeeDetailPage() {
                 </div>
                 <div className="mt-8 border-t border-gray-50 pt-8">
                   <p className="mb-3 flex items-center text-[10px] font-black uppercase tracking-widest text-gray-300"><MapPin className="mr-2 h-3 w-3" /> Current Address</p>
-                  <p className="text-sm font-bold leading-relaxed text-gray-700">{detail.address || "No address provided."}</p>
+                  <p className="text-sm font-bold leading-relaxed text-gray-700">{address}</p>
                 </div>
               </Card>
             )}

@@ -20,7 +20,10 @@ import {
   Clock,
   RefreshCw,
   UserCheck,
-  UserRound
+  UserRound,
+  MapPin,
+  IdCard,
+  UsersRound,
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
@@ -89,7 +92,7 @@ const staticPermissionModules = [
   { key: "settings", label: "Settings", group: "Settings", actions: ["View", "Edit", "Manage"], enabled: [] },
 ];
 
-type PermissionActionLabel = (typeof staticPermissionActions)[number];
+type PermissionActionLabel = "View" | "Create" | "Edit" | "Delete" | "Approve" | "Export" | "Manage";
 type PermissionState = Record<string, PermissionActionLabel[]>;
 
 const initialPermissionState = staticPermissionModules.reduce<PermissionState>((permissions, moduleItem) => {
@@ -107,20 +110,22 @@ export default function CreateEmployeePage() {
   const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isRoleAccessOpen, setIsRoleAccessOpen] = useState(false);
 
   const selectedModuleCount = Object.values(permissionState).filter((actions) => actions.length > 0).length;
   const permissionKeys = staticPermissionModules.flatMap((moduleItem) =>
     (permissionState[moduleItem.label] || []).map((action) => `${moduleItem.key}.${action.toLowerCase()}`),
   );
   const companyId = user?.company_id ? String(user.company_id) : "";
-  const withCompanyQuery = (url: string) => {
-    if (!companyId) return url;
-    const separator = url.includes("?") ? "&" : "?";
-    return `${url}${separator}company_id=${encodeURIComponent(companyId)}`;
-  };
 
   useEffect(() => {
     const fetchDropdownOptions = async () => {
+      const withCompanyQuery = (url: string) => {
+        if (!companyId) return url;
+        const separator = url.includes("?") ? "&" : "?";
+        return `${url}${separator}company_id=${encodeURIComponent(companyId)}`;
+      };
+
       try {
         const [designationResponse, departmentResponse, shiftResponse] = await Promise.all([
           fetch(withCompanyQuery(optionApiUrls.designations)),
@@ -198,6 +203,10 @@ export default function CreateEmployeePage() {
       joining_date: String(formData.get("joining_date") || "") || null,
       hourly_rate: String(formData.get("hourly_rate") || "") || null,
       mobile: String(formData.get("mobile") || "") || null,
+      emergency_phone: String(formData.get("emergency_phone") || "") || null,
+      address: String(formData.get("address") || "") || null,
+      nic: String(formData.get("nic") || "") || null,
+      father_name: String(formData.get("father_name") || "") || null,
       login: formData.get("login_enabled") ? "enable" : "disable",
       status: formData.get("status_active") ? "active" : "deactive",
       permissions: permissionKeys,
@@ -239,8 +248,8 @@ export default function CreateEmployeePage() {
               <Plus className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-sm md:text-base font-black text-gray-800 uppercase tracking-widest truncate">
-                Onboard Employee
+              <h1 className="text-sm md:text-base font-black text-gray-800 tracking-wide truncate normal-case">
+                Create Employee
               </h1>
               <p className="text-[9px] md:text-[10px] text-gray-400 font-bold mt-0.5 tracking-wider uppercase">HR / Personnel / New Registration</p>
             </div>
@@ -252,7 +261,7 @@ export default function CreateEmployeePage() {
           </Link>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8 [&_h2]:normal-case [&_h3]:normal-case [&_label]:normal-case">
           {/* Section 1: Basic Information */}
           <Card className="p-8 border-none shadow-sm bg-white rounded-2xl">
             <div className="flex items-center space-x-3 mb-8 border-l-4 border-primary pl-4">
@@ -280,7 +289,7 @@ export default function CreateEmployeePage() {
                   <input
                     name="name"
                     defaultValue=""
-                    placeholder="JOHN DOE"
+                    placeholder="John Doe"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
@@ -294,7 +303,7 @@ export default function CreateEmployeePage() {
                     name="email"
                     type="email"
                     defaultValue=""
-                    placeholder="JOHN@EXAMPLE.COM"
+                    placeholder="john@example.com"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
@@ -353,7 +362,69 @@ export default function CreateEmployeePage() {
             </div>
           </Card>
 
-          {/* Section 2: Department & Role */}
+          {/* Section 2: Personal & Contact Information */}
+          <Card className="p-8 border-none shadow-sm bg-white rounded-2xl">
+            <div className="flex items-center space-x-3 mb-8 border-l-4 border-primary pl-4">
+              <h2 className="text-[11px] font-black text-gray-800 tracking-[0.12em] normal-case">Personal & Contact Information</h2>
+            </div>
+
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-gray-400 tracking-wider">Father Name</label>
+                <div className="relative">
+                  <UsersRound className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+                  <input
+                    name="father_name"
+                    placeholder="Enter father name"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-gray-400 tracking-wider">NIC</label>
+                <div className="relative">
+                  <IdCard className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+                  <input
+                    name="nic"
+                    inputMode="numeric"
+                    placeholder="00000-0000000-0"
+                    maxLength={15}
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                <p className="text-[9px] font-bold text-gray-400">Use the format 00000-0000000-0</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-gray-400 tracking-wider">Emergency Phone Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+                  <input
+                    name="emergency_phone"
+                    type="tel"
+                    placeholder="+92 300 0000000"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-gray-400 tracking-wider">Address</label>
+                <div className="relative">
+                  <MapPin className="absolute left-4 top-4 h-4 w-4 text-primary" />
+                  <textarea
+                    name="address"
+                    rows={3}
+                    placeholder="Enter complete residential address"
+                    className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Section 3: Department & Role */}
           <Card className="p-8 border-none shadow-sm bg-white rounded-2xl">
             <div className="flex items-center space-x-3 mb-8 border-l-4 border-blue-500 pl-4">
               <h2 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">Assignment & Role</h2>
@@ -481,86 +552,98 @@ export default function CreateEmployeePage() {
 
           <Card className="border-none shadow-sm p-0 bg-white rounded-2xl overflow-hidden">
             <div className="rounded-2xl border border-gray-100 bg-white">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-3">
-                <div>
-                  <h3 className="text-xs font-black tracking-widest text-gray-700">Employee Module Permissions</h3>
-                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                    {selectedModuleCount} modules selected
-                  </p>
+              <button
+                type="button"
+                onClick={() => setIsRoleAccessOpen((open) => !open)}
+                aria-expanded={isRoleAccessOpen}
+                aria-controls="employee-role-access-panel"
+                className={`flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-gray-50 ${isRoleAccessOpen ? "border-b border-gray-100 bg-gray-50" : "bg-white"}`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <UserRound className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="m-0 text-xs font-black tracking-wide text-gray-700 normal-case">Role Access</h3>
+                    <p className="mt-1 text-[10px] font-bold tracking-wide text-gray-400">{selectedModuleCount} modules selected</p>
+                  </div>
                 </div>
-                <span className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[9px] font-black tracking-widest text-gray-500">
-                  <UserRound className="h-3.5 w-3.5" />
-                  Employee Access
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="border-b border-gray-100 bg-white">
-                    <tr>
-                      <th className="min-w-56 px-4 py-3 text-[10px] font-black tracking-widest text-gray-500">Module</th>
-                      {staticPermissionActions.map((action) => (
-                        <th key={action} className="px-3 py-3 text-center text-[10px] font-black tracking-widest text-gray-500">
-                          {action}
-                        </th>
-                      ))}
-                      <th className="px-4 py-3 text-center text-[10px] font-black tracking-widest text-gray-500">All</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {staticPermissionModules.map((moduleItem) => {
-                      const enabledActions = permissionState[moduleItem.label] || [];
-                      const allowedActions = moduleItem.actions as PermissionActionLabel[];
-                      const moduleFullyEnabled = allowedActions.every((action) => enabledActions.includes(action));
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="hidden text-[9px] font-black tracking-widest text-gray-400 sm:inline">
+                    {isRoleAccessOpen ? "Close permissions" : "Manage permissions"}
+                  </span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm">
+                    <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isRoleAccessOpen ? "rotate-180" : ""}`} />
+                  </span>
+                </div>
+              </button>
 
-                      return (
-                        <tr key={moduleItem.label} className="hover:bg-gray-50/60">
-                          <td className="px-4 py-3">
-                            <div>
-                              <p className="text-xs font-black tracking-widest text-gray-700">{moduleItem.label}</p>
-                              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{moduleItem.group}</p>
-                            </div>
-                          </td>
-                          {staticPermissionActions.map((action) => {
-                            const allowed = allowedActions.includes(action);
-                            const enabled = enabledActions.includes(action);
+              {isRoleAccessOpen && (
+                <div id="employee-role-access-panel" className="overflow-x-auto animate-in fade-in slide-in-from-top-1 duration-200">
+                  <table className="m-0 w-full min-w-[900px] text-left">
+                    <thead className="border-b border-gray-100 bg-white">
+                      <tr>
+                        <th className="min-w-56 px-4 py-3 text-[10px] font-black tracking-widest text-gray-500">Module</th>
+                        {staticPermissionActions.map((action) => (
+                          <th key={action} className="px-3 py-3 text-center text-[10px] font-black tracking-widest text-gray-500">{action}</th>
+                        ))}
+                        <th className="px-4 py-3 text-center text-[10px] font-black tracking-widest text-gray-500">All</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {staticPermissionModules.map((moduleItem) => {
+                        const enabledActions = permissionState[moduleItem.label] || [];
+                        const allowedActions = moduleItem.actions as PermissionActionLabel[];
+                        const moduleFullyEnabled = allowedActions.every((action) => enabledActions.includes(action));
 
-                            return (
-                              <td key={action} className="px-3 py-3 text-center">
-                                {allowed ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePermission(moduleItem.label, action)}
-                                    className={`mx-auto flex h-7 w-12 items-center rounded-full p-1 transition-colors ${enabled ? "bg-primary" : "bg-gray-200"} hover:ring-2 hover:ring-primary/20`}
-                                    aria-label={`${moduleItem.label} ${action.toLowerCase()} ${enabled ? "enabled" : "disabled"}`}
-                                  >
-                                    <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? "translate-x-5" : ""}`} />
-                                  </button>
-                                ) : (
-                                  <span className="text-gray-200">-</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => toggleModulePermissions(moduleItem.label, allowedActions)}
-                              className={`mx-auto rounded-lg px-3 py-2 text-[9px] font-black tracking-widest transition ${moduleFullyEnabled ? "bg-primary text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                }`}
-                            >
-                              {moduleFullyEnabled ? "On" : "Off"}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        return (
+                          <tr key={moduleItem.label} className="hover:bg-gray-50/60">
+                            <td className="px-4 py-3">
+                              <p className="text-xs font-black tracking-wide text-gray-700">{moduleItem.label}</p>
+                              <p className="mt-1 text-[10px] font-bold tracking-widest text-gray-400">{moduleItem.group}</p>
+                            </td>
+                            {staticPermissionActions.map((action) => {
+                              const allowed = allowedActions.includes(action);
+                              const enabled = enabledActions.includes(action);
+
+                              return (
+                                <td key={action} className="px-3 py-3 text-center">
+                                  {allowed ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePermission(moduleItem.label, action)}
+                                      className={`mx-auto flex h-7 w-12 items-center rounded-full p-1 transition-colors ${enabled ? "bg-primary" : "bg-gray-200"} hover:ring-2 hover:ring-primary/20`}
+                                      aria-label={`${moduleItem.label} ${action.toLowerCase()} ${enabled ? "enabled" : "disabled"}`}
+                                      aria-pressed={enabled}
+                                    >
+                                      <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? "translate-x-5" : ""}`} />
+                                    </button>
+                                  ) : (
+                                    <span className="text-gray-200">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => toggleModulePermissions(moduleItem.label, allowedActions)}
+                                className={`mx-auto rounded-lg px-3 py-2 text-[9px] font-black tracking-widest transition ${moduleFullyEnabled ? "bg-primary text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                              >
+                                {moduleFullyEnabled ? "On" : "Off"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </Card>
 
-          {/* Section 3: Extra Details */}
+          {/* Section 4: Extra Details */}
           <Card className="p-8 border-none shadow-sm bg-white rounded-2xl">
             <div className="flex items-center space-x-3 mb-8 border-l-4 border-orange-500 pl-4">
               <h2 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">Other Details</h2>

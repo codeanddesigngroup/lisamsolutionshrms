@@ -2,6 +2,7 @@
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import AttendanceOverrideModal, {
@@ -21,7 +22,7 @@ import {
   ShiftDefinition,
 } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
-import { Activity, AlertTriangle, CalendarDays, Clock, Cpu, Edit3, RefreshCw, ShieldCheck, TimerReset, Users } from "lucide-react";
+import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Clock, Cpu, Edit3, RefreshCw, RotateCcw, ShieldCheck, TimerReset, Users } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -56,6 +57,11 @@ type AttendanceRecord = AttendanceRecordForOverride & {
   override_reason?: string;
   override_history?: unknown[];
   device_serial?: string | null;
+  late_waived?: boolean;
+  late_waiver_reason?: string | null;
+  late_waiver_note?: string | null;
+  late_waived_by?: string | null;
+  late_waived_at?: string | null;
 };
 
 type HolidayRecord = { date?: string; holiday_date?: string; name?: string; occassion?: string };
@@ -85,7 +91,10 @@ type DailyAttendanceRow = {
   lateAfterGraceMinutes: number;
   workingMinutes: number;
   isException: boolean;
+  isLateWaived: boolean;
+  waiverReason?: string;
 };
+
 
 const todayString = () => new Date().toISOString().slice(0, 10);
 const DEFAULT_ATTENDANCE_DATE = todayString();
@@ -149,6 +158,7 @@ const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?
 const isCurrentUserAttendance = (attendance: AttendanceRecord, user: { id?: number | string; name?: string; email?: string } | null) =>
   isCurrentUserEmployee(attendance.employee, user);
 
+
 type AttendancePageProps = {
   mode?: "daily" | "date-wise";
 };
@@ -183,6 +193,9 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const [statusFilter, setStatusFilter] = useState("all");
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [editingRow, setEditingRow] = useState<DailyAttendanceRow | null>(null);
+  const [waiverRow, setWaiverRow] = useState<DailyAttendanceRow | null>(null);
+  const [waiverReason, setWaiverReason] = useState("Manager discretion");
+  const [waiverNote, setWaiverNote] = useState("");
 
   const fetchAttendance = async () => {
     setLoading(true);
@@ -302,9 +315,11 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       const lateMinutes = attendanceRecord ? calculateLateMinutes(attendanceRecord.clock_in, shift as ShiftDefinition) : 0;
       const lateAfterGraceMinutes = attendanceRecord ? calculateLateAfterGraceMinutes(attendanceRecord.clock_in, shift as ShiftDefinition) : 0;
       const workingMinutes = attendanceRecord ? minutesBetween(attendanceRecord.clock_in, attendanceRecord.clock_out) : 0;
+      const isLateWaived = Boolean(attendanceRecord?.late_waived && lateAfterGraceMinutes > 0);
+      if (isLateWaived && status === "late") status = "present";
       const hasCalendarOverrideContext = Boolean(attendanceRecord && contextParts.length > 0);
       const isException =
-        ["late", "absent", "half-day", "missing-checkout"].includes(status) ||
+        (!isLateWaived && ["late", "absent", "half-day", "missing-checkout"].includes(status)) ||
         hasCalendarOverrideContext ||
         Boolean(attendanceRecord?.manual_override);
 
@@ -320,6 +335,8 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         lateAfterGraceMinutes,
         workingMinutes,
         isException,
+        isLateWaived,
+        waiverReason: attendanceRecord?.late_waiver_reason || undefined,
       };
     });
   }, [attendance, date, employees, holidays, leaves, officeOpenDays]);
@@ -353,6 +370,41 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
 
   const handleAttendanceSaved = () => {
     void fetchAttendance();
+  };
+
+  const openLateWaiver = (row: DailyAttendanceRow) => {
+    setWaiverRow(row);
+    setWaiverReason("Manager discretion");
+    setWaiverNote("");
+  };
+
+  const confirmLateWaiver = async () => {
+    if (!waiverRow?.attendance?.id) return;
+    try {
+      await attendanceService.waiveLate(waiverRow.attendance.id, {
+        reason: waiverReason,
+        note: waiverNote.trim(),
+        waivedBy: hydratedUser?.name || "Admin",
+      });
+      setWaiverRow(null);
+      await fetchAttendance();
+      showToast(`Late arrival waived for ${waiverRow.employee.name}.`, "success");
+    } catch (err) {
+      console.error("Late waiver error:", err);
+      showToast("Could not waive late attendance.", "error");
+    }
+  };
+
+  const revokeLateWaiver = async (row: DailyAttendanceRow) => {
+    if (!row.attendance?.id) return;
+    try {
+      await attendanceService.revokeLateWaiver(row.attendance.id);
+      await fetchAttendance();
+      showToast(`Late waiver removed for ${row.employee.name}.`);
+    } catch (err) {
+      console.error("Late waiver revoke error:", err);
+      showToast("Could not remove late waiver.", "error");
+    }
   };
 
   return (
@@ -521,11 +573,12 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                       <td className="px-4 py-4">
                         {row.lateMinutes > 0 ? (
                           <div>
-                            <div className="flex items-center gap-1 text-xs font-black text-orange-600">
-                              <TimerReset className="h-3.5 w-3.5" /> {formatDuration(row.lateMinutes)}
+                            <div className={`flex items-center gap-1 text-xs font-black ${row.isLateWaived ? "text-green-600" : "text-orange-600"}`}>
+                              {row.isLateWaived ? <BadgeCheck className="h-3.5 w-3.5" /> : <TimerReset className="h-3.5 w-3.5" />}
+                              {formatDuration(row.lateMinutes)}
                             </div>
                             <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                              After grace {formatDuration(row.lateAfterGraceMinutes)}
+                              {row.isLateWaived ? "Late impact waived" : `After grace ${formatDuration(row.lateAfterGraceMinutes)}`}
                             </div>
                           </div>
                         ) : (
@@ -548,7 +601,16 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                         <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{getDeviceLabel(row.attendance)}</div>
                       </td>
                       <td className={`${canManageAttendance ? "" : "rounded-r-lg"} px-4 py-4`}>
-                        {row.attendance?.manual_override ? (
+                        {row.isLateWaived ? (
+                          <div>
+                            <div className="flex items-center gap-1 text-xs font-bold text-green-600">
+                              <BadgeCheck className="h-3.5 w-3.5" /> Late waived
+                            </div>
+                            <div className="mt-1 max-w-[150px] truncate text-[9px] font-semibold text-gray-400" title={row.waiverReason}>
+                              {row.waiverReason}
+                            </div>
+                          </div>
+                        ) : row.attendance?.manual_override ? (
                           <div className="flex items-center gap-1 text-xs font-bold text-blue-600">
                             <ShieldCheck className="h-3.5 w-3.5" /> Override
                           </div>
@@ -569,6 +631,21 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                       {canManageAttendance && (
                         <td className="rounded-r-lg px-4 py-4">
                           <div className="flex justify-end gap-2">
+                            {(row.lateAfterGraceMinutes > 0 || row.isLateWaived) && (
+                              <button
+                                type="button"
+                                onClick={() => row.isLateWaived ? revokeLateWaiver(row) : openLateWaiver(row)}
+                                className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-[10px] font-black shadow-sm transition ${
+                                  row.isLateWaived
+                                    ? "border border-green-100 bg-green-50 text-green-700 hover:bg-green-100"
+                                    : "bg-green-600 text-white hover:bg-green-700"
+                                }`}
+                                title={row.isLateWaived ? "Remove late waiver" : "Mark this late arrival as waived"}
+                              >
+                                {row.isLateWaived ? <RotateCcw className="h-3.5 w-3.5" /> : <BadgeCheck className="h-3.5 w-3.5" />}
+                                {row.isLateWaived ? "Undo" : "Waive Late"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setEditingRow(row)}
@@ -608,6 +685,74 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             onSaved={handleAttendanceSaved}
           />
         )}
+
+        <Modal
+          isOpen={Boolean(waiverRow)}
+          onClose={() => setWaiverRow(null)}
+          title="Waive Late Arrival"
+          size="sm"
+        >
+          {waiverRow && (
+            <div className="space-y-5">
+              <div className="flex gap-3 rounded-xl border border-green-100 bg-green-50 p-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-600 text-white">
+                  <BadgeCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-gray-800">{waiverRow.employee.name}</p>
+                  <p className="mt-1 text-[10px] font-semibold leading-5 text-gray-500">
+                    Recorded {formatDuration(waiverRow.lateAfterGraceMinutes)} late after the shift grace period on {date}.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-[10px] leading-5 text-gray-500">
+                The original check-in time will remain unchanged. This waiver marks the attendance as on time and removes this instance from late totals.
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  Waiver Reason
+                </label>
+                <select value={waiverReason} onChange={(event) => setWaiverReason(event.target.value)}>
+                  <option>Manager discretion</option>
+                  <option>Approved official work</option>
+                  <option>Transport disruption</option>
+                  <option>Medical circumstances</option>
+                  <option>System or device issue</option>
+                  <option>Other approved exception</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  Internal Note <span className="font-semibold normal-case text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  value={waiverNote}
+                  onChange={(event) => setWaiverNote(event.target.value)}
+                  rows={3}
+                  maxLength={250}
+                  placeholder="Add context for the attendance record..."
+                />
+                <p className="mt-1 text-right text-[9px] text-gray-400">{waiverNote.length}/250</p>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+                <Button type="button" variant="secondary" className="bg-gray-100 text-gray-600 hover:bg-gray-200" onClick={() => setWaiverRow(null)}>
+                  Cancel
+                </Button>
+                <button
+                  type="button"
+                  onClick={confirmLateWaiver}
+                  className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-green-600 px-5 text-xs font-bold text-white transition hover:bg-green-700"
+                >
+                  <BadgeCheck className="h-4 w-4" /> Confirm Waiver
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
       </div>
     </DashboardLayout>
   );

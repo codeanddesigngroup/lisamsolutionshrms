@@ -32,6 +32,7 @@ import {
   Search,
   Shield,
   Cpu,
+  Ticket,
 } from "lucide-react";
 
 interface SubItem {
@@ -160,6 +161,7 @@ const menuItems: MenuItem[] = [
   },
   // { icon: ShoppingBag, label: "Products", href: "/products" },
   { icon: MessageSquare, label: "Messages", href: "/user-chat" },
+  { icon: Ticket, label: "Tickets", href: "/tickets" },
   {
     icon: Calendar,
     label: "Events",

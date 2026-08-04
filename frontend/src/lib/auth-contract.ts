@@ -309,6 +309,10 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin", "employee"],
   },
   {
+    prefixes: ["/tickets"],
+    roles: ["admin", "employee"],
+  },
+  {
     prefixes: ["/projects", "/tasks", "/taskboard", "/task-calendar", "/events", "/event-calendar", "/notices", "/faqs", "/search", "/profile"],
     roles: ["admin", "employee", "client"],
   },

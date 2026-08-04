@@ -51,6 +51,37 @@ const AttendanceRecords = sequelize.define('AttendanceRecords', {
     field: 'worked_hours',
   },
 
+  lateWaived: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'late_waived',
+  },
+
+  lateWaiverReason: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    field: 'late_waiver_reason',
+  },
+
+  lateWaiverNote: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'late_waiver_note',
+  },
+
+  lateWaivedBy: {
+    type: DataTypes.STRING(150),
+    allowNull: true,
+    field: 'late_waived_by',
+  },
+
+  lateWaivedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'late_waived_at',
+  },
+
 }, {
   tableName: 'attendance_records',
   createdAt: 'created_at',

@@ -76,6 +76,8 @@ export const calculateAttendanceStatus = (
     clock_out?: string;
     half_day?: boolean; 
     late?: boolean;
+    late_waived?: boolean;
+    lateWaived?: boolean;
     is_holiday?: boolean;
     is_leave?: boolean;
   }, 
@@ -87,6 +89,7 @@ export const calculateAttendanceStatus = (
   if (record.is_leave) return "leave";
   if (explicit === "absent") return "absent";
   if (record.half_day || explicit === "half-day" || explicit === "half day") return "half-day";
+  if (record.late_waived || record.lateWaived) return "present";
 
   const clockIn = normalizeShiftMinute(record.clock_in, shift);
   const clockOut = normalizeShiftMinute(record.clock_out, shift);

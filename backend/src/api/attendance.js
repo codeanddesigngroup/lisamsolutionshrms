@@ -72,6 +72,11 @@ const attendanceRecordAttributes = [
         'deviceSerial',
     ],
     'workedHours',
+    'lateWaived',
+    'lateWaiverReason',
+    'lateWaiverNote',
+    'lateWaivedBy',
+    [fn('to_char', col('late_waived_at'), 'YYYY-MM-DD HH24:MI:SS'), 'lateWaivedAt'],
     [
         literal(`("AttendanceRecords"."updated_at" > clock_timestamp() + interval '50 years')`),
         'manualOverride',
@@ -82,6 +87,11 @@ const attendanceRecordAttributes = [
 
 const getQueryLimit = (value, defaultLimit = 100) =>
     Math.min(Math.max(Number(value) || defaultLimit, 1), 10000);
+
+const findAttendanceRecordResponse = (id) => AttendanceRecords.findByPk(id, {
+    attributes: attendanceRecordAttributes,
+    raw: true,
+});
 
 router.get('/', async (req, res, next) => {
     try {
@@ -220,4 +230,68 @@ router.post('/override', async (req, res, next) => {
     }
 });
 
+router.post('/:id/late-waiver', async (req, res, next) => {
+    try {
+        const id = Number(req.params.id);
+        const reason = String(req.body.reason || 'Manager discretion').trim().slice(0, 100);
+        const note = String(req.body.note || '').trim().slice(0, 250) || null;
+        const waivedBy = String(req.body.waived_by || req.body.waivedBy || req.body.user_name || 'Admin').trim().slice(0, 150) || 'Admin';
+
+        if (!Number.isInteger(id) || id <= 0) {
+            return res.status(422).json({ success: false, message: 'A valid attendance record ID is required.' });
+        }
+
+        const record = await AttendanceRecords.findByPk(id);
+        if (!record) {
+            return res.status(404).json({ success: false, message: 'Attendance record not found.' });
+        }
+
+        await record.update({
+            lateWaived: true,
+            lateWaiverReason: reason || 'Manager discretion',
+            lateWaiverNote: note,
+            lateWaivedBy: waivedBy,
+            lateWaivedAt: new Date(),
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Late attendance waived successfully.',
+            data: await findAttendanceRecordResponse(id),
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.delete('/:id/late-waiver', async (req, res, next) => {
+    try {
+        const id = Number(req.params.id);
+
+        if (!Number.isInteger(id) || id <= 0) {
+            return res.status(422).json({ success: false, message: 'A valid attendance record ID is required.' });
+        }
+
+        const record = await AttendanceRecords.findByPk(id);
+        if (!record) {
+            return res.status(404).json({ success: false, message: 'Attendance record not found.' });
+        }
+
+        await record.update({
+            lateWaived: false,
+            lateWaiverReason: null,
+            lateWaiverNote: null,
+            lateWaivedBy: null,
+            lateWaivedAt: null,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Late attendance waiver removed successfully.',
+            data: await findAttendanceRecordResponse(id),
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
 module.exports = router;
