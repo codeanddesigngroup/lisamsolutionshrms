@@ -156,6 +156,7 @@ const menuItems: MenuItem[] = [
     href: "/payroll",
     submenu: [
       { label: "Payroll Dashboard", href: "/payroll" },
+      { label: "Salary Sheet", href: "/payroll/salary-sheet" },
       { label: "Salary Settings", href: "/payroll/settings" },
     ],
   },

@@ -60,6 +60,7 @@ const navbarTitleRules: NavbarTitleRule[] = [
   { prefix: "/expenses-recurring", title: "Recurring Expenses", section: "Finance" },
   { prefix: "/expenses", title: "Expenses", section: "Finance" },
   { prefix: "/credit-notes", title: "Credit Notes", section: "Finance" },
+  { prefix: "/payroll/salary-sheet", title: "Salary Sheet", section: "Payroll" },
   { prefix: "/payroll/settings", title: "Payroll Settings", section: "Payroll" },
   { prefix: "/employee/payroll", title: "My Payslips", section: "Payroll" },
   { prefix: "/member/payroll", title: "My Payslips", section: "Payroll" },

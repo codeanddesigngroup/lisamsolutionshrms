@@ -99,6 +99,7 @@ app.use('/api/v1/leave-types', leaveTypes);
 app.use('/api/v1/leaveType', leaveTypes);
 app.use('/api/v1/leave-quotas', leaveQuotas);
 app.use('/api/v1/employees', employees);
+app.use('/api/v1/attendance', attendance);
 app.use('/api/attendance', attendance);
 
 app.use((err, req, res, next) => {
