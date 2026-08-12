@@ -157,7 +157,7 @@ export default function SalarySheetPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-start gap-3">
             <Link href="/payroll" className="mt-1 rounded-xl border border-gray-100 bg-white p-2 text-gray-400 transition-colors hover:text-primary"><ArrowLeft className="h-4 w-4" /></Link>
-            <div><h1 className="flex items-center gap-2 text-xl font-black text-gray-900"><FileSpreadsheet className="h-5 w-5 text-primary" /> Salary Sheet</h1><p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Salaries - Telecom · {monthName(month)} {year}</p></div>
+            <div><h1 className="flex items-center gap-2 text-xl font-black text-gray-900"><FileSpreadsheet className="h-5 w-5 text-primary" /> Salary Sheet</h1><p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Salaries - Lisam · {monthName(month)} {year}</p></div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select value={month} onChange={(event) => setMonth(Number(event.target.value))} className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700">{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{monthName(index + 1)}</option>)}</select>
