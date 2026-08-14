@@ -160,8 +160,6 @@ export default function SalarySheetPage() {
             <div><h1 className="flex items-center gap-2 text-xl font-black text-gray-900"><FileSpreadsheet className="h-5 w-5 text-primary" /> Salary Sheet</h1><p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Salaries - Lisam · {monthName(month)} {year}</p></div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select value={month} onChange={(event) => setMonth(Number(event.target.value))} className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700">{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{monthName(index + 1)}</option>)}</select>
-            <select value={year} onChange={(event) => setYear(Number(event.target.value))} className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700">{Array.from(new Set([now.getFullYear(), ...years])).map((item) => <option key={item}>{item}</option>)}</select>
             <Button onClick={loadSheet} className="h-10 px-3"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh</Button>
             <Link href="/payroll/salary-sheet/create"><Button className="h-10 px-4"><FileSpreadsheet className="h-4 w-4" /> Create Salary Sheet</Button></Link>
             <Button onClick={exportCsv} disabled={!rows.length} className="h-10 px-4"><Download className="h-4 w-4" /> Export CSV</Button>
@@ -173,9 +171,18 @@ export default function SalarySheetPage() {
         </div>
 
         <Card className="overflow-hidden p-0">
-          <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h2 className="text-xs font-black uppercase tracking-widest text-gray-800">Monthly Salary Register</h2><p className="mt-1 text-[10px] font-bold text-gray-400">White cells are sourced from payroll; blue cells are editable manual entries.</p></div>
-            <label className="relative block w-full sm:w-64"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-300" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search employee" className="h-10 w-full rounded-xl border border-gray-200 pl-9 pr-3 text-xs font-bold outline-none focus:border-primary" /></label>
+          <div className="border-b border-gray-100 p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-xs font-black uppercase tracking-widest text-gray-800">Monthly Salary Register</h2>
+                <p className="mt-1 text-[10px] font-bold text-gray-400">White cells are sourced from payroll; blue cells are editable manual entries.</p>
+              </div>
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+                <select aria-label="Salary month" value={month} onChange={(event) => setMonth(Number(event.target.value))} className="h-10 min-w-0 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 sm:w-36">{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{monthName(index + 1)}</option>)}</select>
+                <select aria-label="Salary year" value={year} onChange={(event) => setYear(Number(event.target.value))} className="h-10 min-w-0 rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 sm:w-28">{Array.from(new Set([now.getFullYear(), ...years])).map((item) => <option key={item}>{item}</option>)}</select>
+                <label className="relative col-span-2 block w-full sm:w-64"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-300" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search employee" className="h-10 w-full rounded-xl border border-gray-200 pl-9 pr-3 text-xs font-bold outline-none focus:border-primary" /></label>
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[3600px] border-collapse text-[10px]">
