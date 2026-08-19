@@ -104,7 +104,7 @@ export default function AttendanceReportPage() {
         rows.forEach((row) => {
           const status = calculateAttendanceStatus(row, row.shift_type || employee.employee_detail?.shift_type);
           const rowDate = String(row.date || row.clock_in_date || "").slice(0, 10);
-          if (["present", "late", "half-day"].includes(status)) presentDates.add(rowDate);
+          if (["present", "early", "late", "half-day"].includes(status)) presentDates.add(rowDate);
           if (status === "late") late += 1;
           if (status === "half-day") halfDay += 1;
           minutes += Number(row.total_minutes || minutesBetween(row.clock_in || row.clock_in_time, row.clock_out || row.clock_out_time));

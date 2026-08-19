@@ -144,19 +144,19 @@ export interface AttendanceAuditLog {
 
 const toClockTime = (value?: string | null) => {
   if (!value) return "";
-  const rawTimeMatch = value.match(/^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/);
+  const rawTimeMatch = value.match(/^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
 
   if (rawTimeMatch) {
-    return `${rawTimeMatch[1]}:${rawTimeMatch[2]}`;
+    return `${rawTimeMatch[1]}:${rawTimeMatch[2]}:${rawTimeMatch[3] || "00"}`;
   }
 
   const date = new Date(value);
 
   if (!Number.isNaN(date.getTime())) {
-    return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
+    return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}:${String(date.getUTCSeconds()).padStart(2, "0")}`;
   }
 
-  return value.includes("T") ? value.slice(11, 16) : value.slice(0, 5);
+  return value.includes("T") ? value.slice(11, 19) : value.slice(0, 8);
 };
 
 const normalizeShift = (shift?: NodeShift) => {

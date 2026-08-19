@@ -5,7 +5,7 @@
 
 export type HRRecord = Record<string, any>;
 
-export type AttendanceStatus = "present" | "absent" | "late" | "half-day" | "holiday" | "leave";
+export type AttendanceStatus = "present" | "early" | "absent" | "late" | "half-day" | "holiday" | "leave";
 
 export interface ShiftDefinition {
   id?: number | string;
@@ -88,12 +88,18 @@ export const calculateAttendanceStatus = (
   if (record.is_holiday) return "holiday";
   if (record.is_leave) return "leave";
   if (explicit === "absent") return "absent";
+
+  const clockIn = normalizeShiftMinute(record.clock_in, shift);
+  const shiftStart = normalizeShiftMinute(shift?.start_time, shift);
+
+  // Device punches are authoritative: any punch before the scheduled start is
+  // EARLY, independent of grace periods or other duration-based classifications.
+  if (clockIn !== null && shiftStart !== null && clockIn < shiftStart) return "early";
+
   if (record.half_day || explicit === "half-day" || explicit === "half day") return "half-day";
   if (record.late_waived || record.lateWaived) return "present";
 
-  const clockIn = normalizeShiftMinute(record.clock_in, shift);
   const clockOut = normalizeShiftMinute(record.clock_out, shift);
-  const shiftStart = normalizeShiftMinute(shift?.start_time, shift);
   const shiftEnd = normalizeShiftMinute(shift?.end_time, shift);
   const halfDayMark = normalizeShiftMinute(getShiftHalfDayMarkTime(shift), shift);
 

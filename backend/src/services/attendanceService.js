@@ -3,7 +3,6 @@ const AttendanceRecords = require('../models/AttendanceRecords');
 const sequelize = require('../config/db');
 const { Op } = require('sequelize');
 
-const EARLY_CHECK_IN_BUFFER_MINUTES = 120;
 const LATE_CHECK_OUT_BUFFER_MINUTES = 240;
 
 function formatWorkDate(date) {
@@ -68,7 +67,10 @@ function getShiftWorkDateRange(workDate, shift) {
 
   const startTime = normalizeTime(shift.start_time);
   const endTime = normalizeTime(shift.end_time);
-  const shiftStart = getWorkDateAtTime(workDate, startTime);
+  // A punch before the scheduled start is still the employee's actual check-in,
+  // regardless of how early it is. Start at the work-date boundary instead of
+  // applying an arbitrary early-punch cutoff.
+  const workDateStart = getWorkDateAtTime(workDate, '00:00:00');
   let shiftEnd = getWorkDateAtTime(workDate, endTime);
 
   if (shiftCrossesMidnight(shift)) {
@@ -76,8 +78,10 @@ function getShiftWorkDateRange(workDate, shift) {
   }
 
   return {
-    start: formatTimestamp(addMinutes(shiftStart, -EARLY_CHECK_IN_BUFFER_MINUTES)),
-    end: formatTimestamp(addMinutes(shiftEnd, LATE_CHECK_OUT_BUFFER_MINUTES)),
+    start: formatTimestamp(workDateStart),
+    end: shiftCrossesMidnight(shift)
+      ? formatTimestamp(addMinutes(shiftEnd, LATE_CHECK_OUT_BUFFER_MINUTES))
+      : getWorkDateRange(workDate).end,
   };
 }
 
@@ -146,24 +150,17 @@ function parsePunchTime(value) {
 }
 
 function calculateDailySummary(punches) {
-  let workedMs = 0;
-  let lastOut = null;
-
-  for (let index = 0; index < punches.length - 1; index += 2) {
-    const inTime = punches[index].punchTime || punches[index].punch_time;
-    const outTime = punches[index + 1].punchTime || punches[index + 1].punch_time;
-    const inDate = parsePunchTime(inTime);
-    const outDate = parsePunchTime(outTime);
-
-    if (outDate > inDate) {
-      workedMs += outDate - inDate;
-      lastOut = outTime;
-    }
-  }
+  const checkIn = punches[0]?.punchTime || punches[0]?.punch_time || null;
+  const checkOut = punches.length > 1
+    ? punches[punches.length - 1]?.punchTime || punches[punches.length - 1]?.punch_time || null
+    : null;
+  const inDate = checkIn ? parsePunchTime(checkIn) : null;
+  const outDate = checkOut ? parsePunchTime(checkOut) : null;
+  const workedMs = inDate && outDate && outDate > inDate ? outDate - inDate : 0;
 
   return {
-    checkIn: punches[0]?.punchTime || punches[0]?.punch_time || null,
-    checkOut: lastOut,
+    checkIn,
+    checkOut,
     workedHours: Math.floor(workedMs / (1000 * 60 * 60)),
   };
 }

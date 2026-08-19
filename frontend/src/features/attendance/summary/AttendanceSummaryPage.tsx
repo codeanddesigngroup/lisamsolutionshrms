@@ -214,7 +214,7 @@ export default function AttendanceSummaryPage() {
     daysArray.reduce((total, day) => {
       const status = getDayStatus(employee, day);
       if (status === "half-day") return total + 0.5;
-      return ["present", "late"].includes(status) ? total + 1 : total;
+      return ["present", "early", "late"].includes(status) ? total + 1 : total;
     }, 0);
 
   return (
@@ -332,7 +332,7 @@ export default function AttendanceSummaryPage() {
                       return (
                         <td key={day} className="p-1 border-r text-center">
                           <button type="button" onClick={() => setSelectedDayDetail(getDayDetail(employee, day))} className="mx-auto flex h-6 w-6 items-center justify-center rounded-sm transition-transform hover:scale-110" title={`${employee.name} - ${day}`}>
-                            {(status === "present" || status === "late") && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#00c292]"><Check className="h-2.5 w-2.5 text-white" /></span>}
+                            {(status === "present" || status === "early" || status === "late") && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#00c292]"><Check className="h-2.5 w-2.5 text-white" /></span>}
                             {status === "half-day" && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fec107]"><Check className="h-2.5 w-2.5 text-white" /></span>}
                             {status === "absent" && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fb9678]"><X className="h-2.5 w-2.5 text-white" /></span>}
                             {status === "holiday" && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#5475ed]"><Star className="h-2.5 w-2.5 text-white" /></span>}

@@ -77,7 +77,7 @@ type LeaveRecord = {
   leave_type?: { type_name?: string };
 };
 
-type DailyStatus = "present" | "late" | "absent" | "half-day" | "holiday" | "leave" | "weekly-off" | "future" | "missing-checkout";
+type DailyStatus = "present" | "early" | "late" | "absent" | "half-day" | "holiday" | "leave" | "weekly-off" | "future" | "missing-checkout";
 
 type DailyAttendanceRow = {
   employee: EmployeeOption;
@@ -103,6 +103,7 @@ const isValidDateParam = (value: string | null) => Boolean(value && /^\d{4}-\d{2
 const formatTime = (value?: string) => value || "--:--";
 const statusLabel = (status: DailyStatus) => {
   if (status === "present") return "On Time";
+  if (status === "early") return "Early";
   if (status === "half-day") return "Half Day";
   if (status === "weekly-off") return "Weekly Off";
   if (status === "missing-checkout") return "Missing Checkout";
@@ -114,6 +115,7 @@ const getShiftForEmployee = (employee: EmployeeOption, attendance?: AttendanceRe
 
 const getStatusClass = (status: DailyStatus) => {
   if (status === "present") return "bg-green-50 text-green-700 border-green-100";
+  if (status === "early") return "bg-cyan-50 text-cyan-700 border-cyan-100";
   if (status === "late") return "bg-orange-50 text-orange-700 border-orange-100";
   if (status === "half-day") return "bg-yellow-50 text-yellow-700 border-yellow-100";
   if (status === "absent" || status === "missing-checkout") return "bg-red-50 text-red-700 border-red-100";
@@ -353,7 +355,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   }, [dailyRows, employeeFilter, exceptionsOnly, isSelfServiceAttendance, statusFilter]);
 
   const stats = useMemo(() => {
-    const present = dailyRows.filter((row) => row.status === "present").length;
+    const present = dailyRows.filter((row) => row.status === "present" || row.status === "early").length;
     const late = dailyRows.filter((row) => row.status === "late").length;
     const halfDay = dailyRows.filter((row) => row.status === "half-day").length;
     const absent = dailyRows.filter((row) => row.status === "absent").length;

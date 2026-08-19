@@ -69,7 +69,7 @@ const getShiftForRow = (row: AttendanceRecord, employees: EmployeeOption[]): Shi
 };
 
 const getStatusClass = (status: string) => {
-  if (status === "present") return "label-success";
+  if (status === "present" || status === "early") return "label-success";
   if (status === "late" || status === "absent") return "label-danger";
   return "label-info";
 };
@@ -144,7 +144,7 @@ export default function AttendanceByDatePage() {
   };
 
   const dailyRows = useMemo(() => attendance.filter((row) => row.date === date), [attendance, date]);
-  const presentCount = dailyRows.filter((row) => ["present", "late"].includes(calculateAttendanceStatus(row, getShiftForRow(row, employees)))).length;
+  const presentCount = dailyRows.filter((row) => ["present", "early", "late"].includes(calculateAttendanceStatus(row, getShiftForRow(row, employees)))).length;
   const absentCount = dailyRows.filter((row) => calculateAttendanceStatus(row, getShiftForRow(row, employees)) === "absent").length;
 
   return (
