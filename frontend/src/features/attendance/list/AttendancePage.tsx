@@ -349,7 +349,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     if (isSelfServiceAttendance) return dailyRows;
 
     return dailyRows.filter((row) => {
-      const employeeMatch = employeeFilter === "all" || getEmployeeMatchCodes(row.employee).includes(employeeFilter);
+      const employeeMatch = employeeFilter === "all" || String(row.employee.id) === employeeFilter;
       const statusMatch = statusFilter === "all" || row.status === statusFilter;
       const exceptionMatch = !exceptionsOnly || row.isException;
       return employeeMatch && statusMatch && exceptionMatch;
@@ -479,14 +479,11 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                   <label className="mb-2 block text-[12px] font-bold text-gray-600">Employee</label>
                   <select className="form-control" value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)}>
                     <option value="all">All Employees</option>
-                    {employees.map((employee) => {
-                      const employeeCode = getEmployeeMatchCodes(employee)[0] || String(employee.id);
-                      return (
-                        <option key={String(employee.id)} value={employeeCode}>
-                          {employee.name}
-                        </option>
-                      );
-                    })}
+                    {employees.map((employee) => (
+                      <option key={String(employee.id)} value={String(employee.id)}>
+                        {employee.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
