@@ -87,6 +87,7 @@ export default function AttendanceReportPage() {
       .filter((date) => date <= today)
       .map((date) => ({ date, key: toDateString(date) }))
       .filter(({ date, key }) => officeOpenDays.includes(date.getDay()) && !holidayDates.has(key));
+    const workingDateKeys = new Set(workingDates.map(({ key }) => key));
 
     return employees
       .filter((employee) => selectedEmployee === "all" || String(employee.id) === selectedEmployee)
@@ -94,7 +95,7 @@ export default function AttendanceReportPage() {
         const employeeId = String(employee.id);
         const rows = attendanceRows.filter((row) => {
           const date = String(row.date || row.clock_in_date || "").slice(0, 10);
-          return getAttendanceEmployeeId(row) === employeeId && date >= start && date <= end;
+          return getAttendanceEmployeeId(row) === employeeId && date >= start && date <= end && workingDateKeys.has(date);
         });
         const presentDates = new Set<string>();
         let late = 0;

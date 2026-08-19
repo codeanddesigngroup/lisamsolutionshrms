@@ -198,6 +198,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const [waiverRow, setWaiverRow] = useState<DailyAttendanceRow | null>(null);
   const [waiverReason, setWaiverReason] = useState("Manager discretion");
   const [waiverNote, setWaiverNote] = useState("");
+  const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
 
   const fetchAttendance = async () => {
     setLoading(true);
@@ -285,24 +286,25 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
           )
         )
       );
+      const displayedAttendance = isOfficeOpen ? attendanceRecord : undefined;
       const approvedLeave = leaves.find((leave) => getLeaveEmployeeId(leave) === employeeId && getLeaveDate(leave) === date && String(leave.status || "").toLowerCase() === "approved");
-      const shift = getShiftForEmployee(employee, attendanceRecord);
-      const calculatedStatus = attendanceRecord
-        ? calculateAttendanceStatus(attendanceRecord, shift as ShiftDefinition)
+      const shift = getShiftForEmployee(employee, displayedAttendance);
+      const calculatedStatus = displayedAttendance
+        ? calculateAttendanceStatus(displayedAttendance, shift as ShiftDefinition)
         : undefined;
-      const hasMissingCheckout = Boolean(attendanceRecord?.clock_in && !attendanceRecord?.clock_out && isPastDate(date));
+      const hasMissingCheckout = Boolean(displayedAttendance?.clock_in && !displayedAttendance?.clock_out && isPastDate(date));
 
       let status: DailyStatus;
-      if (hasMissingCheckout) {
+      if (!isOfficeOpen) {
+        status = "weekly-off";
+      } else if (hasMissingCheckout) {
         status = "missing-checkout";
-      } else if (attendanceRecord && calculatedStatus) {
+      } else if (displayedAttendance && calculatedStatus) {
         status = calculatedStatus as DailyStatus;
       } else if (holiday) {
         status = "holiday";
       } else if (approvedLeave) {
         status = "leave";
-      } else if (!isOfficeOpen) {
-        status = "weekly-off";
       } else if (isFutureDate(date)) {
         status = "future";
       } else {
@@ -314,20 +316,20 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         approvedLeave ? approvedLeave.leave_type?.type_name || approvedLeave.reason || "Approved leave" : "",
         !isOfficeOpen ? "Weekly off" : "",
       ].filter(Boolean);
-      const lateMinutes = attendanceRecord ? calculateLateMinutes(attendanceRecord.clock_in, shift as ShiftDefinition) : 0;
-      const lateAfterGraceMinutes = attendanceRecord ? calculateLateAfterGraceMinutes(attendanceRecord.clock_in, shift as ShiftDefinition) : 0;
-      const workingMinutes = attendanceRecord ? minutesBetween(attendanceRecord.clock_in, attendanceRecord.clock_out) : 0;
-      const isLateWaived = Boolean(attendanceRecord?.late_waived && lateAfterGraceMinutes > 0);
+      const lateMinutes = displayedAttendance ? calculateLateMinutes(displayedAttendance.clock_in, shift as ShiftDefinition) : 0;
+      const lateAfterGraceMinutes = displayedAttendance ? calculateLateAfterGraceMinutes(displayedAttendance.clock_in, shift as ShiftDefinition) : 0;
+      const workingMinutes = displayedAttendance ? minutesBetween(displayedAttendance.clock_in, displayedAttendance.clock_out) : 0;
+      const isLateWaived = Boolean(displayedAttendance?.late_waived && lateAfterGraceMinutes > 0);
       if (isLateWaived && status === "late") status = "present";
-      const hasCalendarOverrideContext = Boolean(attendanceRecord && contextParts.length > 0);
+      const hasCalendarOverrideContext = Boolean(displayedAttendance && contextParts.length > 0);
       const isException =
         (!isLateWaived && ["late", "absent", "half-day", "missing-checkout"].includes(status)) ||
         hasCalendarOverrideContext ||
-        Boolean(attendanceRecord?.manual_override);
+        Boolean(displayedAttendance?.manual_override);
 
       return {
         employee,
-        attendance: attendanceRecord,
+        attendance: displayedAttendance,
         shift,
         holiday,
         leave: approvedLeave,
@@ -338,7 +340,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         workingMinutes,
         isException,
         isLateWaived,
-        waiverReason: attendanceRecord?.late_waiver_reason || undefined,
+        waiverReason: displayedAttendance?.late_waiver_reason || undefined,
       };
     });
   }, [attendance, date, employees, holidays, leaves, officeOpenDays]);
@@ -370,6 +372,25 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     setExceptionsOnly(false);
   };
 
+
+  const handleSyncMissingAttendance = async () => {
+    setIsSyncingAttendance(true);
+    try {
+      const endDate = new Date().toISOString().slice(0, 10);
+      const response = await attendanceService.processMissingRecords({
+        startDate: "2026-03-01",
+        endDate,
+      });
+      const data = response.data;
+      await fetchAttendance();
+      showToast(`Attendance synced: ${data.synced || 0} synced, ${data.skipped || 0} skipped.`, "success");
+    } catch (err) {
+      console.error("Sync missing attendance error:", err);
+      showToast("Failed to sync attendance", "error");
+    } finally {
+      setIsSyncingAttendance(false);
+    }
+  };
   const handleAttendanceSaved = () => {
     void fetchAttendance();
   };
@@ -489,8 +510,17 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
               </>
             )}
             {canManageAttendance && (
-              <div className="flex gap-2">
-                <Button onClick={resetFilters} className="btn-default btn-block h-[34px]">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={handleSyncMissingAttendance}
+                  loading={isSyncingAttendance}
+                  className="h-[34px] whitespace-nowrap px-4 text-[10px] font-black uppercase tracking-widest"
+                >
+                  {!isSyncingAttendance && <RefreshCw className="h-4 w-4" />}
+                  Sync Attendance
+                </Button>
+                <Button onClick={resetFilters} className="btn-default h-[34px]">
                   Reset
                 </Button>
               </div>

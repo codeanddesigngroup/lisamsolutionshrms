@@ -3,10 +3,11 @@ const router = express.Router();
 const { Op, fn, col, literal } = require('sequelize');
 
 const AttendanceRecords = require('../models/AttendanceRecords');
-const { getRecentAttendanceRecords, processAttendanceRecords } = require('../services/attendanceService');
+const { getRecentAttendanceRecords, generateAttendanceRecord, processAttendanceRecords } = require('../services/attendanceService');
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const attendanceDateTime = (workDate, time) => {
@@ -170,6 +171,51 @@ router.post('/process', async (req, res, next) => {
         return res.status(200).json({
             success: true,
             data: result,
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.post('/process-missing', async (req, res, next) => {
+    try {
+        const startDate = String(req.body?.startDate || req.query.startDate || '2026-03-01').trim();
+        const endDate = String(req.body?.endDate || req.query.endDate || getToday()).trim();
+
+        if (!DATE_PATTERN.test(startDate) || !DATE_PATTERN.test(endDate)) {
+            return res.status(422).json({ success: false, message: 'Start date and end date must use YYYY-MM-DD format.' });
+        }
+
+        const [rows] = await AttendanceRecords.sequelize.query(
+            `
+                SELECT DISTINCT employee_id, punch_time::date AS work_date
+                FROM attendance_logs
+                WHERE punch_time::date BETWEEN :startDate::date AND :endDate::date
+                ORDER BY employee_id, work_date
+            `,
+            { replacements: { startDate, endDate } },
+        );
+
+        const records = [];
+        for (const row of rows) {
+            const workDate = row.work_date instanceof Date
+                ? row.work_date.toISOString().slice(0, 10)
+                : String(row.work_date).slice(0, 10);
+            records.push(await generateAttendanceRecord(String(row.employee_id), workDate));
+        }
+
+        const skippedRecords = records.filter((record) => record.skipped);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                startDate,
+                endDate,
+                processed: records.length,
+                synced: records.length - skippedRecords.length,
+                skipped: skippedRecords.length,
+                skippedRecords: skippedRecords.slice(0, 50),
+            },
         });
     } catch (err) {
         return next(err);

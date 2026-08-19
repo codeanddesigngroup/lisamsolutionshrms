@@ -96,6 +96,15 @@ export type AttendanceEmployee = NodeEmployee & {
   };
 };
 
+
+type ProcessMissingAttendanceResponse = {
+  startDate: string;
+  endDate: string;
+  processed: number;
+  synced: number;
+  skipped: number;
+  skippedRecords?: unknown[];
+};
 export type AttendanceRecord = {
   id: number | string;
   company_id?: number | string;
@@ -298,6 +307,11 @@ export const attendanceService = {
     return response.data;
   },
 
+
+  processMissingRecords: async (payload: { startDate?: string; endDate?: string } = {}): Promise<ApiEnvelope<ProcessMissingAttendanceResponse>> => {
+    const response = await nodeApi.post<ApiEnvelope<ProcessMissingAttendanceResponse>>("/attendance/process-missing", payload);
+    return response.data;
+  },
   waiveLate: async (id: string | number, payload: { reason?: string; note?: string; waivedBy?: string } = {}): Promise<ApiEnvelope<NodeAttendanceRecord>> => {
     const response = await nodeApi.post<ApiEnvelope<NodeAttendanceRecord>>(`/attendance/${encodeURIComponent(String(id))}/late-waiver`, payload);
     return response.data;

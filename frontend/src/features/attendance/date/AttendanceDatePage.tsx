@@ -143,7 +143,11 @@ export default function AttendanceByDatePage() {
     setDate(DEFAULT_ATTENDANCE_DATE);
   };
 
-  const dailyRows = useMemo(() => attendance.filter((row) => row.date === date), [attendance, date]);
+  const dailyRows = useMemo(() => {
+    const day = new Date(`${date}T00:00:00`).getDay();
+    if (day === 0 || day === 6) return [];
+    return attendance.filter((row) => row.date === date);
+  }, [attendance, date]);
   const presentCount = dailyRows.filter((row) => ["present", "early", "late"].includes(calculateAttendanceStatus(row, getShiftForRow(row, employees)))).length;
   const absentCount = dailyRows.filter((row) => calculateAttendanceStatus(row, getShiftForRow(row, employees)) === "absent").length;
 

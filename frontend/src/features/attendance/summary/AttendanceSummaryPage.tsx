@@ -191,6 +191,7 @@ export default function AttendanceSummaryPage() {
   const getDayStatus = (employee: EmployeeOption, day: number) => {
     const date = new Date(year, month - 1, day);
     const dateString = getDateForDay(year, month, day);
+    if (!officeOpenDays.includes(date.getDay())) return "closed";
     const record = getAttendanceForEmployeeDay(employee, day);
     if (record) {
       const shift = record.shift_type || employee.employee_detail?.shift_type;
@@ -198,13 +199,13 @@ export default function AttendanceSummaryPage() {
     }
     if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
     if (leaves.some((leave) => getLeaveEmployeeId(leave) === String(employee.id) && getLeaveDate(leave) === dateString && leave.status === "approved")) return "leave";
-    if (!officeOpenDays.includes(date.getDay())) return "closed";
     return "empty";
   };
 
   const getDayDetail = (employee: EmployeeOption, day: number): DayDetail => {
     const date = getDateForDay(year, month, day);
-    const attendanceRecord = getAttendanceForEmployeeDay(employee, day);
+    const dayDate = new Date(year, month - 1, day);
+    const attendanceRecord = officeOpenDays.includes(dayDate.getDay()) ? getAttendanceForEmployeeDay(employee, day) : undefined;
     const holiday = holidays.find((item) => getHolidayDate(item) === date);
     const leave = leaves.find((item) => getLeaveEmployeeId(item) === String(employee.id) && getLeaveDate(item) === date && item.status === "approved");
     return { employee, day, date, status: getDayStatus(employee, day), attendance: attendanceRecord, holiday, leave };
