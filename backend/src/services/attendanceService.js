@@ -234,13 +234,10 @@ async function generateAttendanceRecord(employeeId, workDate) {
             AND al.punch_time >= :start::timestamp
             AND al.punch_time < :end::timestamp
         )
-      WHERE attendance_records.updated_at <= (
-        SELECT MAX(al.created_at)
-        FROM attendance_logs al
-        WHERE al.employee_id = :employeeId
-          AND al.punch_time >= :start::timestamp
-          AND al.punch_time < :end::timestamp
-      )
+      -- Machine-generated rows must be recalculable even when the row was
+      -- created after its raw punches. Manual overrides are timestamped 100
+      -- years ahead and remain protected by this guard.
+      WHERE attendance_records.updated_at < clock_timestamp() + interval '50 years'
     `,
     {
       replacements: {
