@@ -65,23 +65,29 @@ function getShiftWorkDateRange(workDate, shift) {
     return getWorkDateRange(workDate);
   }
 
-  const startTime = normalizeTime(shift.start_time);
   const endTime = normalizeTime(shift.end_time);
-  // A punch before the scheduled start is still the employee's actual check-in,
-  // regardless of how early it is. Start at the work-date boundary instead of
-  // applying an arbitrary early-punch cutoff.
   const workDateStart = getWorkDateAtTime(workDate, '00:00:00');
   let shiftEnd = getWorkDateAtTime(workDate, endTime);
 
   if (shiftCrossesMidnight(shift)) {
     shiftEnd = addMinutes(shiftEnd, 24 * 60);
+    // The early-morning punches on workDate close the shift that started on
+    // the previous date. Begin this shift's window after that checkout buffer,
+    // otherwise yesterday's checkout becomes today's check-in.
+    const previousShiftCheckoutCutoff = addMinutes(
+      getWorkDateAtTime(workDate, endTime),
+      LATE_CHECK_OUT_BUFFER_MINUTES,
+    );
+
+    return {
+      start: formatTimestamp(previousShiftCheckoutCutoff),
+      end: formatTimestamp(addMinutes(shiftEnd, LATE_CHECK_OUT_BUFFER_MINUTES)),
+    };
   }
 
   return {
     start: formatTimestamp(workDateStart),
-    end: shiftCrossesMidnight(shift)
-      ? formatTimestamp(addMinutes(shiftEnd, LATE_CHECK_OUT_BUFFER_MINUTES))
-      : getWorkDateRange(workDate).end,
+    end: getWorkDateRange(workDate).end,
   };
 }
 
@@ -123,7 +129,7 @@ function getWorkDateForPunch(punchTime, shift) {
   const punchTimeOfDay = `${String(punchTime.getUTCHours()).padStart(2, '0')}:${String(punchTime.getUTCMinutes()).padStart(2, '0')}:${String(punchTime.getUTCSeconds()).padStart(2, '0')}`;
   const checkoutBufferEndSeconds = timeToSeconds(shift.end_time) + LATE_CHECK_OUT_BUFFER_MINUTES * 60;
 
-  if (timeToSeconds(punchTimeOfDay) <= checkoutBufferEndSeconds) {
+  if (timeToSeconds(punchTimeOfDay) < checkoutBufferEndSeconds) {
     const previousDate = new Date(punchTime);
     previousDate.setUTCDate(previousDate.getUTCDate() - 1);
     return formatWorkDate(previousDate);
@@ -228,7 +234,7 @@ async function generateAttendanceRecord(employeeId, workDate) {
             AND al.punch_time >= :start::timestamp
             AND al.punch_time < :end::timestamp
         )
-      WHERE attendance_records.updated_at < (
+      WHERE attendance_records.updated_at <= (
         SELECT MAX(al.created_at)
         FROM attendance_logs al
         WHERE al.employee_id = :employeeId
