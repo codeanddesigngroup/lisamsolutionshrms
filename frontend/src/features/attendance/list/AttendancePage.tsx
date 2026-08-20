@@ -22,6 +22,7 @@ import {
   ShiftDefinition,
 } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
+import axios from "axios";
 import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Clock, Cpu, Edit3, RefreshCw, RotateCcw, ShieldCheck, TimerReset, Users } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -376,17 +377,19 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const handleSyncMissingAttendance = async () => {
     setIsSyncingAttendance(true);
     try {
-      const endDate = new Date().toISOString().slice(0, 10);
       const response = await attendanceService.processMissingRecords({
-        startDate: "2026-03-01",
-        endDate,
+        startDate: date,
+        endDate: date,
       });
       const data = response.data;
       await fetchAttendance();
       showToast(`Attendance synced: ${data.synced || 0} synced, ${data.skipped || 0} skipped.`, "success");
     } catch (err) {
       console.error("Sync missing attendance error:", err);
-      showToast("Failed to sync attendance", "error");
+      const message = axios.isAxiosError(err)
+        ? String(err.response?.data?.message || err.message || "Failed to sync attendance")
+        : "Failed to sync attendance";
+      showToast(message, "error");
     } finally {
       setIsSyncingAttendance(false);
     }

@@ -309,7 +309,11 @@ export const attendanceService = {
 
 
   processMissingRecords: async (payload: { startDate?: string; endDate?: string } = {}): Promise<ApiEnvelope<ProcessMissingAttendanceResponse>> => {
-    const response = await nodeApi.post<ApiEnvelope<ProcessMissingAttendanceResponse>>("/attendance/process-missing", payload);
+    const response = await nodeApi.post<ApiEnvelope<ProcessMissingAttendanceResponse>>(
+      "/attendance/process-missing",
+      payload,
+      { timeout: 120000 },
+    );
     return response.data;
   },
   waiveLate: async (id: string | number, payload: { reason?: string; note?: string; waivedBy?: string } = {}): Promise<ApiEnvelope<NodeAttendanceRecord>> => {
