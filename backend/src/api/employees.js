@@ -12,7 +12,7 @@ const EmployeePermission = require('../models/EmployeePermission');
 const AttendanceRecords = require('../models/AttendanceRecords');
 const ShiftType = require('../models/ShiftType');
 const applyAssociations = require('../models/associations');
-const { processAttendanceRecords } = require('../services/attendanceService');
+const { syncEmployeeHistoricalAttendance } = require('../services/attendanceService');
 
 applyAssociations();
 
@@ -113,33 +113,12 @@ const serializeEmployee = (employee) => {
   };
 };
 
-function formatDate(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function getBackfillRange(months = 6) {
-  const end = new Date();
-  const start = new Date(end);
-  start.setUTCMonth(start.getUTCMonth() - months);
-
-  return {
-    startDate: formatDate(start),
-    endDate: formatDate(end),
-  };
-}
-
 function backfillEmployeeAttendance(employeeId) {
-  const { startDate, endDate } = getBackfillRange(6);
-
   setImmediate(async () => {
     try {
-      const result = await processAttendanceRecords({
-        employeeId,
-        startDate,
-        endDate,
-      });
+      const result = await syncEmployeeHistoricalAttendance(employeeId);
 
-      console.log(`Employee attendance backfill completed. employeeId=${employeeId}, processed=${result.processed}`);
+      console.log(`Employee attendance backfill started. employeeId=${employeeId}, processed=${result.processed.processed}, deviceQueries=${result.queued.length}`);
     } catch (err) {
       console.error(`Employee attendance backfill failed. employeeId=${employeeId}`, err);
     }

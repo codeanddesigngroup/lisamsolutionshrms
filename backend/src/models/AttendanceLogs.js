@@ -30,6 +30,13 @@ const AttendanceLogs = sequelize.define('AttendanceLogs', {
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: false,
+  indexes: [
+    {
+      name: 'attendance_logs_employee_punch_unique',
+      unique: true,
+      fields: ['employee_id', 'punch_time'],
+    },
+  ],
 });
 
 module.exports = AttendanceLogs;

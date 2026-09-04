@@ -2,8 +2,24 @@ const AttendanceLogs = require('../models/AttendanceLogs');
 const AttendanceRecords = require('../models/AttendanceRecords');
 const sequelize = require('../config/db');
 const { Op } = require('sequelize');
+const { getKnownDevices, queueAttendanceSync } = require('./zkCommandQueue');
 
 const LATE_CHECK_OUT_BUFFER_MINUTES = 240;
+
+function subtractUtcMonths(value, months) {
+  const result = new Date(value);
+  const originalDay = result.getUTCDate();
+  result.setUTCDate(1);
+  result.setUTCMonth(result.getUTCMonth() - months);
+  const lastDay = new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate();
+  result.setUTCDate(Math.min(originalDay, lastDay));
+  return result;
+}
+
+function getHistoricalSyncRange(now = new Date()) {
+  const endDate = new Date(now);
+  return { startDate: subtractUtcMonths(endDate, 6), endDate };
+}
 
 function formatWorkDate(date) {
   const year = date.getUTCFullYear();
@@ -291,23 +307,17 @@ async function saveAttendanceLogs(logs) {
       continue;
     }
 
-    const exists = await AttendanceLogs.findOne({
-      attributes: ['id'],
+    const [, created] = await AttendanceLogs.findOrCreate({
       where: {
         employeeId: attendance.employeeId,
         punchTime: attendance.punchTime,
       },
-    });
-
-    if (exists) {
-      skipped += 1;
-      continue;
-    }
-
-    await AttendanceLogs.create(attendance, {
+      defaults: attendance,
       fields: ['employeeId', 'punchTime', 'deviceSerial'],
     });
-    saved += 1;
+
+    if (created) saved += 1;
+    else skipped += 1;
   }
 
   return { saved, skipped };
@@ -316,11 +326,17 @@ async function saveAttendanceLogs(logs) {
 async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDate, employeeId } = {}) {
   const since = new Date(Date.now() - Number(sinceMinutes || 1440) * 60 * 1000);
   const punchTime = {};
-  if (startDate) punchTime[Op.gte] = new Date(`${startDate}T00:00:00.000Z`);
+  if (startDate) {
+    punchTime[Op.gte] = startDate instanceof Date
+      ? startDate
+      : new Date(`${startDate}T00:00:00.000Z`);
+  }
   if (endDate) {
-    const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
-    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-    punchTime[Op.lt] = endExclusive;
+    const upperBound = endDate instanceof Date
+      ? endDate
+      : new Date(`${endDate}T00:00:00.000Z`);
+    if (!(endDate instanceof Date)) upperBound.setUTCDate(upperBound.getUTCDate() + 1);
+    punchTime[endDate instanceof Date ? Op.lte : Op.lt] = upperBound;
   }
   const logs = await AttendanceLogs.findAll({
     where: {
@@ -358,6 +374,31 @@ async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDat
   };
 }
 
+async function syncEmployeeHistoricalAttendance(employeeId, now = new Date()) {
+  const deviceEmployeeId = String(employeeId || '').trim();
+  if (!deviceEmployeeId) throw new Error('Device employee ID is required');
+
+  const range = getHistoricalSyncRange(now);
+  const processed = await processAttendanceRecords({ employeeId: deviceEmployeeId, ...range });
+  const [storedDevices] = await sequelize.query(`
+    SELECT DISTINCT device_serial AS serial
+    FROM attendance_logs
+    WHERE device_serial IS NOT NULL AND device_serial <> ''
+  `);
+  const serials = new Set([
+    ...getKnownDevices().map((device) => device.serial),
+    ...storedDevices.map((device) => String(device.serial || '').trim().toUpperCase()),
+  ].filter(Boolean));
+  const queued = Array.from(serials, (serial) => queueAttendanceSync(
+    serial,
+    range.startDate,
+    range.endDate,
+    deviceEmployeeId,
+  ));
+
+  return { employeeId: deviceEmployeeId, ...range, processed, queued };
+}
+
 async function getRecentAttendanceRecords({ limit = 50, employeeId } = {}) {
   const where = {};
 
@@ -378,8 +419,10 @@ module.exports = {
   getShiftWorkDateRange,
   getWorkDateForPunch,
   getRecentAttendanceRecords,
+  getHistoricalSyncRange,
   normalizeAttendanceLog,
   processAttendanceRecords,
   saveAttendanceLogs,
+  syncEmployeeHistoricalAttendance,
   updateDailyAttendance,
 };

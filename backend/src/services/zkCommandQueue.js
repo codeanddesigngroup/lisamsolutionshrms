@@ -7,7 +7,12 @@ function normalizeSerial(serial) {
 }
 
 function formatDeviceTimestamp(value, endOfDay = false) {
-  return `${value} ${endOfDay ? '23:59:59' : '00:00:00'}`;
+  if (value instanceof Date) return value.toISOString().slice(0, 19).replace('T', ' ');
+  const stringValue = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(stringValue)) {
+    return stringValue.slice(0, 19).replace('T', ' ');
+  }
+  return `${stringValue} ${endOfDay ? '23:59:59' : '00:00:00'}`;
 }
 
 function registerDevice(serial) {
@@ -29,15 +34,17 @@ function getKnownDevices() {
   return Array.from(knownDevices.values());
 }
 
-function queueAttendanceSync(serial, startDate, endDate) {
+function queueAttendanceSync(serial, startDate, endDate, employeeId = null) {
   const deviceSerial = normalizeSerial(serial);
   if (!deviceSerial) throw new Error('Device serial is required');
 
   nextCommandId += 1;
   const commandId = nextCommandId;
-  const command = `C:${commandId}:DATA QUERY ATTLOG StartTime=${formatDeviceTimestamp(startDate)} EndTime=${formatDeviceTimestamp(endDate, true)}`;
+  const deviceEmployeeId = String(employeeId || '').trim();
+  const employeeFilter = deviceEmployeeId ? ` Pin=${deviceEmployeeId}` : '';
+  const command = `C:${commandId}:DATA QUERY ATTLOG StartTime=${formatDeviceTimestamp(startDate)} EndTime=${formatDeviceTimestamp(endDate, true)}${employeeFilter}`;
   const commands = pendingCommands.get(deviceSerial) || [];
-  commands.push({ commandId, command, startDate, endDate, queuedAt: new Date() });
+  commands.push({ commandId, command, startDate, endDate, employeeId: deviceEmployeeId || null, queuedAt: new Date() });
   pendingCommands.set(deviceSerial, commands);
 
   return commands[commands.length - 1];
