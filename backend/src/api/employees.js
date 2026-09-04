@@ -113,18 +113,6 @@ const serializeEmployee = (employee) => {
   };
 };
 
-function backfillEmployeeAttendance(employeeId) {
-  setImmediate(async () => {
-    try {
-      const result = await syncEmployeeHistoricalAttendance(employeeId);
-
-      console.log(`Employee attendance backfill started. employeeId=${employeeId}, processed=${result.processed.processed}, deviceQueries=${result.queued.length}`);
-    } catch (err) {
-      console.error(`Employee attendance backfill failed. employeeId=${employeeId}`, err);
-    }
-  });
-}
-
 router.post('/', async (req, res, next) => {
   const transaction = await sequelize.transaction();
   let transactionCommitted = false;
@@ -152,13 +140,29 @@ router.post('/', async (req, res, next) => {
 
     await transaction.commit();
     transactionCommitted = true;
-    backfillEmployeeAttendance(employee.employee_id);
+    let attendanceSync;
+    try {
+      const syncResult = await syncEmployeeHistoricalAttendance(employee.employee_id);
+      attendanceSync = {
+        status: syncResult.queued.length > 0 ? 'queued' : 'no_device_found',
+        employeeId: syncResult.employeeId,
+        startDate: syncResult.startDate,
+        endDate: syncResult.endDate,
+        processedFromStoredLogs: syncResult.processed.processed,
+        deviceQueries: syncResult.queued.length,
+      };
+      console.log(`Employee attendance backfill started. employeeId=${employee.employee_id}, processed=${syncResult.processed.processed}, deviceQueries=${syncResult.queued.length}`);
+    } catch (syncError) {
+      attendanceSync = { status: 'failed', employeeId: employee.employee_id, error: syncError.message };
+      console.error(`Employee attendance backfill failed. employeeId=${employee.employee_id}`, syncError);
+    }
     const createdEmployee = employee.toJSON();
     delete createdEmployee.password;
 
     return res.status(201).json({
       success: true,
       message: 'Employee created successfully',
+      attendanceSync,
       data: serializeEmployee({
         ...createdEmployee,
         permission_record: {
@@ -244,6 +248,35 @@ router.get('/:employeeId/attendance', async (req, res, next) => {
       count: records.length,
       employee: employee || null,
       data: records,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post('/:id/sync-attendance', async (req, res, next) => {
+  try {
+    const employee = await Employee.findByPk(req.params.id, {
+      attributes: ['id', 'company_id', 'employee_id'],
+    });
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const result = await syncEmployeeHistoricalAttendance(employee.employee_id);
+    return res.status(202).json({
+      success: true,
+      message: result.queued.length > 0
+        ? 'Historical attendance synchronization queued'
+        : 'Stored punches processed, but no attendance device was discovered',
+      data: {
+        status: result.queued.length > 0 ? 'queued' : 'no_device_found',
+        employeeId: result.employeeId,
+        startDate: result.startDate,
+        endDate: result.endDate,
+        processedFromStoredLogs: result.processed.processed,
+        deviceQueries: result.queued.length,
+      },
     });
   } catch (err) {
     return next(err);

@@ -112,11 +112,18 @@ async function getEmployeeAttendanceProfile(employeeId) {
     `
       SELECT
         e.company_id,
+        e.employee_id,
         s.start_time,
         s.end_time
       FROM employees e
       LEFT JOIN shifts s ON s.id = e.shift_type_id
       WHERE e.employee_id = :employeeId
+         OR (
+           e.employee_id ~ '^[0-9]+$'
+           AND :employeeId ~ '^[0-9]+$'
+           AND COALESCE(NULLIF(LTRIM(e.employee_id, '0'), ''), '0') =
+               COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
+         )
       LIMIT 2
     `,
     { replacements: { employeeId: String(employeeId) } },
@@ -201,6 +208,7 @@ async function generateAttendanceRecord(employeeId, workDate) {
   }
 
   const companyId = employees[0].company_id;
+  const applicationEmployeeId = employees[0].employee_id;
   const shift = {
     start_time: employees[0].start_time,
     end_time: employees[0].end_time,
@@ -210,7 +218,15 @@ async function generateAttendanceRecord(employeeId, workDate) {
     `
       SELECT to_char(punch_time, 'YYYY-MM-DD HH24:MI:SS') AS "punchTime"
       FROM attendance_logs
-      WHERE employee_id = :employeeId
+      WHERE (
+          employee_id = :employeeId
+          OR (
+            employee_id ~ '^[0-9]+$'
+            AND :employeeId ~ '^[0-9]+$'
+            AND COALESCE(NULLIF(LTRIM(employee_id, '0'), ''), '0') =
+                COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
+          )
+        )
         AND punch_time >= :start::timestamp
         AND punch_time < :end::timestamp
       ORDER BY punch_time ASC
@@ -237,7 +253,7 @@ async function generateAttendanceRecord(employeeId, workDate) {
       INSERT INTO attendance_records
         (company_id, employee_id, work_date, check_in, check_out, worked_hours, created_at, updated_at)
       VALUES
-        (:companyId, :employeeId, :workDate, :checkIn::timestamp, :checkOut::timestamp, :workedHours, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        (:companyId, :applicationEmployeeId, :workDate, :checkIn::timestamp, :checkOut::timestamp, :workedHours, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT (company_id, employee_id, work_date)
       DO UPDATE SET
         check_in = EXCLUDED.check_in,
@@ -246,7 +262,15 @@ async function generateAttendanceRecord(employeeId, workDate) {
         updated_at = (
           SELECT MAX(al.created_at)
           FROM attendance_logs al
-          WHERE al.employee_id = :employeeId
+          WHERE (
+              al.employee_id = :employeeId
+              OR (
+                al.employee_id ~ '^[0-9]+$'
+                AND :employeeId ~ '^[0-9]+$'
+                AND COALESCE(NULLIF(LTRIM(al.employee_id, '0'), ''), '0') =
+                    COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
+              )
+            )
             AND al.punch_time >= :start::timestamp
             AND al.punch_time < :end::timestamp
         )
@@ -259,6 +283,7 @@ async function generateAttendanceRecord(employeeId, workDate) {
       replacements: {
         companyId,
         employeeId,
+        applicationEmployeeId,
         workDate,
         checkIn: summary.checkIn,
         checkOut: summary.checkOut,
@@ -269,7 +294,7 @@ async function generateAttendanceRecord(employeeId, workDate) {
     },
   );
 
-  return { companyId, employeeId, workDate, punches: punches.length, ...summary };
+  return { companyId, employeeId: applicationEmployeeId, workDate, punches: punches.length, ...summary };
 }
 
 async function updateDailyAttendance(employeeId, punchTime) {
@@ -338,9 +363,25 @@ async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDat
     if (!(endDate instanceof Date)) upperBound.setUTCDate(upperBound.getUTCDate() + 1);
     punchTime[endDate instanceof Date ? Op.lte : Op.lt] = upperBound;
   }
+  let matchingEmployeeIds = null;
+  if (employeeId) {
+    const [matches] = await sequelize.query(`
+      SELECT DISTINCT employee_id AS "employeeId"
+      FROM attendance_logs
+      WHERE employee_id = :employeeId
+         OR (
+           employee_id ~ '^[0-9]+$'
+           AND :employeeId ~ '^[0-9]+$'
+           AND COALESCE(NULLIF(LTRIM(employee_id, '0'), ''), '0') =
+               COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
+         )
+    `, { replacements: { employeeId: String(employeeId) } });
+    matchingEmployeeIds = matches.map((match) => String(match.employeeId));
+  }
+
   const logs = await AttendanceLogs.findAll({
     where: {
-      ...(employeeId ? { employeeId: String(employeeId) } : {}),
+      ...(employeeId ? { employeeId: { [Op.in]: matchingEmployeeIds } } : {}),
       ...(Object.keys(punchTime).length > 0 ? { punchTime } : { created_at: { [Op.gte]: since } }),
     },
     order: [['employeeId', 'ASC'], ['punchTime', 'ASC']],
