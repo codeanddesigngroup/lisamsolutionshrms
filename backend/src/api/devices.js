@@ -3,6 +3,7 @@ const router = express.Router();
 
 const sequelize = require('../config/db');
 const { getKnownDevices, queueAttendanceSync } = require('../services/zkCommandQueue');
+const { processAttendanceRecords } = require('../services/attendanceService');
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -84,7 +85,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.post('/:serial/sync-attendance', (req, res) => {
+router.post('/:serial/sync-attendance', async (req, res, next) => {
   const defaults = getDefaultSyncRange();
   const startDate = String(req.body?.startDate || defaults.startDate);
   const endDate = String(req.body?.endDate || defaults.endDate);
@@ -96,12 +97,30 @@ router.post('/:serial/sync-attendance', (req, res) => {
     });
   }
 
-  const queued = queueAttendanceSync(req.params.serial, startDate, endDate);
-  return res.status(202).json({
-    success: true,
-    message: 'Attendance sync queued. The device will receive it on its next getrequest poll.',
-    data: queued,
-  });
+  try {
+    // Build attendance immediately from historical punches already received.
+    // The queued device query then supplies any punches not stored locally yet;
+    // the iClock upload handler processes that returned batch again idempotently.
+    const processed = await processAttendanceRecords({ startDate, endDate, missingOnly: true });
+    const synced = processed.records.filter((record) => !record.skipped).length;
+    const skipped = processed.records.length - synced;
+    const queued = queueAttendanceSync(req.params.serial, startDate, endDate);
+
+    return res.status(202).json({
+      success: true,
+      message: 'Stored punches processed and device attendance refresh queued.',
+      data: {
+        startDate,
+        endDate,
+        processed: processed.processed,
+        synced,
+        skipped,
+        command: queued,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
 });
 
 module.exports = router;

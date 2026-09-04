@@ -77,6 +77,11 @@ export default function DevicesPage() {
         devicesToSync.map((device) => api.post(`/devices/${encodeURIComponent(device.serial)}/sync-attendance`)),
       );
       const queued = results.filter((result) => result.status === "fulfilled").length;
+      const syncedDays = results.reduce((total, result) => (
+        result.status === "fulfilled"
+          ? total + Number(result.value.data?.data?.synced || 0)
+          : total
+      ), 0);
 
       if (queued === 0) {
         showToast("Failed to queue attendance sync", "error");
@@ -85,10 +90,11 @@ export default function DevicesPage() {
 
       showToast(
         queued === devicesToSync.length
-          ? `Attendance sync queued for ${queued} device${queued === 1 ? "" : "s"}`
+          ? `${syncedDays} stored attendance day${syncedDays === 1 ? "" : "s"} processed; refresh queued for ${queued} device${queued === 1 ? "" : "s"}`
           : `Attendance sync queued for ${queued} of ${devicesToSync.length} devices`,
         queued === devicesToSync.length ? "success" : "error",
       );
+      await fetchDevices();
     } catch (error) {
       console.error("Attendance Sync Error:", error);
       showToast("Failed to queue attendance sync", "error");

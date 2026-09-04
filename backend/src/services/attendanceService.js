@@ -348,7 +348,12 @@ async function saveAttendanceLogs(logs) {
   return { saved, skipped };
 }
 
-async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDate, employeeId } = {}) {
+function comparableEmployeeId(value) {
+  const employeeId = String(value || '').trim();
+  return /^\d+$/.test(employeeId) ? String(Number(employeeId)) : employeeId;
+}
+
+async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDate, employeeId, missingOnly = false } = {}) {
   const since = new Date(Date.now() - Number(sinceMinutes || 1440) * 60 * 1000);
   const punchTime = {};
   if (startDate) {
@@ -401,6 +406,24 @@ async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDat
       employeeId: log.employeeId,
       workDate,
     });
+  }
+
+  if (missingOnly && workKeys.size > 0) {
+    const workDates = Array.from(workKeys.values(), (item) => item.workDate);
+    const existingRecords = await AttendanceRecords.findAll({
+      attributes: ['employeeId', 'workDate'],
+      where: { workDate: { [Op.between]: [workDates.sort()[0], workDates.sort().at(-1)] } },
+      raw: true,
+    });
+    const existingKeys = new Set(existingRecords.map((record) => (
+      `${comparableEmployeeId(record.employeeId)}:${record.workDate}`
+    )));
+
+    for (const [key, item] of workKeys) {
+      if (existingKeys.has(`${comparableEmployeeId(item.employeeId)}:${item.workDate}`)) {
+        workKeys.delete(key);
+      }
+    }
   }
 
   const records = [];
