@@ -41,8 +41,10 @@ function queueAttendanceSync(serial, startDate, endDate, employeeId = null) {
   nextCommandId += 1;
   const commandId = nextCommandId;
   const deviceEmployeeId = String(employeeId || '').trim();
-  const employeeFilter = deviceEmployeeId ? ` Pin=${deviceEmployeeId}` : '';
-  const command = `C:${commandId}:DATA QUERY ATTLOG StartTime=${formatDeviceTimestamp(startDate)} EndTime=${formatDeviceTimestamp(endDate, true)}${employeeFilter}`;
+  // DATA QUERY ATTLOG filtering support differs between iClock firmwares.
+  // Keep employeeId as application metadata and use the protocol's supported
+  // date-range query; attendanceService matches returned punches by employee ID.
+  const command = `C:${commandId}:DATA QUERY ATTLOG StartTime=${formatDeviceTimestamp(startDate)} EndTime=${formatDeviceTimestamp(endDate, true)}`;
   const commands = pendingCommands.get(deviceSerial) || [];
   commands.push({ commandId, command, startDate, endDate, employeeId: deviceEmployeeId || null, queuedAt: new Date() });
   pendingCommands.set(deviceSerial, commands);

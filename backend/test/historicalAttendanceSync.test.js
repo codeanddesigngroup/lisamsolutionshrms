@@ -16,13 +16,13 @@ test('historical range clamps dates at the end of shorter months', () => {
   assert.equal(range.startDate.toISOString(), '2026-02-28T08:00:00.000Z');
 });
 
-test('device query uses exact timestamps and the new device employee ID', () => {
+test('device query uses exact timestamps and tracks the new device employee ID', () => {
   const serial = 'TEST-SERIAL';
   queueAttendanceSync(serial, new Date('2026-03-04T12:34:56.000Z'), new Date('2026-09-04T12:34:56.000Z'), 'EMP-42');
   const queued = takeNextCommand(serial);
   assert.match(queued.command, /StartTime=2026-03-04 12:34:56/);
   assert.match(queued.command, /EndTime=2026-09-04 12:34:56/);
-  assert.match(queued.command, /Pin=EMP-42$/);
+  assert.doesNotMatch(queued.command, /\bPin=/);
   assert.equal(queued.employeeId, 'EMP-42');
 });
 
