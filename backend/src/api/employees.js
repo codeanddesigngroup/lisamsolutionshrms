@@ -149,6 +149,7 @@ router.post('/', async (req, res, next) => {
         startDate: syncResult.startDate,
         endDate: syncResult.endDate,
         processedFromStoredLogs: syncResult.processed.processed,
+        syncedFromStoredLogs: syncResult.processed.records.filter((record) => !record.skipped).length,
         deviceQueries: syncResult.queued.length,
       };
       console.log(`Employee attendance backfill started. employeeId=${employee.employee_id}, processed=${syncResult.processed.processed}, deviceQueries=${syncResult.queued.length}`);
@@ -275,6 +276,7 @@ router.post('/:id/sync-attendance', async (req, res, next) => {
         startDate: result.startDate,
         endDate: result.endDate,
         processedFromStoredLogs: result.processed.processed,
+        syncedFromStoredLogs: result.processed.records.filter((record) => !record.skipped).length,
         deviceQueries: result.queued.length,
       },
     });

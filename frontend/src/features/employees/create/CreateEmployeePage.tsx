@@ -228,7 +228,17 @@ export default function CreateEmployeePage() {
 
       form.reset();
       setPermissionState(initialPermissionState);
-      showToast("Employee created successfully.", "success");
+      const attendanceSync = result?.attendanceSync;
+      const processedDays = Number(attendanceSync?.syncedFromStoredLogs || 0);
+      if (attendanceSync?.status === "failed") {
+        showToast(`Employee created, but attendance sync failed: ${attendanceSync.error || "unknown error"}`, "error");
+      } else if (processedDays > 0) {
+        showToast(`Employee created. ${processedDays} historical attendance day${processedDays === 1 ? "" : "s"} imported.`, "success");
+      } else if (attendanceSync?.status === "queued") {
+        showToast("Employee created. Six-month device attendance sync is queued.", "info");
+      } else {
+        showToast("Employee created, but no attendance device was found for historical sync.", "info");
+      }
       router.push("/employees");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Failed to create employee.", "error");
