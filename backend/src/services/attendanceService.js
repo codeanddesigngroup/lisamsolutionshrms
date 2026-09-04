@@ -356,6 +356,7 @@ function comparableEmployeeId(value) {
 async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDate, employeeId, missingOnly = false } = {}) {
   const since = new Date(Date.now() - Number(sinceMinutes || 1440) * 60 * 1000);
   const punchTime = {};
+  const hasPunchTimeRange = Boolean(startDate || endDate);
   if (startDate) {
     punchTime[Op.gte] = startDate instanceof Date
       ? startDate
@@ -387,7 +388,7 @@ async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDat
   const logs = await AttendanceLogs.findAll({
     where: {
       ...(employeeId ? { employeeId: { [Op.in]: matchingEmployeeIds } } : {}),
-      ...(Object.keys(punchTime).length > 0 ? { punchTime } : { created_at: { [Op.gte]: since } }),
+      ...(hasPunchTimeRange ? { punchTime } : { created_at: { [Op.gte]: since } }),
     },
     order: [['employeeId', 'ASC'], ['punchTime', 'ASC']],
   });
