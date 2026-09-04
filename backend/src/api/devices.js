@@ -104,6 +104,9 @@ router.post('/:serial/sync-attendance', async (req, res, next) => {
     const processed = await processAttendanceRecords({ startDate, endDate, missingOnly: true });
     const synced = processed.records.filter((record) => !record.skipped).length;
     const skipped = processed.records.length - synced;
+    const skippedRecords = processed.records
+      .filter((record) => record.skipped)
+      .map(({ employeeId, workDate, reason, punches }) => ({ employeeId, workDate, reason, punches }));
     const queued = queueAttendanceSync(req.params.serial, startDate, endDate);
 
     return res.status(202).json({
@@ -115,6 +118,7 @@ router.post('/:serial/sync-attendance', async (req, res, next) => {
         processed: processed.processed,
         synced,
         skipped,
+        skippedRecords,
         command: queued,
       },
     });

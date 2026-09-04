@@ -82,17 +82,26 @@ export default function DevicesPage() {
           ? total + Number(result.value.data?.data?.synced || 0)
           : total
       ), 0);
+      const skippedRecords = results.flatMap((result) => (
+        result.status === "fulfilled" && Array.isArray(result.value.data?.data?.skippedRecords)
+          ? result.value.data.data.skippedRecords
+          : []
+      ));
 
       if (queued === 0) {
         showToast("Failed to queue attendance sync", "error");
         return;
       }
 
+      const firstSkip = skippedRecords[0];
       showToast(
+        syncedDays === 0 && firstSkip
+          ? `Attendance not generated for device ID ${firstSkip.employeeId} on ${firstSkip.workDate}: ${firstSkip.reason}`
+          :
         queued === devicesToSync.length
           ? `${syncedDays} stored attendance day${syncedDays === 1 ? "" : "s"} processed; refresh queued for ${queued} device${queued === 1 ? "" : "s"}`
           : `Attendance sync queued for ${queued} of ${devicesToSync.length} devices`,
-        queued === devicesToSync.length ? "success" : "error",
+        syncedDays === 0 && firstSkip ? "error" : queued === devicesToSync.length ? "success" : "error",
       );
       await fetchDevices();
     } catch (error) {
