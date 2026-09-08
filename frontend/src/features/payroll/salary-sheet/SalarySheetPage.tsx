@@ -10,7 +10,12 @@ import { useToast } from "@/context/ToastContext";
 import api from "@/lib/api";
 import { employeeNameOf, formatCurrency, monthName, toNumber, type PayrollRecord } from "@/lib/payroll-utils";
 
+import MultipleAmountField from './MultipleAmountField';
+import { defaultTemplates, entryTotal, fieldForDepartment, readLocal, templateKey, type SalaryBreakdowns, type SalaryEntry, type SalaryTemplate } from '@/lib/salary-templates';
+
+type ManualField = Exclude<keyof ManualValues, 'breakdowns'>;
 type ManualValues = {
+  breakdowns?: SalaryBreakdowns;
   bankAccount: string;
   employmentType: string;
   halfDays: number;
@@ -34,13 +39,14 @@ type ManualValues = {
 type SheetRow = ManualValues & {
   id: string;
   employeeName: string;
+  departmentName: string;
   basicSalary: number;
   presentDays: number;
   absentDays: number;
 };
 
 const years = [2026, 2025, 2024, 2023];
-const numberFields: (keyof ManualValues)[] = ["halfDays", "halfDayDeduction", "casualLeaves", "sickLeaves", "lateDays", "lateDeduction", "absenceDeduction", "penalties", "loanAdvance", "transportation", "parking", "bankCharges", "attendanceBonus", "commission", "monthlySpiffs", "weeklySpiffs"];
+const numberFields: (ManualField)[] = ["halfDays", "halfDayDeduction", "casualLeaves", "sickLeaves", "lateDays", "lateDeduction", "absenceDeduction", "penalties", "loanAdvance", "transportation", "parking", "bankCharges", "attendanceBonus", "commission", "monthlySpiffs", "weeklySpiffs"];
 
 const headers = [
   "S.No", "Name", "Bank Account No", "Employment Type", "Basic Salary", "Days Present", "Half Day",
@@ -84,12 +90,14 @@ export default function SalarySheetPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [loading, setLoading] = useState(true);
+  const [templates, setTemplates] = useState<SalaryTemplate[]>(defaultTemplates);
   const [slips, setSlips] = useState<PayrollRecord[]>([]);
   const [manual, setManual] = useState<Record<string, ManualValues>>({});
   const [search, setSearch] = useState("");
 
   const loadSheet = useCallback(async () => {
     setLoading(true);
+    setTemplates(readLocal(templateKey, defaultTemplates));
     try {
       const response = await api.get(`/payroll?month=${month}&year=${year}`);
       const records: PayrollRecord[] = response.data.data || [];
@@ -122,6 +130,7 @@ export default function SalarySheetPage() {
     const values = manual[id] || blankManualValues(slip);
     return {
       id, ...values,
+      departmentName: String(nested(nested(slip.employee || slip.user)?.department)?.name || nested(slip.employee || slip.user)?.department_name || ''),
       employeeName: employeeNameOf((slip.employee || slip.user) as PayrollRecord),
       basicSalary: toNumber(slip.monthly_salary || slip.basic_salary),
       presentDays: toNumber(slip.present_days),
@@ -134,8 +143,17 @@ export default function SalarySheetPage() {
     return { basic: sum.basic + row.basicSalary, deductions: sum.deductions + row.halfDayDeduction + row.lateDeduction + row.absenceDeduction + row.penalties + row.loanAdvance + row.parking, payable: sum.payable + calculated.totalSalary, grand: sum.grand + calculated.totalAmount };
   }, { basic: 0, deductions: 0, payable: 0, grand: 0 }), [rows]);
 
-  const update = (id: string, field: keyof ManualValues, value: string) => {
+  const update = (id: string, field: ManualField, value: string) => {
     setManual((current) => ({ ...current, [id]: { ...(current[id] || {} as ManualValues), [field]: numberFields.includes(field) ? toNumber(value) : value } }));
+  };
+
+  const updateEntries = (id: string, field: ManualField, entries: SalaryEntry[]) => {
+    const next = { ...manual, [id]: { ...manual[id], [field]: entryTotal(entries), breakdowns: { ...manual[id]?.breakdowns, [field]: entries } } };
+    try {
+      const stored = JSON.parse(localStorage.getItem('salary-sheet-manual-v1') || '{}');
+      localStorage.setItem('salary-sheet-manual-v1', JSON.stringify({ ...stored, ...next }));
+      setManual(next);
+    } catch { showToast('Could not save the breakdown in this browser.', 'error'); }
   };
 
   const exportCsv = () => {
@@ -162,6 +180,7 @@ export default function SalarySheetPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={loadSheet} className="h-10 px-3"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh</Button>
             <Link href="/payroll/salary-sheet/create"><Button className="h-10 px-4"><FileSpreadsheet className="h-4 w-4" /> Create Salary Sheet</Button></Link>
+            <Link href="/payroll/salary-sheet/templates"><Button className="h-10 px-4">Salary Sheet Templates</Button></Link>
             <Button onClick={exportCsv} disabled={!rows.length} className="h-10 px-4"><Download className="h-4 w-4" /> Export CSV</Button>
           </div>
         </div>
@@ -188,7 +207,7 @@ export default function SalarySheetPage() {
             <table className="min-w-[3600px] border-collapse text-[10px]">
               <thead><tr className="bg-slate-800 text-white">{headers.map((header, index) => <th key={header} className={`border-r border-slate-700 px-2 py-3 text-left font-black uppercase tracking-wide ${index === 1 ? "sticky left-0 z-20 min-w-44 bg-slate-800" : "min-w-28"}`}>{header}</th>)}</tr></thead>
               <tbody>
-                {loading ? <tr><td colSpan={headers.length} className="py-16 text-center font-black uppercase tracking-widest text-gray-400">Loading salary sheet...</td></tr> : rows.length ? rows.map((row, index) => <SalaryRow key={row.id} row={row} index={index} update={update} />) : <tr><td colSpan={headers.length} className="py-16 text-center font-black uppercase tracking-widest text-gray-400">No payroll records found for this period.</td></tr>}
+                {loading ? <tr><td colSpan={headers.length} className="py-16 text-center font-black uppercase tracking-widest text-gray-400">Loading salary sheet...</td></tr> : rows.length ? rows.map((row, index) => <SalaryRow key={row.id} row={row} index={index} update={update} updateEntries={updateEntries} templates={templates} />) : <tr><td colSpan={headers.length} className="py-16 text-center font-black uppercase tracking-widest text-gray-400">No payroll records found for this period.</td></tr>}
               </tbody>
               {!!rows.length && <tfoot><tr className="bg-slate-50 font-black text-slate-800"><td className="px-2 py-4" /><td className="sticky left-0 bg-slate-50 px-2 py-4 uppercase">Totals</td><td colSpan={2} /><MoneyCell value={totals.basic} /><td colSpan={9} /><MoneyCell value={totals.deductions} /><td colSpan={8} /><MoneyCell value={totals.payable} /><td /><MoneyCell value={totals.grand} /></tr></tfoot>}
             </table>
@@ -199,9 +218,13 @@ export default function SalarySheetPage() {
   );
 }
 
-function SalaryRow({ row, index, update }: { row: SheetRow; index: number; update: (id: string, field: keyof ManualValues, value: string) => void }) {
+function SalaryRow({ row, index, update, updateEntries, templates }: { row: SheetRow; index: number; update: (id: string, field: ManualField, value: string) => void; updateEntries: (id: string, field: ManualField, entries: SalaryEntry[]) => void; templates: SalaryTemplate[] }) {
   const calculated = calculate(row);
-  const manualInput = (field: keyof ManualValues, type: "text" | "number" = "number") => <input type={type} min={type === "number" ? 0 : undefined} value={row[field]} onChange={(event) => update(row.id, field, event.target.value)} className="h-8 w-full min-w-24 rounded-lg border border-blue-100 bg-blue-50/60 px-2 font-bold text-slate-700 outline-none focus:border-primary focus:bg-white" />;
+  const manualInput = (field: ManualField, type: "text" | "number" = "number") => {
+    const config = fieldForDepartment(templates, row.departmentName, field);
+    if (type !== 'text' && (field === 'penalties' || config?.multiple || row.breakdowns?.[field])) return <MultipleAmountField label={`${row.employeeName} · ${config?.label || field}`} value={Number(row[field])} entries={row.breakdowns?.[field]} options={config?.options} onChange={entries => updateEntries(row.id, field, entries)} />;
+    return <input type={type} min={type === "number" ? 0 : undefined} value={row[field]} onChange={(event) => update(row.id, field, event.target.value)} className="h-8 w-full min-w-24 rounded-lg border border-blue-100 bg-blue-50/60 px-2 font-bold text-slate-700 outline-none focus:border-primary focus:bg-white" />;
+  };
   return <tr className="border-b border-gray-100 hover:bg-slate-50/60">
     <td className="px-2 py-2 font-black text-gray-400">{index + 1}</td><td className="sticky left-0 z-10 bg-white px-2 py-2 font-black text-gray-900">{row.employeeName}</td>
     <td className="px-2 py-2">{manualInput("bankAccount", "text")}</td><td className="px-2 py-2">{manualInput("employmentType", "text")}</td><MoneyCell value={row.basicSalary} /><NumberCell value={row.presentDays} />

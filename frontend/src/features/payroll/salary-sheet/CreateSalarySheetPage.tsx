@@ -12,7 +12,11 @@ import api from "@/lib/api";
 import { departmentIdOf, employeeIdOf, employeeNameOf, getEmployeeMonthlySalary, getMonthRange, monthName, toNumber, type PayrollRecord } from "@/lib/payroll-utils";
 import { calculateAttendanceStatus, leaveUnits, type HRRecord, type ShiftDefinition } from "@/lib/hr-utils";
 
+import MultipleAmountField from './MultipleAmountField';
+import { defaultTemplates, entryTotal, fieldForDepartment, readLocal, templateKey, type SalaryBreakdowns, type SalaryTemplate } from '@/lib/salary-templates';
+
 type FormState = {
+  breakdowns?: SalaryBreakdowns;
   employeeId: string; bankAccount: string; employmentType: string; basicSalary: number; presentDays: number;
   halfDays: number; halfDayDeduction: number; casualLeaves: number; sickLeaves: number; lateDays: number;
   lateDeduction: number; absentDays: number; absenceDeduction: number; penalties: number; loanAdvance: number;
@@ -20,7 +24,7 @@ type FormState = {
   monthlySpiffs: number; weeklySpiffs: number;
 };
 
-type EditableField = Exclude<keyof FormState, "employeeId">;
+type EditableField = Exclude<keyof FormState, "employeeId" | "breakdowns">;
 
 const now = new Date();
 const inputClass = "h-9 w-32 rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-bold text-gray-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10";
@@ -76,12 +80,14 @@ export default function CreateSalarySheetPage() {
   const [employees, setEmployees] = useState<PayrollRecord[]>([]);
   const [salaryRecords, setSalaryRecords] = useState<PayrollRecord[]>([]);
   const [cycles, setCycles] = useState<PayrollRecord[]>([]);
+  const [templates, setTemplates] = useState<SalaryTemplate[]>(defaultTemplates);
   const [rows, setRows] = useState<FormState[]>([]);
   const [loading, setLoading] = useState(true);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    setTemplates(readLocal(templateKey, defaultTemplates));
     const load = async () => {
       const results = await Promise.allSettled([api.get("/departments"), api.get("/employees"), api.get("/employee-salaries"), api.get("/payroll-cycles")]);
       if (results[0].status === "fulfilled") setDepartments(recordsFromResponse(results[0].value.data));
@@ -177,6 +183,7 @@ export default function CreateSalarySheetPage() {
         const slip = slips.find((item) => String(item.employee_id || item.user_id || employeeIdOf((item.employee || item.user) as PayrollRecord)) === row.employeeId);
         if (!slip?.id) return;
         saved[String(slip.id)] = {
+          breakdowns: row.breakdowns,
           bankAccount: row.bankAccount, employmentType: row.employmentType, halfDays: row.halfDays,
           halfDayDeduction: row.halfDayDeduction, casualLeaves: row.casualLeaves, sickLeaves: row.sickLeaves,
           lateDays: row.lateDays, lateDeduction: row.lateDeduction, absentDays: row.absentDays,
@@ -202,7 +209,11 @@ export default function CreateSalarySheetPage() {
     </div></Card>
     <Card><div className="mb-4 flex items-center justify-between"><h2 className="text-xs font-black uppercase tracking-widest text-gray-800">Employee Salary Rows</h2>{attendanceLoading && <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Loading employee attendance...</span>}</div>
       <div className="overflow-x-auto"><table className="min-w-max border-separate border-spacing-0 text-left"><thead><tr><th className="sticky left-0 z-20 border-b bg-gray-50 px-3 py-3 text-[9px] font-black uppercase tracking-wider text-gray-500">Employee</th>{fields.map((field) => <Fragment key={field.key}><th className="border-b bg-gray-50 px-2 py-3 text-[9px] font-black uppercase tracking-wider text-gray-500">{field.label}{field.attendance && <span className="ml-1 text-blue-500">*</span>}</th>{field.key === "attendanceBonus" && <th className="border-b bg-emerald-50 px-3 py-3 text-[9px] font-black uppercase tracking-wider text-emerald-700">Net Basic Salary</th>}{field.key === "monthlySpiffs" && <th className="border-b bg-emerald-50 px-3 py-3 text-[9px] font-black uppercase tracking-wider text-emerald-700">Total Salary (Payable)</th>}</Fragment>)}<th className="border-b bg-emerald-50 px-3 py-3 text-[9px] font-black uppercase tracking-wider text-emerald-700">Total Amount</th></tr></thead>
-      <tbody>{rows.map((row, index) => { const employee = employees.find((item) => String(item.id) === row.employeeId); const totals = totalsFor(row); return <tr key={row.employeeId}><td className="sticky left-0 z-10 min-w-44 border-b bg-white px-3 py-2 text-xs font-black text-gray-800">{employeeNameOf(employee)}</td>{fields.map((field) => <Fragment key={field.key}><td className="border-b px-2 py-2"><input required type={field.type || "number"} min={field.type === "text" ? undefined : 0} step={field.type === "text" ? undefined : "0.01"} value={row[field.key]} onChange={(event) => updateRow(index, field.key, event.target.value)} className={inputClass} /></td>{field.key === "attendanceBonus" && <CalculatedCell value={totals.netBasic} />}{field.key === "monthlySpiffs" && <CalculatedCell value={totals.totalSalary} />}</Fragment>)}<CalculatedCell value={totals.totalAmount} /></tr>; })}</tbody></table></div>
+      <tbody>{rows.map((row, index) => { const employee = employees.find((item) => String(item.id) === row.employeeId); const totals = totalsFor(row); return <tr key={row.employeeId}><td className="sticky left-0 z-10 min-w-44 border-b bg-white px-3 py-2 text-xs font-black text-gray-800">{employeeNameOf(employee)}</td>{fields.map((field) => <Fragment key={field.key}><td className="border-b px-2 py-2">{(() => {
+  const department = departments.find(item => String(item.id) === departmentId);
+  const config = fieldForDepartment(templates, String(department?.name || department?.title || ''), field.key);
+  return field.type !== 'text' && (field.key === 'penalties' || config?.multiple || row.breakdowns?.[field.key]) ? <MultipleAmountField label={`${employeeNameOf(employee)} · ${field.label}`} value={Number(row[field.key])} entries={row.breakdowns?.[field.key]} options={config?.options} onChange={entries => setRows(items => items.map((item, i) => i === index ? { ...item, [field.key]: entryTotal(entries), breakdowns: { ...item.breakdowns, [field.key]: entries } } : item))} /> : <input required type={field.type || "number"} min={field.type === "text" ? undefined : 0} step={field.type === "text" ? undefined : "0.01"} value={row[field.key]} onChange={(event) => updateRow(index, field.key, event.target.value)} className={inputClass} />;
+})()}</td>{field.key === "attendanceBonus" && <CalculatedCell value={totals.netBasic} />}{field.key === "monthlySpiffs" && <CalculatedCell value={totals.totalSalary} />}</Fragment>)}<CalculatedCell value={totals.totalAmount} /></tr>; })}</tbody></table></div>
       {!attendanceLoading && departmentId && !rows.length && <p className="py-12 text-center text-xs font-black uppercase tracking-widest text-gray-400">No employees found in this department.</p>}
       {!departmentId && <p className="py-12 text-center text-xs font-black uppercase tracking-widest text-gray-400">Select a department to load employees.</p>}
     </Card>
