@@ -40,6 +40,7 @@ export default function AttendanceIdentityCard({
               </div>
             </div>
           </div>
+          
           <div className="text-right">
              <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mb-1">System ID</p>
              <p className="text-xl font-black text-gray-800 leading-none">#{biometricId}</p>
