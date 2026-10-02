@@ -46,6 +46,48 @@ const getShiftForAttendanceRow = (row: HRRecord, employee: HRRecord) =>
   employee.employee_detail?.shift_type ||
   employee.shift_type;
 
+const getEmployeeAppIds = (employee: HRRecord) =>
+  [
+    employee.id,
+  ]
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+    .map((value) => String(value).trim());
+
+const getEmployeeDeviceCodes = (employee: HRRecord) =>
+  [
+    employee.employee_id,
+    employee.employee_detail?.employee_id,
+  ]
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+    .map((value) => String(value).trim());
+
+const getAttendanceAppIds = (row: HRRecord) =>
+  [
+    row.employee_id,
+    row.user_id,
+    row.employee?.id,
+  ]
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+    .map((value) => String(value).trim());
+
+const getAttendanceDeviceCodes = (row: HRRecord) =>
+  [
+    row.employee_code,
+    row.employee?.employee_id,
+    row.employee?.employee_detail?.employee_id,
+  ]
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+    .map((value) => String(value).trim());
+
+const attendanceBelongsToEmployee = (row: HRRecord, employee: HRRecord) => {
+  const employeeAppIds = new Set(getEmployeeAppIds(employee));
+  const employeeDeviceCodes = new Set(getEmployeeDeviceCodes(employee));
+  const appIdMatch = getAttendanceAppIds(row).some((id) => employeeAppIds.has(id));
+  const deviceCodeMatch = getAttendanceDeviceCodes(row).some((code) => employeeDeviceCodes.has(code));
+
+  return appIdMatch || deviceCodeMatch;
+};
+
 export default function AttendanceReportPage() {
   const { user } = useAuth();
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -99,27 +141,6 @@ export default function AttendanceReportPage() {
     return () => window.clearTimeout(timeoutId);
   }, [fetchReport, hasHydrated]);
 
-  const getEmployeeMatchCodes = (employee: HRRecord) =>
-    [
-      employee.id,
-      employee.employee_id,
-      employee.employee_detail?.employee_id,
-    ]
-      .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-      .map((value) => String(value).trim());
-
-  const getAttendanceMatchCodes = (row: HRRecord) =>
-    [
-      row.employee_id,
-      row.user_id,
-      row.employee?.id,
-      row.employee_code,
-      row.employee?.employee_id,
-      row.employee?.employee_detail?.employee_id,
-    ]
-      .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-      .map((value) => String(value).trim());
-
   const reportRows = useMemo(() => {
     const { start, end } = getMonthRange(month, year);
     if (attendanceRows.length === 0) return [];
@@ -136,10 +157,9 @@ export default function AttendanceReportPage() {
     return employees
       .filter((employee) => selectedEmployee === "all" || String(employee.id) === selectedEmployee)
       .map((employee) => {
-        const employeeCodes = new Set(getEmployeeMatchCodes(employee));
         const rows = attendanceRows.filter((row) => {
           const date = String(row.date || row.clock_in_date || "").slice(0, 10);
-          return getAttendanceMatchCodes(row).some((code) => employeeCodes.has(code)) && date >= start && date <= end && workingDateKeys.has(date);
+          return attendanceBelongsToEmployee(row, employee) && date >= start && date <= end && workingDateKeys.has(date);
         });
         const presentDates = new Set<string>();
         let late = 0;
