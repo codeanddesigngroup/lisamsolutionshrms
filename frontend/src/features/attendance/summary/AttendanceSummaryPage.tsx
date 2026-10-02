@@ -9,6 +9,7 @@ import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { getHolidayDate, getLeaveDate, getLeaveEmployeeId, parseOfficeOpenDays, calculateAttendanceStatus, ShiftDefinition } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
+import api from "@/lib/api";
 
 type ShiftSummary = {
   id?: number | string;
@@ -65,6 +66,7 @@ const getDateForDay = (year: number, month: number, day: number) =>
   `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
 const getAttendanceDate = (value: string) => value.slice(0, 10);
+const getTodayString = () => new Date().toISOString().slice(0, 10);
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
@@ -73,6 +75,20 @@ const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?
 
 const isCurrentUserAttendance = (attendance: AttendanceRecord, user: { id?: number | string; name?: string; email?: string } | null) =>
   isCurrentUserEmployee(attendance.employee, user);
+
+const getEmployeeMatchCodes = (employee: EmployeeOption) =>
+  [
+    employee.id,
+    employee.employee_id,
+    employee.employee_detail?.employee_id,
+  ]
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+    .map((value) => String(value).trim());
+
+const isApprovedLeaveForEmployee = (leave: LeaveRecord, employee: EmployeeOption, date: string) =>
+  getEmployeeMatchCodes(employee).includes(getLeaveEmployeeId(leave)) &&
+  getLeaveDate(leave) === date &&
+  String(leave.status || "").toLowerCase() === "approved";
 
 export default function AttendanceSummaryPage() {
   const { showToast } = useToast();
@@ -123,8 +139,18 @@ export default function AttendanceSummaryPage() {
         },
         employeeRecords,
       )) as AttendanceRecord[];
-      const holidayList: HolidayRecord[] = [];
-      const leaveList: LeaveRecord[] = [];
+      const [holidayResponse, leaveResponse] = await Promise.allSettled([
+        api.get("/holidays"),
+        api.get("/leaves"),
+      ]);
+      const holidayList: HolidayRecord[] =
+        holidayResponse.status === "fulfilled" && Array.isArray(holidayResponse.value.data?.data)
+          ? holidayResponse.value.data.data
+          : [];
+      const leaveList: LeaveRecord[] =
+        leaveResponse.status === "fulfilled" && Array.isArray(leaveResponse.value.data?.data)
+          ? leaveResponse.value.data.data
+          : [];
 
       const employeesWithAttendance = isEmployeeSession
         ? (currentEmployee ? [currentEmployee] : [])
@@ -176,29 +202,41 @@ export default function AttendanceSummaryPage() {
       const [, , rowDay] = rowDate.split("-").map(Number);
       if (!rowDate.startsWith(`${year}-${String(month).padStart(2, "0")}-`)) return;
 
-      const applicationEmployeeId = row.employee?.id ?? row.employee_id ?? row.user_id;
-      if (applicationEmployeeId !== undefined && applicationEmployeeId !== null) {
-        map.set(`${String(applicationEmployeeId)}-${rowDay}`, row);
-      }
+      [
+        row.employee?.id,
+        row.employee_id,
+        row.user_id,
+        row.employee_code,
+        row.employee?.employee_id,
+        row.employee?.employee_detail?.employee_id,
+      ]
+        .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+        .forEach((value) => map.set(`${String(value).trim()}-${rowDay}`, row));
     });
     return map;
   }, [attendance, month, year]);
 
   const getAttendanceForEmployeeDay = (employee: EmployeeOption, day: number) => {
-    return attendanceByEmployeeDay.get(`${String(employee.id)}-${day}`);
+    for (const code of getEmployeeMatchCodes(employee)) {
+      const record = attendanceByEmployeeDay.get(`${code}-${day}`);
+      if (record) return record;
+    }
+
+    return undefined;
   };
 
   const getDayStatus = (employee: EmployeeOption, day: number) => {
     const date = new Date(year, month - 1, day);
     const dateString = getDateForDay(year, month, day);
+    if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
+    if (leaves.some((leave) => isApprovedLeaveForEmployee(leave, employee, dateString))) return "leave";
     if (!officeOpenDays.includes(date.getDay())) return "closed";
     const record = getAttendanceForEmployeeDay(employee, day);
     if (record) {
       const shift = record.shift_type || employee.employee_detail?.shift_type;
       return calculateAttendanceStatus(record, shift as ShiftDefinition);
     }
-    if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
-    if (leaves.some((leave) => getLeaveEmployeeId(leave) === String(employee.id) && getLeaveDate(leave) === dateString && leave.status === "approved")) return "leave";
+    if (dateString <= getTodayString()) return "absent";
     return "empty";
   };
 
@@ -207,7 +245,7 @@ export default function AttendanceSummaryPage() {
     const dayDate = new Date(year, month - 1, day);
     const attendanceRecord = officeOpenDays.includes(dayDate.getDay()) ? getAttendanceForEmployeeDay(employee, day) : undefined;
     const holiday = holidays.find((item) => getHolidayDate(item) === date);
-    const leave = leaves.find((item) => getLeaveEmployeeId(item) === String(employee.id) && getLeaveDate(item) === date && item.status === "approved");
+    const leave = leaves.find((item) => isApprovedLeaveForEmployee(item, employee, date));
     return { employee, day, date, status: getDayStatus(employee, day), attendance: attendanceRecord, holiday, leave };
   };
 
