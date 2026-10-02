@@ -53,7 +53,7 @@ const Employee = sequelize.define('Employee', {
 
   shift_type_id: {
     type: DataTypes.INTEGER,
-    allowNull: true,
+    allowNull: false,
   },
 
   joining_date: {

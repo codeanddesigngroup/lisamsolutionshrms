@@ -288,6 +288,7 @@ export default function CreateEmployeePage() {
                     defaultValue=""
                     placeholder="01"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    required
                   />
                 </div>
               </div>
@@ -301,6 +302,7 @@ export default function CreateEmployeePage() {
                     defaultValue=""
                     placeholder="John Doe"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    required
                   />
                 </div>
               </div>
@@ -315,6 +317,7 @@ export default function CreateEmployeePage() {
                     defaultValue=""
                     placeholder="john@example.com"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    required
                   />
                 </div>
               </div>
@@ -337,6 +340,7 @@ export default function CreateEmployeePage() {
                     defaultValue=""
                     placeholder="Enter password"
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-12 text-xs font-black tracking-tight outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                    required
                   />
                   <button
                     type="button"
@@ -497,6 +501,7 @@ export default function CreateEmployeePage() {
                     name="shift_type_id"
                     defaultValue=""
                     className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-10 text-xs font-black tracking-tight outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+                    required
                   >
                     <option value="">Select Shift</option>
                     {shifts.map((shift) => (
