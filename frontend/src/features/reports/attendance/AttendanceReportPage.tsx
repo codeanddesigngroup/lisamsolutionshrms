@@ -114,6 +114,8 @@ export default function AttendanceReportPage() {
 
   const reportRows = useMemo(() => {
     const { start, end } = getMonthRange(month, year);
+    if (attendanceRows.length === 0) return [];
+
     const holidayDates = new Set(holidays.map(getHolidayDate));
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -330,7 +332,7 @@ export default function AttendanceReportPage() {
                 {!loading && reportRows.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-8 py-16 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
-                      No attendance records found for selected filters
+                      No report found
                     </td>
                   </tr>
                 )}
