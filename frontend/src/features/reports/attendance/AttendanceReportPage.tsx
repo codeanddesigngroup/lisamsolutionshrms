@@ -16,12 +16,11 @@ import {
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import {
   calculateAttendanceStatus,
   dateRange,
   formatDuration,
-  getAttendanceEmployeeId,
   getEmployeeDisplayId,
   getHolidayDate,
   minutesBetween,
@@ -29,6 +28,7 @@ import {
   toDateString,
   type HRRecord,
 } from "@/lib/hr-utils";
+import { attendanceService } from "@/services/attendance/attendance.service";
 
 const current = new Date();
 
@@ -39,6 +39,8 @@ const getMonthRange = (month: number, year: number) => {
 };
 
 export default function AttendanceReportPage() {
+  const { user } = useAuth();
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState<HRRecord[]>([]);
   const [attendanceRows, setAttendanceRows] = useState<HRRecord[]>([]);
@@ -51,32 +53,64 @@ export default function AttendanceReportPage() {
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      const [employeeResponse, attendanceResponse, holidayResponse, settingsResponse] = await Promise.all([
-        api.get("/employee"),
-        api.get("/attendance"),
-        api.get("/holidays"),
-        api.get("/attendance-settings"),
-      ]);
-      const settingsRecords = settingsResponse.data.data;
-      const settings = Array.isArray(settingsRecords) ? settingsRecords[0] : settingsRecords;
-      setEmployees(employeeResponse.data.data || []);
-      setAttendanceRows(attendanceResponse.data.data || []);
-      setHolidays(holidayResponse.data.data || []);
-      setOfficeOpenDays(parseOfficeOpenDays(settings?.office_open_days));
+      const { start, end } = getMonthRange(month, year);
+      const companyId = user?.role === "super_admin" ? "" : String(user?.company_id || "");
+      const employeeRecords = await attendanceService.getEmployees({ companyId });
+      const attendanceRecords = await attendanceService.getRecords(
+        {
+          companyId,
+          startDate: start,
+          endDate: end,
+          limit: 10000,
+        },
+        employeeRecords,
+      );
+
+      setEmployees(employeeRecords);
+      setAttendanceRows(attendanceRecords);
+      setHolidays([]);
+      setOfficeOpenDays(parseOfficeOpenDays(undefined));
     } catch (error) {
       console.error("Fetch Attendance Report Error:", error);
     } finally {
       setLoading(false);
     }
+  }, [month, user, year]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setHasHydrated(true), 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     const timeoutId = window.setTimeout(() => {
       void fetchReport();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [fetchReport]);
+  }, [fetchReport, hasHydrated]);
+
+  const getEmployeeMatchCodes = (employee: HRRecord) =>
+    [
+      employee.id,
+      employee.employee_id,
+      employee.employee_detail?.employee_id,
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+      .map((value) => String(value).trim());
+
+  const getAttendanceMatchCodes = (row: HRRecord) =>
+    [
+      row.employee_id,
+      row.user_id,
+      row.employee?.id,
+      row.employee_code,
+      row.employee?.employee_id,
+      row.employee?.employee_detail?.employee_id,
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+      .map((value) => String(value).trim());
 
   const reportRows = useMemo(() => {
     const { start, end } = getMonthRange(month, year);
@@ -92,10 +126,10 @@ export default function AttendanceReportPage() {
     return employees
       .filter((employee) => selectedEmployee === "all" || String(employee.id) === selectedEmployee)
       .map((employee) => {
-        const employeeId = String(employee.id);
+        const employeeCodes = new Set(getEmployeeMatchCodes(employee));
         const rows = attendanceRows.filter((row) => {
           const date = String(row.date || row.clock_in_date || "").slice(0, 10);
-          return getAttendanceEmployeeId(row) === employeeId && date >= start && date <= end && workingDateKeys.has(date);
+          return getAttendanceMatchCodes(row).some((code) => employeeCodes.has(code)) && date >= start && date <= end && workingDateKeys.has(date);
         });
         const presentDates = new Set<string>();
         let late = 0;
@@ -108,7 +142,9 @@ export default function AttendanceReportPage() {
           if (["present", "early", "late", "half-day"].includes(status)) presentDates.add(rowDate);
           if (status === "late") late += 1;
           if (status === "half-day") halfDay += 1;
-          minutes += Number(row.total_minutes || minutesBetween(row.clock_in || row.clock_in_time, row.clock_out || row.clock_out_time));
+          minutes += Number(row.total_minutes || 0) ||
+            Number(row.worked_hours || 0) * 60 ||
+            minutesBetween(row.clock_in || row.clock_in_time, row.clock_out || row.clock_out_time);
         });
 
         const present = presentDates.size;
