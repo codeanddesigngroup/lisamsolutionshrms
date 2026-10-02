@@ -18,6 +18,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
 import {
+  calculateLateAfterGraceMinutes,
   calculateAttendanceStatus,
   dateRange,
   formatDuration,
@@ -37,6 +38,13 @@ const getMonthRange = (month: number, year: number) => {
   const end = toDateString(new Date(year, month, 0));
   return { start, end };
 };
+
+const getShiftForAttendanceRow = (row: HRRecord, employee: HRRecord) =>
+  row.shift_type ||
+  row.employee?.employee_detail?.shift_type ||
+  row.employee?.shift_type ||
+  employee.employee_detail?.shift_type ||
+  employee.shift_type;
 
 export default function AttendanceReportPage() {
   const { user } = useAuth();
@@ -139,10 +147,12 @@ export default function AttendanceReportPage() {
         let minutes = 0;
 
         rows.forEach((row) => {
-          const status = calculateAttendanceStatus(row, row.shift_type || employee.employee_detail?.shift_type);
+          const shift = getShiftForAttendanceRow(row, employee);
+          const status = calculateAttendanceStatus(row, shift);
           const rowDate = String(row.date || row.clock_in_date || "").slice(0, 10);
+          const lateAfterGraceMinutes = calculateLateAfterGraceMinutes(row.clock_in || row.clock_in_time, shift);
           if (["present", "early", "late", "half-day"].includes(status)) presentDates.add(rowDate);
-          if (status === "late") late += 1;
+          if (status === "late" && lateAfterGraceMinutes > 0 && !row.late_waived) late += 1;
           if (status === "half-day") halfDay += 1;
           minutes += Number(row.total_minutes || 0) ||
             Number(row.worked_hours || 0) * 60 ||
