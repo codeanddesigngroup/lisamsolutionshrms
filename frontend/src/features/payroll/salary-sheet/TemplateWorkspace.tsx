@@ -5,15 +5,16 @@ import Link from "next/link";
 import { ArrowLeft, FileSpreadsheet, Plus, Save, Trash2 } from "lucide-react";
 import api from "@/lib/api";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { baseFields, defaultTemplates, readLocal, templateKey, type SalaryField, type SalaryTemplate } from "@/lib/salary-templates";
+import { baseFields, defaultTemplates, readLocal, templateForDepartment, templateKey, type SalaryField, type SalaryTemplate } from "@/lib/salary-templates";
 
 const input = "h-11 w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 const button = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-40";
 const secondary = "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-40";
 const catalog = [...baseFields, ...defaultTemplates.flatMap(t => t.fields)].filter((field, index, all) => all.findIndex(f => f.id === field.id) === index);
+type DepartmentOption = { id: string; name: string };
 
 export default function TemplateWorkspace() {
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [templates, setTemplates] = useState<SalaryTemplate[]>([]);
   const [selected, setSelected] = useState("");
   const [fieldId, setFieldId] = useState("");
@@ -30,7 +31,7 @@ export default function TemplateWorkspace() {
     setSelected(initial[0]?.id || "");
     api.get('/departments').then(response => {
       const records = Array.isArray(response.data) ? response.data : response.data.data;
-      setDepartments(Array.isArray(records) ? [...new Set<string>(records.map((item: { name?: string; title?: string }) => String(item.name || item.title || '')).filter(Boolean))] : []);
+      setDepartments(Array.isArray(records) ? records.map((item: { id?: string | number; name?: string; title?: string }) => ({ id: String(item.id || ""), name: String(item.name || item.title || "") })).filter(item => item.id && item.name) : []);
     }).catch(() => setNotice('Departments could not be loaded. Please refresh to try again.'));
   }, []);
 
@@ -52,6 +53,28 @@ export default function TemplateWorkspace() {
     if (!current) return;
     update({ ...current, fields: [...current.fields, { ...field, enabled: true, visible: true }] });
     setFieldId("");
+  };
+  const openDepartmentTemplate = (department: DepartmentOption) => {
+    const existing = templateForDepartment(templates, department.name, department.id);
+    if (existing) {
+      setSelected(existing.id);
+      setFieldId("");
+      setCustomLabel("");
+      return;
+    }
+    const next: SalaryTemplate = {
+      id: crypto.randomUUID(),
+      name: `${department.name} Salary Form`,
+      departments: [department.name],
+      departmentIds: [department.id],
+      fields: baseFields.map(field => ({ ...field, enabled: true, visible: true })),
+    };
+    setTemplates(items => [...items, next]);
+    setSelected(next.id);
+    setFieldId("");
+    setCustomLabel("");
+    setDirty(true);
+    setNotice("");
   };
   const save = () => {
     if (templates.some(t => !t.name.trim() || t.fields.some(f => !f.label.trim() || (f.options || []).some(option => !option.trim()) || new Set((f.options || []).map(option => option.trim().toLowerCase())).size !== (f.options || []).length))) {
@@ -82,17 +105,33 @@ export default function TemplateWorkspace() {
       </div>
       {dirty && <p className="mt-3 text-xs font-medium text-amber-700">You have unsaved changes.</p>}
     </section>
+    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div><h2 className="text-sm font-bold text-gray-900">Department forms</h2><p className="mt-1 text-xs text-gray-500">Open a department to create or edit its salary sheet form.</p></div>
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{departments.length} departments</span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {departments.map(department => {
+          const assigned = templateForDepartment(templates, department.name, department.id);
+          return <button key={department.id} type="button" className={`flex min-h-16 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${assigned?.id === selected ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`} onClick={() => openDepartmentTemplate(department)}>
+            <span className="min-w-0"><span className="block truncate text-sm font-bold text-gray-900">{department.name}</span><span className="block truncate text-xs font-medium text-gray-500">{assigned ? assigned.name : "No form yet"}</span></span>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${assigned ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{assigned ? "Ready" : "Create"}</span>
+          </button>;
+        })}
+      </div>
+      {!departments.length && <p className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">No departments loaded yet.</p>}
+    </section>
     {!current && <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500">No templates yet. Create a template to add fields and assign departments.</div>}
     {current && <>
       <section className="grid gap-5 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 md:grid-cols-2">
         <label className="grid min-w-0 content-start gap-2 text-xs font-semibold text-gray-600">Template name<input className={input} value={current.name} onChange={e => update({ ...current, name: e.target.value })} /></label>
         <div className="min-w-0 space-y-2"><label className="grid gap-2 text-xs font-semibold text-gray-600">Assign department<select className={input} value="" onChange={e => {
-          const department = e.target.value;
+          const department = departments.find(item => item.id === e.target.value);
           if (!department) return;
-          setTemplates(items => items.map(t => t.id === current.id ? { ...t, departments: [...t.departments, department] } : { ...t, departments: t.departments.filter(d => d !== department) }));
+          setTemplates(items => items.map(t => t.id === current.id ? { ...t, departments: [...t.departments.filter(d => d !== department.name), department.name], departmentIds: [...(t.departmentIds || []).filter(d => d !== department.id), department.id] } : { ...t, departments: t.departments.filter(d => d !== department.name), departmentIds: (t.departmentIds || []).filter(d => d !== department.id) }));
           setDirty(true);
-        }}><option value="">Choose a department</option>{departments.filter(d => !current.departments.includes(d)).map(d => <option key={d}>{d}</option>)}</select></label>
-          <div className="flex flex-wrap gap-2">{current.departments.map(d => <span key={d} className="inline-flex max-w-full items-center gap-1 rounded-xl border border-blue-100 bg-blue-50 pl-3 text-xs font-semibold text-blue-800">{d}<button type="button" title={`Remove ${d}`} aria-label={`Remove ${d} department`} className="flex h-11 w-11 items-center justify-center rounded-xl text-blue-500 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-blue-600" onClick={() => update({ ...current, departments: current.departments.filter(item => item !== d) })}><Trash2 size={15} /></button></span>)}</div>
+        }}><option value="">Choose a department</option>{departments.filter(d => !(current.departmentIds || []).includes(d.id) && !current.departments.includes(d.name)).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+          <div className="flex flex-wrap gap-2">{current.departments.map((d, index) => <span key={`${d}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-xl border border-blue-100 bg-blue-50 pl-3 text-xs font-semibold text-blue-800">{d}<button type="button" title={`Remove ${d}`} aria-label={`Remove ${d} department`} className="flex h-11 w-11 items-center justify-center rounded-xl text-blue-500 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-blue-600" onClick={() => update({ ...current, departments: current.departments.filter(item => item !== d), departmentIds: (current.departmentIds || []).filter(item => item !== departments.find(department => department.name === d)?.id) })}><Trash2 size={15} /></button></span>)}</div>
           <p className="text-xs leading-relaxed text-gray-500">Each department belongs to one template. Assigning it here replaces its previous assignment.</p>
         </div>
       </section>

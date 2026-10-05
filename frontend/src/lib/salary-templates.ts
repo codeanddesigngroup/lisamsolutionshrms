@@ -1,11 +1,20 @@
 export type SalaryField = { id: string; label: string; enabled: boolean; visible: boolean; role: 'info' | 'addition' | 'deduction'; stage: 'netBasic' | 'totalSalary' | 'totalAmount'; multiple?: boolean; options?: string[] };
 export type SalaryEntry = { id: string; label: string; amount: number };
 export type SalaryBreakdowns = Record<string, SalaryEntry[]>;
+export const createdSheetsKey = 'hrms-created-salary-sheets-v1';
 export const entryTotal = (entries: SalaryEntry[]) => Math.round(entries.reduce((sum, entry) => sum + (Number.isFinite(entry.amount) ? Math.max(0, entry.amount) : 0), 0) * 100) / 100;
-export function fieldForDepartment(templates: SalaryTemplate[], department: string, id: string) {
-  return templates.find(t => t.departments.some(d => d.toLowerCase() === department.toLowerCase()))?.fields.find(f => f.id === id);
+export function templateForDepartment(templates: SalaryTemplate[], department: string, departmentId?: string) {
+  const name = department.trim().toLowerCase();
+  const id = String(departmentId || "").trim();
+  return templates.find(t =>
+    (id && (t.departmentIds || []).some(item => String(item) === id)) ||
+    t.departments.some(item => item.trim().toLowerCase() === name)
+  );
 }
-export type SalaryTemplate = { id: string; name: string; departments: string[]; fields: SalaryField[] };
+export function fieldForDepartment(templates: SalaryTemplate[], department: string, id: string, departmentId?: string) {
+  return templateForDepartment(templates, department, departmentId)?.fields.find(f => f.id === id);
+}
+export type SalaryTemplate = { id: string; name: string; departments: string[]; departmentIds?: string[]; fields: SalaryField[] };
 export const templateKey = 'hrms-salary-templates-v1';
 const field = (id: string, label: string, role: SalaryField['role'] = 'addition', stage: SalaryField['stage'] = 'netBasic'): SalaryField => ({ id, label, role, stage, enabled: true, visible: true });
 export const baseFields = [field('basicSalary', 'Basic Salary', 'info'), field('presentDays', 'Days Present', 'info'), field('halfDays', 'Half Days', 'info'), field('halfDayDeduction', 'Half Day Deduction', 'deduction'), field('casualLeaves', 'Casual Leaves', 'info'), field('sickLeaves', 'Sick Leaves', 'info'), field('lateDays', 'Late Days', 'info'), field('lateDeduction', 'Late Deduction', 'deduction'), field('absentDays', 'Absent Days', 'info'), field('absenceDeduction', 'Absence Deduction', 'deduction'), field('penalties', 'Penalties', 'deduction'), field('loanAdvance', 'Loan / Advance', 'deduction'), field('transportation', 'Transportation'), field('parking', 'Parking', 'deduction'), field('bankCharges', 'Bank Charges'), field('attendanceBonus', 'Attendance Bonus'), field('commission', 'Commission / Others', 'addition', 'totalSalary'), field('monthlySpiffs', 'Monthly SPIFFs', 'addition', 'totalSalary'), field('weeklySpiffs', 'Weekly SPIFFs', 'addition', 'totalAmount')];
