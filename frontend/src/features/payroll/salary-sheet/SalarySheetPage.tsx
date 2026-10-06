@@ -8,7 +8,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { useToast } from "@/context/ToastContext";
 import api from "@/lib/api";
-import { departmentIdOf, employeeNameOf, formatCurrency, monthName, toNumber, type PayrollRecord } from "@/lib/payroll-utils";
+import { buildSalarySlip, canGeneratePayrollForEmployee, departmentIdOf, employeeNameOf, formatCurrency, getMonthRange, monthName, toNumber, type PayrollRecord } from "@/lib/payroll-utils";
 
 import MultipleAmountField from './MultipleAmountField';
 import { createdSheetsKey, defaultTemplates, entryTotal, fieldForDepartment, readLocal, templateKey, type SalaryBreakdowns, type SalaryEntry, type SalaryTemplate } from '@/lib/salary-templates';
@@ -61,6 +61,16 @@ const headers = [
 
 const nested = (value: unknown) => value && typeof value === "object" ? value as PayrollRecord : undefined;
 const pick = (record: PayrollRecord | undefined, keys: string[]) => keys.map((key) => record?.[key]).find((value) => value !== undefined && value !== null && value !== "");
+const recordsFromResponse = (payload: unknown): PayrollRecord[] => {
+  if (Array.isArray(payload)) return payload as PayrollRecord[];
+  if (!payload || typeof payload !== "object") return [];
+  const data = (payload as { data?: unknown }).data;
+  return Array.isArray(data) ? data as PayrollRecord[] : [];
+};
+const isNotFound = (error: unknown) => {
+  const response = nested(nested(error)?.response);
+  return toNumber(response?.status) === 404;
+};
 
 const blankManualValues = (slip: PayrollRecord): ManualValues => {
   const employee = nested(slip.employee) || nested(slip.user);
@@ -243,12 +253,56 @@ export default function SalarySheetPage() {
         api.get(`/payroll?month=${month}&year=${year}`),
         api.get("/departments"),
       ]);
+
       if (departmentResponse.status === "fulfilled") {
-        const departmentRecords = Array.isArray(departmentResponse.value.data) ? departmentResponse.value.data : departmentResponse.value.data.data;
-        setDepartments(Array.isArray(departmentRecords) ? departmentRecords : []);
+        setDepartments(recordsFromResponse(departmentResponse.value.data));
       }
-      if (payrollResponse.status !== "fulfilled") throw payrollResponse.reason;
-      const records: PayrollRecord[] = payrollResponse.value.data.data || [];
+      if (payrollResponse.status !== "fulfilled" && !isNotFound(payrollResponse.reason)) throw payrollResponse.reason;
+      let records: PayrollRecord[] = payrollResponse.status === "fulfilled" ? recordsFromResponse(payrollResponse.value.data) : [];
+
+      if (!records.length && payrollResponse.status === "rejected" && isNotFound(payrollResponse.reason)) {
+        const monthRange = getMonthRange(year, month);
+        const [employeeRes, salaryRes, salaryGroupRes, componentRes, employeeGroupRes, employeeCycleRes, cycleRes, settingRes, tdsRes] = await Promise.allSettled([
+          api.get("/employees"),
+          api.get("/employee-salaries"),
+          api.get("/salary-groups"),
+          api.get("/salary-components"),
+          api.get("/employee-salary-groups"),
+          api.get("/employee-payroll-cycles"),
+          api.get("/payroll-cycles"),
+          api.get("/payroll-settings"),
+          api.get("/salary-tds"),
+        ]);
+        const employees = employeeRes.status === "fulfilled" ? recordsFromResponse(employeeRes.value.data) : [];
+        const salaryRecords = salaryRes.status === "fulfilled" ? recordsFromResponse(salaryRes.value.data) : [];
+        const employeeSalaryGroups = employeeGroupRes.status === "fulfilled" ? recordsFromResponse(employeeGroupRes.value.data) : [];
+
+        records = employees
+          .filter((employee) => canGeneratePayrollForEmployee(employee, salaryRecords, employeeSalaryGroups).ok)
+          .map((employee) => {
+            const slip = buildSalarySlip({
+              employee,
+              salaryRecords,
+              salaryGroups: salaryGroupRes.status === "fulfilled" ? recordsFromResponse(salaryGroupRes.value.data) : [],
+              salaryComponents: componentRes.status === "fulfilled" ? recordsFromResponse(componentRes.value.data) : [],
+              employeeSalaryGroups,
+              employeePayrollCycles: employeeCycleRes.status === "fulfilled" ? recordsFromResponse(employeeCycleRes.value.data) : [],
+              payrollCycles: cycleRes.status === "fulfilled" ? recordsFromResponse(cycleRes.value.data) : [],
+              attendance: [],
+              leaves: [],
+              holidays: [],
+              expenses: [],
+              timeLogs: [],
+              settings: settingRes.status === "fulfilled" ? recordsFromResponse(settingRes.value.data)[0] : undefined,
+              salaryTds: tdsRes.status === "fulfilled" ? recordsFromResponse(tdsRes.value.data) : [],
+              year,
+              month,
+              startDate: monthRange.start,
+              endDate: monthRange.end,
+            });
+            return { ...slip, employee, user: employee };
+          });
+      }
       setSlips(records);
       setManual((current) => {
         let saved: Record<string, ManualValues> = {};
