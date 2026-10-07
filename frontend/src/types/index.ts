@@ -52,7 +52,10 @@ export interface Employee {
     designation_id?: number | string;
     shift_type_id?: number | string;
     mobile?: string;
+    emergency_phone?: string;
     address?: string;
+    nic?: string;
+    father_name?: string;
     hourly_rate?: number;
     slack_username?: string;
     designation?: { name: string };

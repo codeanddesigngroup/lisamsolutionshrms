@@ -10,7 +10,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/context/ToastContext";
-import { RefreshCw, Save, ArrowLeft, AlertCircle, Clock, Eye, EyeOff, Plus, UserCheck, UserX } from "lucide-react";
+import { RefreshCw, Save, ArrowLeft, AlertCircle, Clock, Eye, EyeOff, Plus, UserCheck, UserX, UsersRound, IdCard, Phone, MapPin } from "lucide-react";
 import { Employee } from "@/types";
 import { getModulesFromPermissions, rolePermissions, type PermissionKey } from "@/lib/auth-contract";
 import EmployeePermissionMatrix from "@/features/employees/components/EmployeePermissionMatrix";
@@ -33,6 +33,9 @@ const employeeSchema = z.object({
   role: z.literal("employee"),
   status: z.enum(["active", "deactive"]),
   mobile: z.string().optional(),
+  father_name: z.string().optional(),
+  nic: z.string().optional(),
+  emergency_phone: z.string().optional(),
   address: z.string().optional(),
 }).superRefine((data, ctx) => {
   const password = data.password?.trim().toLowerCase();
@@ -77,6 +80,10 @@ type EmployeeUpdatePayload = {
   department_id: string;
   designation_id: string;
   shift_type_id?: string;
+  emergency_phone?: string;
+  address?: string;
+  nic?: string;
+  father_name?: string;
   employee_detail: {
     employee_id: string;
     joining_date: string;
@@ -84,7 +91,10 @@ type EmployeeUpdatePayload = {
     designation_id: string;
     shift_type_id?: string;
     mobile?: string;
+    emergency_phone?: string;
     address?: string;
+    nic?: string;
+    father_name?: string;
   };
 };
 
@@ -95,6 +105,10 @@ type EmployeeWithAccess = Employee & {
   department_id?: number | string;
   designation_id?: number | string;
   shift_type_id?: number | string;
+  emergency_phone?: string;
+  address?: string;
+  nic?: string;
+  father_name?: string;
   hourly_rate?: number | string;
   permissions?: PermissionKey[];
   modules?: string[];
@@ -187,7 +201,10 @@ export default function EditEmployeePage() {
           status: data.status === "deactive" ? "deactive" : "active",
           password: "",
           mobile: detail.mobile || data.mobile || "",
-          address: detail.address || "",
+          father_name: detail.father_name || data.father_name || "",
+          nic: detail.nic || data.nic || "",
+          emergency_phone: detail.emergency_phone || data.emergency_phone || "",
+          address: detail.address || data.address || "",
         });
       } catch (err: unknown) {
         console.error("Fetch Edit Data Error:", err);
@@ -221,6 +238,10 @@ export default function EditEmployeePage() {
         department_id: data.department_id,
         designation_id: data.designation_id,
         shift_type_id: data.shift_type_id,
+        emergency_phone: data.emergency_phone,
+        address: data.address,
+        nic: data.nic,
+        father_name: data.father_name,
         employee_detail: {
           employee_id: data.employee_id,
           joining_date: data.joining_date,
@@ -228,7 +249,10 @@ export default function EditEmployeePage() {
           designation_id: data.designation_id,
           shift_type_id: data.shift_type_id,
           mobile: data.mobile,
+          emergency_phone: data.emergency_phone,
           address: data.address,
+          nic: data.nic,
+          father_name: data.father_name,
         },
       };
       
@@ -353,6 +377,69 @@ export default function EditEmployeePage() {
                  </div>
               </Card>
 
+              <Card className="border-none shadow-sm p-8 bg-white rounded-2xl">
+                 <div className="mb-8 flex items-center space-x-3 border-l-4 border-primary pl-4">
+                    <h2 className="text-[11px] font-black text-gray-800 tracking-[0.12em] normal-case">Personal & Contact Information</h2>
+                 </div>
+
+                 <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                    <div className="space-y-2">
+                       <label className="block text-[10px] font-black text-gray-400 tracking-wider">Father Name</label>
+                       <div className="relative">
+                          <UsersRound className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+                          <input
+                             type="text"
+                             placeholder="Enter father name"
+                             {...register("father_name")}
+                             className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                          />
+                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="block text-[10px] font-black text-gray-400 tracking-wider">NIC</label>
+                       <div className="relative">
+                          <IdCard className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+                          <input
+                             type="text"
+                             inputMode="numeric"
+                             placeholder="00000-0000000-0"
+                             maxLength={15}
+                             {...register("nic")}
+                             className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                          />
+                       </div>
+                       <p className="text-[9px] font-bold text-gray-400">Use the format 00000-0000000-0</p>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="block text-[10px] font-black text-gray-400 tracking-wider">Emergency Phone Number</label>
+                       <div className="relative">
+                          <Phone className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+                          <input
+                             type="tel"
+                             placeholder="+92 300 0000000"
+                             {...register("emergency_phone")}
+                             className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                          />
+                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="block text-[10px] font-black text-gray-400 tracking-wider">Address</label>
+                       <div className="relative">
+                          <MapPin className="absolute left-4 top-4 h-4 w-4 text-primary" />
+                          <textarea
+                             rows={3}
+                             placeholder="Enter complete residential address"
+                             {...register("address")}
+                             className="w-full bg-gray-50 border-none rounded-xl py-3.5 pl-12 pr-4 text-xs font-black tracking-tight outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                          />
+                       </div>
+                    </div>
+                 </div>
+              </Card>
+
               <Card title="Job Information" className="border-none shadow-sm p-8 bg-white">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-1.5">
@@ -417,13 +504,6 @@ export default function EditEmployeePage() {
                           </select>
                        </div>
                        <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Used by attendance calculations.</p>
-                    </div>
-                    <div className="space-y-1.5 md:col-span-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Address</label>
-                       <textarea 
-                          {...register("address")}
-                          className="w-full bg-gray-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-primary outline-none h-24"
-                       />
                     </div>
                  </div>
               </Card>

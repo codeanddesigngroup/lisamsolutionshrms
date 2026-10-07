@@ -12,7 +12,7 @@
   --app-radius: 8px;
   --control-height: 42px;
   --control-padding: 10px 12px;
-  
+
   /* Status Colors (Exact from custom-new.css) */
   --status-success-bg: #edf9f7;
   --status-success-text: #53af9a;
@@ -42,12 +42,12 @@
 
 @theme inline {
   --font-montserrat: "Montserrat", sans-serif;
-  
+
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  
+
   --color-status-success-bg: var(--status-success-bg);
   --color-status-success-text: var(--status-success-text);
   --color-status-info-bg: var(--status-info-bg);
@@ -78,21 +78,51 @@
     @apply font-montserrat antialiased;
     color: var(--foreground);
     background: var(--background);
-    font-size: 13px; /* Exact from custom-new.css */
+    font-size: 13px;
+    /* Exact from custom-new.css */
     line-height: 1.6;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-light text-[#2b2b2b] uppercase;
     margin: 10px 0;
   }
 
-  h1 { font-size: 36px; line-height: 48px; }
-  h2 { font-size: 24px; line-height: 36px; }
-  h3 { font-size: 21px; line-height: 30px; }
-  h4 { font-size: 18px; line-height: 22px; font-weight: 400; }
-  h5 { font-size: 13px; font-weight: 700; }
-  h6 { font-size: 12px; font-weight: 800; }
+  h1 {
+    font-size: 36px;
+    line-height: 48px;
+  }
+
+  h2 {
+    font-size: 24px;
+    line-height: 36px;
+  }
+
+  h3 {
+    font-size: 21px;
+    line-height: 30px;
+  }
+
+  h4 {
+    font-size: 18px;
+    line-height: 22px;
+    font-weight: 400;
+  }
+
+  h5 {
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  h6 {
+    font-size: 12px;
+    font-weight: 800;
+  }
 
   a {
     @apply transition-all duration-200;
@@ -115,14 +145,16 @@
     width: 100%;
     min-height: var(--control-height);
     padding: var(--control-padding);
-    border: 1px solid #d7dde5 !important;
+    border: 0 !important;
+    outline: none !important;
+    /* border: 1px solid #d7dde5 !important; */
     border-radius: var(--app-radius);
     background-color: #ffffff;
     color: #263238;
     font-size: 12px;
     font-weight: 600;
     line-height: 1.4;
-    box-shadow: 0 1px 1px rgba(4, 23, 49, 0.03);
+    /* box-shadow: 0 1px 1px rgba(4, 23, 49, 0.03); */
     transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
   }
 
@@ -287,9 +319,18 @@
     color: #ffffff;
     border: 1px solid var(--primary);
   }
-  .btn-success { @apply bg-[#00c292] text-white border border-[#00c292]; }
-  .btn-danger { @apply bg-[#fb9678] text-white border border-[#fb9678]; }
-  .btn-warning { @apply bg-[#fec107] text-white border border-[#fec107]; }
+
+  .btn-success {
+    @apply bg-[#00c292] text-white border border-[#00c292];
+  }
+
+  .btn-danger {
+    @apply bg-[#fb9678] text-white border border-[#fb9678];
+  }
+
+  .btn-warning {
+    @apply bg-[#fec107] text-white border border-[#fec107];
+  }
 
   .form-control {
     width: 100%;
@@ -350,18 +391,32 @@
     color: var(--navbar-text);
     border-color: var(--navbar-border);
   }
-  
+
   .label {
     @apply px-[12px] py-[4px] font-medium tracking-[.05em] inline-block;
     border-radius: 60px;
   }
 
   /* Status Badges - Exact from custom-new.css */
-  .label-success { @apply bg-[#edf9f7] text-[#53af9a]; }
-  .label-info { @apply bg-[#eef6fe] text-[#3594fa]; }
-  .label-danger { @apply bg-[#fcf2ed] text-[#e15931]; }
-  .label-warning { @apply bg-[#fff3d0] text-[#f9bc03]; }
-  .label-primary { @apply bg-[#faeefd] text-[#cf55e9]; }
+  .label-success {
+    @apply bg-[#edf9f7] text-[#53af9a];
+  }
+
+  .label-info {
+    @apply bg-[#eef6fe] text-[#3594fa];
+  }
+
+  .label-danger {
+    @apply bg-[#fcf2ed] text-[#e15931];
+  }
+
+  .label-warning {
+    @apply bg-[#fff3d0] text-[#f9bc03];
+  }
+
+  .label-primary {
+    @apply bg-[#faeefd] text-[#cf55e9];
+  }
 }
 
 /* Custom Scrollbar (Legacy style) */
@@ -369,6 +424,16 @@
   width: 6px;
   height: 6px;
 }
-::-webkit-scrollbar-track { background: #041731; }
-::-webkit-scrollbar-thumb { background: #88888865; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
+
+::-webkit-scrollbar-track {
+  background: #041731;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #88888865;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
