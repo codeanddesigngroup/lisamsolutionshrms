@@ -104,15 +104,16 @@ const getComparableCodes = (value: number | string | undefined | null) => {
 
 const getEmployeeMatchCodes = (employee: EmployeeOption) =>
   Array.from(new Set([
-    employee.id,
-    employee.employee_id,
-    employee.employee_detail?.employee_id,
-  ]
-    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-    .flatMap(getComparableCodes)));
+    ...getComparableCodes(employee.id).map((code) => `app:${code}`),
+    ...getComparableCodes(employee.employee_id).map((code) => `code:${code}`),
+    ...getComparableCodes(employee.employee_detail?.employee_id).map((code) => `code:${code}`),
+  ]));
 
 const isApprovedLeaveForEmployee = (leave: LeaveRecord, employee: EmployeeOption, date: string) =>
-  getComparableCodes(getLeaveEmployeeId(leave)).some((code) => getEmployeeMatchCodes(employee).includes(code)) &&
+  getComparableCodes(getLeaveEmployeeId(leave)).some((code) =>
+    getEmployeeMatchCodes(employee).includes(`app:${code}`) ||
+    getEmployeeMatchCodes(employee).includes(`code:${code}`),
+  ) &&
   getLeaveDate(leave) === date &&
   String(leave.status || "").toLowerCase() === "approved";
 
@@ -238,13 +239,19 @@ export default function AttendanceSummaryPage() {
         row.employee?.id,
         row.employee_id,
         row.user_id,
+      ]
+        .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+        .flatMap(getComparableCodes)
+        .forEach((value) => map.set(`app:${value}-${rowDay}`, row));
+
+      [
         row.employee_code,
         row.employee?.employee_id,
         row.employee?.employee_detail?.employee_id,
       ]
         .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
         .flatMap(getComparableCodes)
-        .forEach((value) => map.set(`${value}-${rowDay}`, row));
+        .forEach((value) => map.set(`code:${value}-${rowDay}`, row));
     });
     return map;
   }, [attendance, month, year]);
