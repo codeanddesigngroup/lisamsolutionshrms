@@ -111,6 +111,7 @@ async function getEmployeeAttendanceProfile(employeeId) {
   const [employees] = await sequelize.query(
     `
       SELECT
+        e.id,
         e.company_id,
         e.employee_id,
         s.start_time,
@@ -123,6 +124,11 @@ async function getEmployeeAttendanceProfile(employeeId) {
            AND :employeeId ~ '^[0-9]+$'
            AND COALESCE(NULLIF(LTRIM(e.employee_id, '0'), ''), '0') =
                COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
+         )
+         OR e.id::text = :employeeId
+         OR (
+           :employeeId ~ '^[0-9]+$'
+           AND e.id::text = COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
          )
       LIMIT 2
     `,
@@ -372,13 +378,32 @@ async function processAttendanceRecords({ sinceMinutes = 1440, startDate, endDat
   let matchingEmployeeIds = null;
   if (employeeId) {
     const [matches] = await sequelize.query(`
-      SELECT DISTINCT employee_id AS "employeeId"
-      FROM attendance_logs
-      WHERE employee_id = :employeeId
+      WITH employee_matches AS (
+        SELECT e.id::text AS app_employee_id, e.employee_id AS employee_code
+        FROM employees e
+        WHERE e.employee_id = :employeeId
+           OR (
+             e.employee_id ~ '^[0-9]+$'
+             AND :employeeId ~ '^[0-9]+$'
+             AND COALESCE(NULLIF(LTRIM(e.employee_id, '0'), ''), '0') =
+                 COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
+           )
+           OR e.id::text = :employeeId
+           OR (
+             :employeeId ~ '^[0-9]+$'
+             AND e.id::text = COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
+           )
+      )
+      SELECT DISTINCT al.employee_id AS "employeeId"
+      FROM attendance_logs al
+      LEFT JOIN employee_matches em ON TRUE
+      WHERE al.employee_id = :employeeId
+         OR al.employee_id = em.employee_code
+         OR al.employee_id = em.app_employee_id
          OR (
-           employee_id ~ '^[0-9]+$'
+           al.employee_id ~ '^[0-9]+$'
            AND :employeeId ~ '^[0-9]+$'
-           AND COALESCE(NULLIF(LTRIM(employee_id, '0'), ''), '0') =
+           AND COALESCE(NULLIF(LTRIM(al.employee_id, '0'), ''), '0') =
                COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
          )
     `, { replacements: { employeeId: String(employeeId) } });
