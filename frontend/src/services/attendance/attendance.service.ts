@@ -196,8 +196,24 @@ const normalizeEmployee = (employee: NodeEmployee): AttendanceEmployee => ({
   },
 });
 
+const normalizeEmployeeCode = (value?: string | number) => {
+  const code = String(value ?? "").trim();
+  if (!code) return "";
+  return /^\d+$/.test(code) ? String(Number(code)) : code.toLowerCase();
+};
+
+const employeeCodeMatches = (left?: string | number, right?: string | number) => {
+  const leftCode = String(left ?? "").trim();
+  const rightCode = String(right ?? "").trim();
+  if (!leftCode || !rightCode) return false;
+  return leftCode === rightCode || normalizeEmployeeCode(leftCode) === normalizeEmployeeCode(rightCode);
+};
+
 const findEmployeeForAttendance = (employees: AttendanceEmployee[], employeeCode: string) =>
-  employees.find((employee) => String(employee.employee_id) === employeeCode);
+  employees.find((employee) =>
+    employeeCodeMatches(employee.employee_id, employeeCode) ||
+    employeeCodeMatches(employee.employee_detail?.employee_id, employeeCode),
+  );
 
 const hasCompanyScope = (companyId?: string | number) => companyId !== undefined && companyId !== null && String(companyId).trim() !== "";
 
