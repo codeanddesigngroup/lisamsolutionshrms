@@ -70,6 +70,23 @@ const getTodayString = () => {
   const today = new Date();
   return getDateForDay(today.getFullYear(), today.getMonth() + 1, today.getDate());
 };
+const getTimeParts = (value?: string) => {
+  if (!value) return null;
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return { hours, minutes };
+};
+const getShiftEndDate = (dateString: string, shift?: ShiftSummary) => {
+  const start = getTimeParts(shift?.start_time);
+  const end = getTimeParts(shift?.end_time);
+  if (!start || !end) return null;
+  const [yearValue, monthValue, dayValue] = dateString.split("-").map(Number);
+  const shiftEnd = new Date(yearValue, monthValue - 1, dayValue, end.hours, end.minutes, 0);
+  const startMinutes = start.hours * 60 + start.minutes;
+  const endMinutes = end.hours * 60 + end.minutes;
+  if (endMinutes <= startMinutes) shiftEnd.setDate(shiftEnd.getDate() + 1);
+  return shiftEnd;
+};
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
@@ -98,6 +115,12 @@ const isApprovedLeaveForEmployee = (leave: LeaveRecord, employee: EmployeeOption
   getComparableCodes(getLeaveEmployeeId(leave)).some((code) => getEmployeeMatchCodes(employee).includes(code)) &&
   getLeaveDate(leave) === date &&
   String(leave.status || "").toLowerCase() === "approved";
+
+const shouldMarkAbsent = (dateString: string, employee: EmployeeOption) => {
+  const shiftEnd = getShiftEndDate(dateString, employee.employee_detail?.shift_type);
+  if (shiftEnd) return new Date() >= shiftEnd;
+  return dateString < getTodayString();
+};
 
 export default function AttendanceSummaryPage() {
   const { showToast } = useToast();
@@ -246,7 +269,7 @@ export default function AttendanceSummaryPage() {
     }
     if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
     if (leaves.some((leave) => isApprovedLeaveForEmployee(leave, employee, dateString))) return "leave";
-    if (dateString <= getTodayString()) return "absent";
+    if (shouldMarkAbsent(dateString, employee)) return "absent";
     return "empty";
   };
 
