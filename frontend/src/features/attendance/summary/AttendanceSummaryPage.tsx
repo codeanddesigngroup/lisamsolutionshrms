@@ -265,6 +265,7 @@ export default function AttendanceSummaryPage() {
     const record = getAttendanceForEmployeeDay(employee, day);
     if (record) {
       const shift = record.shift_type || employee.employee_detail?.shift_type;
+      if (!record.clock_in && !record.clock_out) return "absent";
       if (record.clock_in && !record.clock_out && shouldMarkAbsent(dateString, employee)) return "absent";
       return calculateAttendanceStatus(record, shift as ShiftDefinition);
     }
