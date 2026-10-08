@@ -273,7 +273,7 @@ export default function AttendanceSummaryPage() {
     if (record) {
       const shift = record.shift_type || employee.employee_detail?.shift_type;
       if (!record.clock_in && !record.clock_out) return "absent";
-      if (record.clock_in && !record.clock_out && shouldMarkAbsent(dateString, employee)) return "absent";
+      if (!record.clock_in || !record.clock_out) return "present";
       return calculateAttendanceStatus(record, shift as ShiftDefinition);
     }
     if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
