@@ -76,16 +76,11 @@ const getTimeParts = (value?: string) => {
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
   return { hours, minutes };
 };
-const getShiftEndDate = (dateString: string, shift?: ShiftSummary) => {
+const getShiftStartDate = (dateString: string, shift?: ShiftSummary) => {
   const start = getTimeParts(shift?.start_time);
-  const end = getTimeParts(shift?.end_time);
-  if (!start || !end) return null;
+  if (!start) return null;
   const [yearValue, monthValue, dayValue] = dateString.split("-").map(Number);
-  const shiftEnd = new Date(yearValue, monthValue - 1, dayValue, end.hours, end.minutes, 0);
-  const startMinutes = start.hours * 60 + start.minutes;
-  const endMinutes = end.hours * 60 + end.minutes;
-  if (endMinutes <= startMinutes) shiftEnd.setDate(shiftEnd.getDate() + 1);
-  return shiftEnd;
+  return new Date(yearValue, monthValue - 1, dayValue, start.hours, start.minutes, 0);
 };
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
@@ -118,8 +113,8 @@ const isApprovedLeaveForEmployee = (leave: LeaveRecord, employee: EmployeeOption
   String(leave.status || "").toLowerCase() === "approved";
 
 const shouldMarkAbsent = (dateString: string, employee: EmployeeOption) => {
-  const shiftEnd = getShiftEndDate(dateString, employee.employee_detail?.shift_type);
-  if (shiftEnd) return new Date() >= shiftEnd;
+  const shiftStart = getShiftStartDate(dateString, employee.employee_detail?.shift_type);
+  if (shiftStart) return new Date() >= shiftStart;
   return dateString < getTodayString();
 };
 
