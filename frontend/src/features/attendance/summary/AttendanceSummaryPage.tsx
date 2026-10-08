@@ -294,6 +294,8 @@ export default function AttendanceSummaryPage() {
     const record = getAttendanceForEmployeeDay(employee, day);
     if (record) {
       const shift = record.shift_type || employee.employee_detail?.shift_type;
+      const explicitStatus = String(record.status || "").toLowerCase();
+      if (record.half_day || explicitStatus === "half-day" || explicitStatus === "half day") return "half-day";
       if (!record.clock_in && !record.clock_out) return "absent";
       if (!record.clock_in || !record.clock_out) return "present";
       return calculateAttendanceStatus(record, shift as ShiftDefinition);
