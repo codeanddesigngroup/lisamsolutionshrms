@@ -146,6 +146,7 @@ export default function AttendanceSummaryPage() {
   const [selectedEmployee, setSelectedEmployee] = useState("all");
   const [month, setMonth] = useState(thisMonth);
   const [year, setYear] = useState(thisYear);
+  const [syncingToday, setSyncingToday] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -219,6 +220,32 @@ export default function AttendanceSummaryPage() {
     setSelectedEmployee("all");
     setMonth(thisMonth);
     setYear(thisYear);
+  };
+
+  const syncTodayAttendance = async () => {
+    setSyncingToday(true);
+    try {
+      const today = getTodayString();
+      const response = await api.get("/devices");
+      const devices = Array.isArray(response.data?.data) ? response.data.data : [];
+      await Promise.all(
+        devices
+          .filter((device: { serial?: string }) => String(device.serial || "").trim())
+          .map((device: { serial: string }) =>
+            api.post(`/devices/${encodeURIComponent(device.serial)}/sync-attendance`, {
+              startDate: today,
+              endDate: today,
+            }),
+          ),
+      );
+      showToast("Today attendance sync requested", "success");
+      await fetchData();
+    } catch (err) {
+      console.error("Sync Today Attendance Error:", err);
+      showToast("Failed to request today attendance sync", "error");
+    } finally {
+      setSyncingToday(false);
+    }
   };
 
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -334,7 +361,7 @@ export default function AttendanceSummaryPage() {
         </div>
 
         <div className="white-box">
-          <div className={`grid grid-cols-1 gap-4 items-end ${canManageAttendance ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
+          <div className={`grid grid-cols-1 gap-4 items-end ${canManageAttendance ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
             {canManageAttendance && (
               <div>
                 <label className="block text-[12px] font-bold text-gray-600 mb-2">Employee Name</label>
@@ -365,6 +392,12 @@ export default function AttendanceSummaryPage() {
             <div>
               <Button onClick={resetFilters} className="btn-default btn-block h-[34px]">
                 Reset
+              </Button>
+            </div>
+            <div>
+              <Button onClick={syncTodayAttendance} disabled={syncingToday} className="btn-success btn-block h-[34px]">
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncingToday ? "animate-spin" : ""}`} />
+                Sync Today
               </Button>
             </div>
           </div>
