@@ -66,7 +66,10 @@ const getDateForDay = (year: number, month: number, day: number) =>
   `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
 const getAttendanceDate = (value: string) => value.slice(0, 10);
-const getTodayString = () => new Date().toISOString().slice(0, 10);
+const getTodayString = () => {
+  const today = new Date();
+  return getDateForDay(today.getFullYear(), today.getMonth() + 1, today.getDate());
+};
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
@@ -235,14 +238,14 @@ export default function AttendanceSummaryPage() {
   const getDayStatus = (employee: EmployeeOption, day: number) => {
     const date = new Date(year, month - 1, day);
     const dateString = getDateForDay(year, month, day);
-    if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
-    if (leaves.some((leave) => isApprovedLeaveForEmployee(leave, employee, dateString))) return "leave";
     if (!officeOpenDays.includes(date.getDay())) return "closed";
     const record = getAttendanceForEmployeeDay(employee, day);
     if (record) {
       const shift = record.shift_type || employee.employee_detail?.shift_type;
       return calculateAttendanceStatus(record, shift as ShiftDefinition);
     }
+    if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
+    if (leaves.some((leave) => isApprovedLeaveForEmployee(leave, employee, dateString))) return "leave";
     if (dateString <= getTodayString()) return "absent";
     return "empty";
   };
