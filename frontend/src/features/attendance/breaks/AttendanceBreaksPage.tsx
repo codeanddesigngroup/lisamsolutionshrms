@@ -27,7 +27,14 @@ type BreakRecord = {
   break_end?: string | null;
   durationMinutes?: number | string | null;
   duration_minutes?: number | string | null;
+  departmentName?: string | null;
+  department_name?: string | null;
   is_open?: boolean;
+};
+
+type DepartmentRecord = {
+  id: number | string;
+  name?: string;
 };
 
 const toLocalDateString = (value = new Date()) => {
@@ -67,17 +74,20 @@ const getWorkDate = (record: BreakRecord) => String(record.workDate || record.wo
 const getBreakStart = (record: BreakRecord) => record.breakStart || record.break_start || null;
 const getBreakEnd = (record: BreakRecord) => record.breakEnd || record.break_end || null;
 const getDurationMinutes = (record: BreakRecord) => record.durationMinutes ?? record.duration_minutes;
+const getDepartmentName = (record: BreakRecord) => record.departmentName || record.department_name || "--";
 const isOpenBreak = (record: BreakRecord) => Boolean(record.is_open || !getBreakEnd(record));
 
 export default function AttendanceBreaksPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [breaks, setBreaks] = useState<BreakRecord[]>([]);
+  const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState(toLocalDateString());
   const [endDate, setEndDate] = useState(toLocalDateString());
   const [status, setStatus] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeName, setEmployeeName] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
 
   const fetchBreaks = useCallback(async () => {
     setLoading(true);
@@ -88,7 +98,8 @@ export default function AttendanceBreaksPage() {
           startDate,
           endDate,
           status: status || undefined,
-          employeeId: employeeId.trim() || undefined,
+          employeeName: employeeName.trim() || undefined,
+          departmentId: departmentId || undefined,
           limit: 1000,
         },
       });
@@ -99,7 +110,21 @@ export default function AttendanceBreaksPage() {
     } finally {
       setLoading(false);
     }
-  }, [employeeId, endDate, showToast, startDate, status, user]);
+  }, [departmentId, employeeName, endDate, showToast, startDate, status, user]);
+
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const response = await api.get("/departments", {
+        params: {
+          company_id: user?.role === "super_admin" ? undefined : user?.company_id,
+        },
+      });
+      setDepartments(Array.isArray(response.data?.data) ? response.data.data : []);
+    } catch (error) {
+      console.error("Fetch Departments Error:", error);
+      showToast("Failed to load departments", "error");
+    }
+  }, [showToast, user]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -108,6 +133,14 @@ export default function AttendanceBreaksPage() {
 
     return () => window.clearTimeout(timeoutId);
   }, [fetchBreaks]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void fetchDepartments();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [fetchDepartments]);
 
   const stats = useMemo(() => {
     const open = breaks.filter(isOpenBreak).length;
@@ -164,7 +197,7 @@ export default function AttendanceBreaksPage() {
         </div>
 
         <div className="white-box">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start Date</span>
               <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="form-control" />
@@ -174,8 +207,19 @@ export default function AttendanceBreaksPage() {
               <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="form-control" />
             </label>
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Employee ID</span>
-              <input value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} className="form-control" placeholder="All employees" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Employee Name</span>
+              <input value={employeeName} onChange={(event) => setEmployeeName(event.target.value)} className="form-control" placeholder="All employees" />
+            </label>
+            <label className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Department</span>
+              <select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} className="form-control">
+                <option value="">All departments</option>
+                {departments.map((department) => (
+                  <option key={String(department.id)} value={String(department.id)}>
+                    {department.name || `Department ${department.id}`}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Status</span>
@@ -203,6 +247,7 @@ export default function AttendanceBreaksPage() {
               <thead>
                 <tr>
                   <th>Employee</th>
+                  <th>Department</th>
                   <th>Work Date</th>
                   <th>Break Start</th>
                   <th>Break End</th>
@@ -213,7 +258,7 @@ export default function AttendanceBreaksPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={6} className="py-16 text-center">
+                    <td colSpan={7} className="py-16 text-center">
                       <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-primary" />
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading breaks</p>
                     </td>
@@ -226,6 +271,7 @@ export default function AttendanceBreaksPage() {
                       <p className="m-0 text-xs font-black text-gray-800">{getEmployeeName(record)}</p>
                       <p className="m-0 mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">ID {getEmployeeId(record)}</p>
                     </td>
+                    <td className="text-xs font-bold text-gray-600">{getDepartmentName(record)}</td>
                     <td className="text-xs font-black text-gray-700">{getWorkDate(record)}</td>
                     <td className="text-xs font-bold text-gray-700">{formatDateTime(getBreakStart(record))}</td>
                     <td className="text-xs font-bold text-gray-700">{formatDateTime(getBreakEnd(record))}</td>
@@ -245,7 +291,7 @@ export default function AttendanceBreaksPage() {
 
                 {!loading && breaks.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    <td colSpan={7} className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
                       No employee breaks found
                     </td>
                   </tr>

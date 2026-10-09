@@ -146,6 +146,17 @@ const breakRecordAttributes = [
         )`),
         'employeeName',
     ],
+    [
+        literal(`(
+            SELECT d.name
+            FROM employees e
+            LEFT JOIN departments d ON d.id = e.department_id
+            WHERE e.company_id = "AttendanceBreak"."company_id"
+              AND e.employee_id = "AttendanceBreak"."employee_id"
+            LIMIT 1
+        )`),
+        'departmentName',
+    ],
     [fn('to_char', col('created_at'), 'YYYY-MM-DD HH24:MI:SS'), 'created_at'],
     [fn('to_char', col('updated_at'), 'YYYY-MM-DD HH24:MI:SS'), 'updated_at'],
 ];
@@ -337,6 +348,7 @@ router.get('/summary', async (req, res, next) => {
 router.get('/breaks', async (req, res, next) => {
     try {
         const where = {};
+        const andConditions = [];
         const companyId = req.query.companyId || req.query.company_id;
         if (companyId) {
             where.companyId = Number(companyId);
@@ -359,6 +371,40 @@ router.get('/breaks', async (req, res, next) => {
         const status = String(req.query.status || '').toLowerCase();
         if (status === 'open') where.breakEnd = null;
         if (status === 'completed') where.breakEnd = { [Op.ne]: null };
+
+        const departmentId = Number(req.query.departmentId || req.query.department_id);
+        if (Number.isInteger(departmentId) && departmentId > 0) {
+            andConditions.push(
+                literal(`EXISTS (
+                    SELECT 1
+                    FROM employees e
+                    WHERE e.company_id = "AttendanceBreak"."company_id"
+                      AND e.employee_id = "AttendanceBreak"."employee_id"
+                      AND e.department_id = ${departmentId}
+                )`),
+            );
+        }
+
+        const employeeName = String(req.query.employeeName || req.query.employee_name || '').trim();
+        if (employeeName) {
+            const escapedName = AttendanceBreak.sequelize.escape(`%${employeeName.replace(/[\\%_]/g, '\\$&')}%`);
+            andConditions.push(
+                literal(`(
+                    "AttendanceBreak"."employee_name" ILIKE ${escapedName} ESCAPE '\\'
+                    OR EXISTS (
+                        SELECT 1
+                        FROM employees e
+                        WHERE e.company_id = "AttendanceBreak"."company_id"
+                          AND e.employee_id = "AttendanceBreak"."employee_id"
+                          AND e.name ILIKE ${escapedName} ESCAPE '\\'
+                    )
+                )`),
+            );
+        }
+
+        if (andConditions.length > 0) {
+            where[Op.and] = andConditions;
+        }
 
         const records = await AttendanceBreak.findAll({
             attributes: breakRecordAttributes,
