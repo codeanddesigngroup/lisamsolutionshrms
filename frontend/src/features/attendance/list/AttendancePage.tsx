@@ -105,7 +105,16 @@ const toLocalDateString = (value = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
-const todayString = () => toLocalDateString();
+const ATTENDANCE_DAY_CUTOFF_HOUR = 6;
+
+const todayString = () => {
+  const now = new Date();
+  if (now.getHours() < ATTENDANCE_DAY_CUTOFF_HOUR) {
+    now.setDate(now.getDate() - 1);
+  }
+  return toLocalDateString(now);
+};
+
 const DEFAULT_ATTENDANCE_DATE = todayString();
 const isValidDateParam = (value: string | null) => Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 
