@@ -42,6 +42,18 @@ const AttendanceBreak = sequelize.define('AttendanceBreak', {
     allowNull: true,
     field: 'break_end',
   },
+  breakCount: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+    field: 'break_count',
+  },
+  totalBreakMinutes: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'total_break_minutes',
+  },
 }, {
   tableName: 'attendance_breaks',
   createdAt: 'created_at',

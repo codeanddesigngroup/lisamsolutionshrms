@@ -27,6 +27,8 @@ type BreakRecord = {
   break_end?: string | null;
   durationMinutes?: number | string | null;
   duration_minutes?: number | string | null;
+  breakCount?: number | string | null;
+  break_count?: number | string | null;
   departmentName?: string | null;
   department_name?: string | null;
   is_open?: boolean;
@@ -89,6 +91,7 @@ const getEmployeeId = (record: BreakRecord) => String(record.employeeId || recor
 const getBreakStart = (record: BreakRecord) => record.breakStart || record.break_start || null;
 const getBreakEnd = (record: BreakRecord) => record.breakEnd || record.break_end || null;
 const getDurationMinutes = (record: BreakRecord) => record.durationMinutes ?? record.duration_minutes;
+const getBreakCount = (record: BreakRecord) => Number(record.breakCount ?? record.break_count ?? 1) || 1;
 const getDepartmentName = (record: BreakRecord) => record.departmentName || record.department_name || "--";
 const isOpenBreak = (record: BreakRecord) => Boolean(record.is_open || !getBreakEnd(record));
 
@@ -173,8 +176,9 @@ export default function AttendanceBreaksPage() {
     const open = breaks.filter(isOpenBreak).length;
     const completed = breaks.length - open;
     const employees = new Set(breaks.map(getEmployeeId)).size;
+    const sessions = breaks.reduce((total, record) => total + getBreakCount(record), 0);
     const totalMinutes = breaks.reduce((total, record) => total + Number(getDurationMinutes(record) || 0), 0);
-    return { total: breaks.length, open, completed, employees, totalMinutes };
+    return { total: sessions, open, completed, employees, totalMinutes };
   }, [breaks]);
 
   return (
@@ -226,11 +230,11 @@ export default function AttendanceBreaksPage() {
         <div className="white-box">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start Date</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start Attendance Date</span>
               <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="form-control" />
             </label>
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End Date</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End Attendance Date</span>
               <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="form-control" />
             </label>
             <label className="space-y-2">
@@ -276,6 +280,7 @@ export default function AttendanceBreaksPage() {
                   <th>Employee</th>
                   <th>Department</th>
                   <th>Attendance Date</th>
+                  <th>Count</th>
                   <th>Break Start</th>
                   <th>Break End</th>
                   <th>Duration</th>
@@ -285,7 +290,7 @@ export default function AttendanceBreaksPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center">
+                    <td colSpan={8} className="py-16 text-center">
                       <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-primary" />
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading breaks</p>
                     </td>
@@ -300,6 +305,7 @@ export default function AttendanceBreaksPage() {
                     </td>
                     <td className="text-xs font-bold text-gray-600">{getDepartmentName(record)}</td>
                     <td className="text-xs font-black text-gray-700">{getAttendanceDate(record)}</td>
+                    <td className="text-xs font-black text-gray-700">{getBreakCount(record)}</td>
                     <td className="text-xs font-bold text-gray-700">{formatDateTime(getBreakStart(record))}</td>
                     <td className="text-xs font-bold text-gray-700">{formatDateTime(getBreakEnd(record))}</td>
                     <td>
@@ -318,7 +324,7 @@ export default function AttendanceBreaksPage() {
 
                 {!loading && breaks.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    <td colSpan={8} className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
                       No employee breaks found
                     </td>
                   </tr>

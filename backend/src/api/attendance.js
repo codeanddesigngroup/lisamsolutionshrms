@@ -121,6 +121,8 @@ const serializeBreak = (record) => record ? ({
     work_date: record.workDate,
     break_start: record.breakStart,
     break_end: record.breakEnd,
+    break_count: record.breakCount,
+    total_break_minutes: record.totalBreakMinutes,
     is_open: !record.breakEnd,
 }) : null;
 
@@ -130,14 +132,23 @@ const breakRecordAttributes = [
     'employeeId',
     'employeeRecordId',
     'workDate',
+    'breakCount',
+    'totalBreakMinutes',
     [fn('to_char', col('break_start'), 'YYYY-MM-DD HH24:MI:SS'), 'breakStart'],
     [fn('to_char', col('break_end'), 'YYYY-MM-DD HH24:MI:SS'), 'breakEnd'],
     [
-        literal(`CASE
-            WHEN "AttendanceBreak"."break_end" IS NULL THEN NULL
+        literal(`COALESCE(NULLIF("AttendanceBreak"."total_break_minutes", 0), CASE
+            WHEN "AttendanceBreak"."break_end" IS NULL THEN 0
             ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM ("AttendanceBreak"."break_end" - "AttendanceBreak"."break_start")) / 60))
-        END`),
+        END)`),
         'durationMinutes',
+    ],
+    [
+        literal(`CASE
+            WHEN "AttendanceBreak"."break_end" IS NULL THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (clock_timestamp() - "AttendanceBreak"."break_start")) / 60))
+            ELSE 0
+        END`),
+        'activeBreakMinutes',
     ],
     [
         literal(`COALESCE(
@@ -199,6 +210,51 @@ const getBreakEmployee = async (source = {}) => {
         employeeRecordId: employee?.id || (Number.isInteger(employeeRecordId) && employeeRecordId > 0 ? employeeRecordId : null),
         employeeName: String(employee?.name || source.employee_name || source.employeeName || 'Employee').trim(),
     };
+};
+
+const combineBreakRecords = (records = []) => {
+    const grouped = new Map();
+
+    for (const record of records) {
+        const key = `${record.companyId}:${record.employeeId}:${record.workDate}`;
+        const breakCount = Number(record.breakCount || 1);
+        const completedMinutes = Number(record.durationMinutes || 0);
+        const activeMinutes = Number(record.activeBreakMinutes || 0);
+        const existing = grouped.get(key);
+
+        if (!existing) {
+            grouped.set(key, {
+                ...record,
+                breakCount,
+                durationMinutes: completedMinutes + activeMinutes,
+                is_open: !record.breakEnd,
+            });
+            continue;
+        }
+
+        const currentStart = record.breakStart ? new Date(record.breakStart).getTime() : 0;
+        const existingStart = existing.breakStart ? new Date(existing.breakStart).getTime() : 0;
+        const currentEnd = record.breakEnd ? new Date(record.breakEnd).getTime() : 0;
+        const existingEnd = existing.breakEnd ? new Date(existing.breakEnd).getTime() : 0;
+        const latestStartRecord = currentStart > existingStart ? record : existing;
+
+        existing.id = latestStartRecord.id;
+        existing.employeeRecordId = existing.employeeRecordId || record.employeeRecordId;
+        existing.employeeName = existing.employeeName || record.employeeName;
+        existing.departmentName = existing.departmentName || record.departmentName;
+        existing.breakStart = latestStartRecord.breakStart;
+        existing.breakCount = Number(existing.breakCount || 0) + breakCount;
+        existing.durationMinutes = Number(existing.durationMinutes || 0) + completedMinutes + activeMinutes;
+        existing.is_open = Boolean(existing.is_open || !record.breakEnd);
+        existing.breakEnd = existing.is_open ? null : (currentEnd > existingEnd ? record.breakEnd : existing.breakEnd);
+        existing.updated_at = currentEnd > existingEnd ? record.updated_at : existing.updated_at;
+    }
+
+    return Array.from(grouped.values()).sort((a, b) => {
+        const dateCompare = String(b.workDate || '').localeCompare(String(a.workDate || ''));
+        if (dateCompare !== 0) return dateCompare;
+        return new Date(b.breakStart || 0).getTime() - new Date(a.breakStart || 0).getTime();
+    });
 };
 
 const notifyAdminsAboutBreak = async ({ breakRecord, action }) => {
@@ -419,14 +475,12 @@ router.get('/breaks', async (req, res, next) => {
             limit: getQueryLimit(req.query.limit, 500),
             raw: true,
         });
+        const data = combineBreakRecords(records);
 
         return res.status(200).json({
             success: true,
-            count: records.length,
-            data: records.map((record) => ({
-                ...record,
-                is_open: !record.breakEnd,
-            })),
+            count: data.length,
+            data,
         });
     } catch (err) {
         return next(err);
@@ -485,14 +539,36 @@ router.post('/break/start', async (req, res, next) => {
             return res.status(200).json({ success: true, message: 'Break is already active.', data: serializeBreak(existing) });
         }
 
-        const breakRecord = await AttendanceBreak.create({
-            companyId: employee.companyId,
-            employeeId: employee.employeeId,
-            employeeRecordId: employee.employeeRecordId,
-            employeeName: employee.employeeName,
-            workDate,
-            breakStart: new Date(),
+        let breakRecord = await AttendanceBreak.findOne({
+            where: {
+                companyId: employee.companyId,
+                employeeId: employee.employeeId,
+                workDate,
+            },
+            order: [['breakStart', 'DESC']],
         });
+
+        if (breakRecord) {
+            await breakRecord.update({
+                employeeRecordId: employee.employeeRecordId || breakRecord.employeeRecordId,
+                employeeName: employee.employeeName || breakRecord.employeeName,
+                breakStart: new Date(),
+                breakEnd: null,
+                breakCount: Number(breakRecord.breakCount || 1) + 1,
+                totalBreakMinutes: Number(breakRecord.totalBreakMinutes || 0),
+            });
+        } else {
+            breakRecord = await AttendanceBreak.create({
+                companyId: employee.companyId,
+                employeeId: employee.employeeId,
+                employeeRecordId: employee.employeeRecordId,
+                employeeName: employee.employeeName,
+                workDate,
+                breakStart: new Date(),
+                breakCount: 1,
+                totalBreakMinutes: 0,
+            });
+        }
 
         await notifyAdminsAboutBreak({ breakRecord, action: 'start' });
 
@@ -528,7 +604,12 @@ router.post('/break/end', async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'No active break found.' });
         }
 
-        await breakRecord.update({ breakEnd: new Date() });
+        const breakEnd = new Date();
+        const sessionMinutes = Math.max(0, Math.floor((breakEnd.getTime() - new Date(breakRecord.breakStart).getTime()) / (60 * 1000)));
+        await breakRecord.update({
+            breakEnd,
+            totalBreakMinutes: Number(breakRecord.totalBreakMinutes || 0) + sessionMinutes,
+        });
         await notifyAdminsAboutBreak({ breakRecord, action: 'end' });
 
         return res.status(200).json({
