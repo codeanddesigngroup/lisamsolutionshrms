@@ -123,6 +123,7 @@ const serializeBreak = (record) => record ? ({
     break_end: record.breakEnd,
     break_count: record.breakCount,
     total_break_minutes: record.totalBreakMinutes,
+    break_sessions: record.breakSessions,
     is_open: !record.breakEnd,
 }) : null;
 
@@ -134,6 +135,7 @@ const breakRecordAttributes = [
     'workDate',
     'breakCount',
     'totalBreakMinutes',
+    'breakSessions',
     [fn('to_char', col('break_start'), 'YYYY-MM-DD HH24:MI:SS'), 'breakStart'],
     [fn('to_char', col('break_end'), 'YYYY-MM-DD HH24:MI:SS'), 'breakEnd'],
     [
@@ -212,22 +214,52 @@ const getBreakEmployee = async (source = {}) => {
     };
 };
 
+const normalizeBreakSessions = (record = {}) => {
+    const sessions = Array.isArray(record.breakSessions) ? record.breakSessions : [];
+
+    if (sessions.length > 0) {
+        return sessions
+            .map((session) => ({
+                start: session.start || session.break_start || null,
+                end: session.end || session.break_end || null,
+            }))
+            .filter((session) => session.start);
+    }
+
+    if (!record.breakStart) return [];
+    return [{
+        start: record.breakStart,
+        end: record.breakEnd || null,
+    }];
+};
+
+const calculateBreakSessionMinutes = (sessions = []) => sessions.reduce((total, session) => {
+    if (!session.start) return total;
+    const start = new Date(session.start);
+    const end = session.end ? new Date(session.end) : new Date();
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return total;
+    return total + Math.max(0, Math.floor((end.getTime() - start.getTime()) / (60 * 1000)));
+}, 0);
+
 const combineBreakRecords = (records = []) => {
     const grouped = new Map();
 
     for (const record of records) {
         const key = `${record.companyId}:${record.employeeId}:${record.workDate}`;
-        const breakCount = Number(record.breakCount || 1);
-        const completedMinutes = Number(record.durationMinutes || 0);
-        const activeMinutes = Number(record.activeBreakMinutes || 0);
+        const sessions = normalizeBreakSessions(record);
+        const breakCount = sessions.length || Number(record.breakCount || 1);
+        const totalMinutes = sessions.length
+            ? calculateBreakSessionMinutes(sessions)
+            : Number(record.durationMinutes || 0) + Number(record.activeBreakMinutes || 0);
         const existing = grouped.get(key);
 
         if (!existing) {
             grouped.set(key, {
                 ...record,
                 breakCount,
-                durationMinutes: completedMinutes + activeMinutes,
-                is_open: !record.breakEnd,
+                breakSessions: sessions,
+                durationMinutes: totalMinutes,
+                is_open: sessions.some((session) => !session.end) || !record.breakEnd,
             });
             continue;
         }
@@ -244,8 +276,9 @@ const combineBreakRecords = (records = []) => {
         existing.departmentName = existing.departmentName || record.departmentName;
         existing.breakStart = latestStartRecord.breakStart;
         existing.breakCount = Number(existing.breakCount || 0) + breakCount;
-        existing.durationMinutes = Number(existing.durationMinutes || 0) + completedMinutes + activeMinutes;
-        existing.is_open = Boolean(existing.is_open || !record.breakEnd);
+        existing.breakSessions = [...(existing.breakSessions || []), ...sessions];
+        existing.durationMinutes = Number(existing.durationMinutes || 0) + totalMinutes;
+        existing.is_open = Boolean(existing.is_open || sessions.some((session) => !session.end) || !record.breakEnd);
         existing.breakEnd = existing.is_open ? null : (currentEnd > existingEnd ? record.breakEnd : existing.breakEnd);
         existing.updated_at = currentEnd > existingEnd ? record.updated_at : existing.updated_at;
     }
@@ -548,14 +581,19 @@ router.post('/break/start', async (req, res, next) => {
             order: [['breakStart', 'DESC']],
         });
 
+        const breakStart = new Date();
         if (breakRecord) {
+            const sessions = normalizeBreakSessions(breakRecord).map((session) => ({ ...session }));
+            sessions.push({ start: breakStart.toISOString(), end: null });
+
             await breakRecord.update({
                 employeeRecordId: employee.employeeRecordId || breakRecord.employeeRecordId,
                 employeeName: employee.employeeName || breakRecord.employeeName,
-                breakStart: new Date(),
+                breakStart,
                 breakEnd: null,
-                breakCount: Number(breakRecord.breakCount || 1) + 1,
+                breakCount: sessions.length,
                 totalBreakMinutes: Number(breakRecord.totalBreakMinutes || 0),
+                breakSessions: sessions,
             });
         } else {
             breakRecord = await AttendanceBreak.create({
@@ -564,9 +602,10 @@ router.post('/break/start', async (req, res, next) => {
                 employeeRecordId: employee.employeeRecordId,
                 employeeName: employee.employeeName,
                 workDate,
-                breakStart: new Date(),
+                breakStart,
                 breakCount: 1,
                 totalBreakMinutes: 0,
+                breakSessions: [{ start: breakStart.toISOString(), end: null }],
             });
         }
 
@@ -606,9 +645,23 @@ router.post('/break/end', async (req, res, next) => {
 
         const breakEnd = new Date();
         const sessionMinutes = Math.max(0, Math.floor((breakEnd.getTime() - new Date(breakRecord.breakStart).getTime()) / (60 * 1000)));
+        const sessions = normalizeBreakSessions(breakRecord).map((session) => ({ ...session }));
+        const openSessionIndex = [...sessions].reverse().findIndex((session) => !session.end);
+        if (openSessionIndex >= 0) {
+            sessions[sessions.length - 1 - openSessionIndex].end = breakEnd.toISOString();
+        } else {
+            sessions.push({
+                start: new Date(breakRecord.breakStart).toISOString(),
+                end: breakEnd.toISOString(),
+            });
+        }
+        const totalBreakMinutes = calculateBreakSessionMinutes(sessions);
+
         await breakRecord.update({
             breakEnd,
-            totalBreakMinutes: Number(breakRecord.totalBreakMinutes || 0) + sessionMinutes,
+            totalBreakMinutes: totalBreakMinutes || Number(breakRecord.totalBreakMinutes || 0) + sessionMinutes,
+            breakCount: sessions.length || Number(breakRecord.breakCount || 1),
+            breakSessions: sessions,
         });
         await notifyAdminsAboutBreak({ breakRecord, action: 'end' });
 

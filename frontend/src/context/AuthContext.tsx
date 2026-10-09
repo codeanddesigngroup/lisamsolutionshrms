@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const syncEmployeePermissions = async () => {
       try {
-        const response = await api.get(`/employee/${encodeURIComponent(String(user.id))}`);
+        const response = await api.get(`/employees/${encodeURIComponent(String(user.id))}`);
         const permissions = Array.isArray(response.data?.data?.permissions) ? response.data.data.permissions as string[] : [];
 
         setUser((currentUser) => {

@@ -388,7 +388,13 @@ export default function ChatPage() {
     client.emit("chat:join-company", { company_id: user.company_id, member_key: currentUserKey });
 
     const handleConversationUpsert = ({ conversation }: { conversation?: ChatConversation }) => {
-      if (conversation) mergeConversation(conversation);
+      if (!conversation) return;
+      const wasVisible = conversationsRef.current.some((item) => String(item.id) === String(conversation.id));
+      const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversation.participant_keys.includes(currentUserKey);
+      mergeConversation(conversation);
+      if (isNewGroupForUser) {
+        showToast(`You were added to ${conversation.name}.`, "info");
+      }
     };
 
     const handleConversationDeleted = ({ conversation_id }: { conversation_id?: string | number }) => {
@@ -429,7 +435,7 @@ export default function ChatPage() {
       client.off("message:updated", handleMessageUpdated);
       disconnectChatSocket();
     };
-  }, [currentUserKey, mergeConversation, mergeMessage, user?.company_id]);
+  }, [currentUserKey, mergeConversation, mergeMessage, showToast, user?.company_id]);
 
   useEffect(() => {
     if (!user?.company_id) return;
