@@ -50,6 +50,7 @@ type ChatMember = {
   role?: string;
   avatar?: string;
   status?: "online" | "away" | "offline";
+  canViewMessages?: boolean;
 };
 
 type ChatAttachment = {
@@ -163,6 +164,13 @@ const isSupportedConversation = (conversation: ChatConversation, currentUserKey:
   conversation.participant_keys.includes(currentUserKey) &&
   !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
   !conversation.participants.some((participant) => participant.type === "client");
+
+const canMemberViewMessages = (member: ChatMember) => member.type !== "employee" || member.canViewMessages !== false;
+
+const hasMessagesViewAccess = (permissions: unknown) => {
+  if (!Array.isArray(permissions)) return false;
+  return permissions.some((permission) => permission === "*" || permission === "messages.*" || permission === "messages.view");
+};
 
 export default function ChatPage() {
   const { user, hasPermission } = useAuth();
@@ -320,6 +328,7 @@ export default function ChatPage() {
             role: detail?.designation?.name || roleLabel[type],
             avatar: String(employee.avatar || employee.image || ""),
             status: String(employee.status || "online") === "active" ? "online" : "offline",
+            canViewMessages: type === "admin" || hasMessagesViewAccess(employee.permissions),
           } as ChatMember;
         });
 
@@ -331,6 +340,7 @@ export default function ChatPage() {
           role: "Admin",
           avatar: String(admin.avatar || admin.image || ""),
           status: String(admin.status || "active") === "active" ? "online" as const : "offline" as const,
+          canViewMessages: true,
         }));
 
         const currentMember: ChatMember = {
@@ -341,16 +351,18 @@ export default function ChatPage() {
           role: roleLabel[user?.role === "client" ? "client" : user?.role === "employee" ? "employee" : "admin"],
           avatar: "",
           status: "online",
+          canViewMessages: true,
         };
 
         const members = [currentMember, ...adminMembers, ...employeeMembers].filter(
           (member, index, list) => list.findIndex((item) => item.key === member.key) === index,
         );
+        const messageViewMembers = members.filter(canMemberViewMessages);
 
         const storedConversations = asList<ChatConversation>(conversationRes.data).filter((conversation) =>
           isSupportedConversation(conversation, currentUserKey),
         );
-        const directConversations = members
+        const directConversations = messageViewMembers
           .filter((member) => member.key !== currentUserKey)
           .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.includes(currentUserKey) && conversation.participant_keys.includes(member.key)))
           .map((member) => ({
@@ -366,7 +378,7 @@ export default function ChatPage() {
             created_at: new Date().toISOString(),
           }));
 
-        setDirectory(members);
+        setDirectory(messageViewMembers);
         setConversations([...storedConversations, ...directConversations]);
         setMessages(asList<ChatMessage>(messageRes.data));
         await Promise.allSettled(directConversations.map((conversation) => api.post("/chat-conversations", { ...conversation, company_id: user?.company_id })));
@@ -658,7 +670,15 @@ export default function ChatPage() {
     }
 
     const currentMember = directory.find((member) => member.key === currentUserKey);
-    const selectedMembers = directory.filter((member) => selectedMemberKeys.includes(member.key));
+    const selectedMembers = directory.filter((member) => selectedMemberKeys.includes(member.key) && canMemberViewMessages(member));
+    const skippedMembers = selectedMemberKeys.length - selectedMembers.length;
+    if (skippedMembers > 0) {
+      showToast("Some selected members were skipped because they do not have Messages view permission.", "info");
+    }
+    if (selectedMembers.length === 0) {
+      showToast("Select at least one member with Messages view permission.", "error");
+      return;
+    }
     const participants = [currentMember, ...selectedMembers].filter(Boolean) as ChatMember[];
     const conversation: ChatConversation = {
       id: `group-${Date.now()}`,

@@ -1,13 +1,65 @@
 const express = require('express');
+const { Op } = require('sequelize');
 const router = express.Router();
 const ChatConversation = require('../models/ChatConversation');
 const ChatMessage = require('../models/ChatMessage');
+const Employee = require('../models/Employee');
+const EmployeePermission = require('../models/EmployeePermission');
 const { emitToChatRooms, emitToCompany } = require('../realtime/socket');
 
 const serialize = (record) => ({ ...record.payload, id: record.id, company_id: record.company_id });
 
 const uniqueList = (items) =>
   Array.from(new Set((Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean)));
+
+const hasMessagesViewAccess = (permissions) =>
+  Array.isArray(permissions) && permissions.some((permission) => permission === '*' || permission === 'messages.*' || permission === 'messages.view');
+
+const filterGroupMessageParticipants = async (payload, companyId) => {
+  if (payload.type !== 'group') return payload;
+
+  const participantKeys = uniqueList(payload.participant_keys);
+  const employeeIds = participantKeys
+    .filter((key) => key.startsWith('employee:'))
+    .map((key) => Number(key.split(':')[1]))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  const validEmployeeIds = new Set();
+  if (employeeIds.length > 0) {
+    const employees = await Employee.findAll({
+      where: { id: { [Op.in]: employeeIds }, company_id: companyId },
+      attributes: ['id'],
+    });
+    const companyEmployeeIds = employees.map((employee) => Number(employee.id));
+    const permissions = await EmployeePermission.findAll({
+      where: { employee_id: { [Op.in]: companyEmployeeIds } },
+      attributes: ['employee_id', 'permission_keys'],
+    });
+
+    permissions.forEach((record) => {
+      if (hasMessagesViewAccess(record.permission_keys)) {
+        validEmployeeIds.add(Number(record.employee_id));
+      }
+    });
+  }
+
+  const creatorKey = String(payload.created_by || '');
+  const allowedParticipantKeys = participantKeys.filter((key) => {
+    if (key === creatorKey) return true;
+    if (!key.startsWith('employee:')) return true;
+    const employeeId = Number(key.split(':')[1]);
+    return validEmployeeIds.has(employeeId);
+  });
+
+  return {
+    ...payload,
+    participant_keys: allowedParticipantKeys,
+    participants: Array.isArray(payload.participants)
+      ? payload.participants.filter((participant) => allowedParticipantKeys.includes(String(participant?.key || '')))
+      : payload.participants,
+    unread_by: uniqueList(payload.unread_by).filter((key) => allowedParticipantKeys.includes(key) && key !== creatorKey),
+  };
+};
 
 const buildGroupCreatedMessage = (conversation) => {
   const payload = conversation.payload || {};
@@ -46,7 +98,8 @@ router.post('/', async (req, res, next) => {
   try {
     const companyId = Number(req.body.company_id);
     if (!req.body.id || !Number.isInteger(companyId) || companyId <= 0) return res.status(400).json({ success: false, message: 'Conversation ID and company are required' });
-    const payload = { ...req.body }; delete payload.company_id;
+    let payload = { ...req.body }; delete payload.company_id;
+    payload = await filterGroupMessageParticipants(payload, companyId);
     const [row, created] = await ChatConversation.findOrCreate({
       where: { id: String(req.body.id) },
       defaults: { company_id: companyId, payload },
@@ -96,7 +149,8 @@ router.put('/:id', async (req, res, next) => {
   try {
     const row = await ChatConversation.findByPk(req.params.id);
     if (!row) return res.status(404).json({ success: false, message: 'Conversation not found' });
-    const payload = { ...req.body, id: row.id }; delete payload.company_id;
+    let payload = { ...req.body, id: row.id }; delete payload.company_id;
+    payload = await filterGroupMessageParticipants(payload, row.company_id);
     await row.update({ payload });
     const data = serialize(row);
     emitToCompany(row.company_id, 'conversation:updated', { conversation: data });
