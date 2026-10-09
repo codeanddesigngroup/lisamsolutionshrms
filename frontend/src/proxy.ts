@@ -8,6 +8,7 @@ import {
 
 const TOKEN_COOKIE = "token";
 const ROLE_COOKIE = "user_role";
+const employeePermissionControlledPathPrefixes = ["/breaks"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -23,7 +24,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (!canRoleAccessPath(role, pathname)) {
+  const isEmployeePermissionControlledPath =
+    role === "employee" &&
+    employeePermissionControlledPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
+  if (!isEmployeePermissionControlledPath && !canRoleAccessPath(role, pathname)) {
     return NextResponse.redirect(new URL(getDefaultRouteForRole(role), request.url));
   }
 
