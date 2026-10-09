@@ -405,7 +405,8 @@ export default function ChatPage() {
       const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversation.participant_keys.includes(currentUserKey);
       mergeConversation(conversation);
       if (isNewGroupForUser) {
-        showToast(`You were added to ${conversation.name}.`, "info");
+        const creatorName = conversation.participants.find((participant) => participant.key === conversation.created_by)?.name || "Someone";
+        showToast(`${creatorName} created ${conversation.name}.`, "info");
       }
     };
 
@@ -447,7 +448,7 @@ export default function ChatPage() {
       client.off("message:updated", handleMessageUpdated);
       disconnectChatSocket();
     };
-  }, [currentUserKey, mergeConversation, mergeMessage, showToast, user?.company_id]);
+  }, [currentUserKey, currentUserName, mergeConversation, mergeMessage, showToast, user?.company_id]);
 
   useEffect(() => {
     if (!user?.company_id) return;

@@ -66,6 +66,10 @@ const buildGroupCreatedMessage = (conversation) => {
   const createdAt = payload.created_at || new Date().toISOString();
   const creatorKey = String(payload.created_by || '');
   const participantKeys = uniqueList(payload.participant_keys);
+  const creator = Array.isArray(payload.participants)
+    ? payload.participants.find((participant) => participant?.key === creatorKey)
+    : null;
+  const creatorName = String(creator?.name || 'Someone').trim();
 
   return {
     id: `system-${conversation.id}-created`,
@@ -76,7 +80,7 @@ const buildGroupCreatedMessage = (conversation) => {
       conversation_id: conversation.id,
       sender_key: 'system',
       sender_name: 'System',
-      body: `You were added to ${payload.name || 'this group'}.`,
+      body: `${creatorName} created ${payload.name || 'this group'}.`,
       attachments: [],
       reactions: [],
       status_by: Object.fromEntries(participantKeys.map((key) => [key, key === creatorKey ? 'seen' : 'delivered'])),
