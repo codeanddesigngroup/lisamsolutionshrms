@@ -159,11 +159,23 @@ function localDateString(date = new Date()) {
 
 function displayTime(value?: string) {
   if (!value) return "--:--";
-  const timeValue = value.includes(" ") ? value.split(" ").pop() || value : value;
-  const [hours = "0", minutes = "0"] = timeValue.split(":");
-  const date = new Date();
-  date.setHours(Number(hours), Number(minutes), 0, 0);
-  return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+
+  const raw = String(value).trim();
+  const timeMatch = raw.match(/(?:^|[ T])(\d{1,2}):(\d{2})(?::\d{2})?/);
+  if (timeMatch) {
+    const date = new Date();
+    date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), 0, 0);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    }
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  return raw;
 }
 
 function statusText(value?: string) {
