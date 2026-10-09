@@ -3,6 +3,13 @@ const router = express.Router();
 const { Op, fn, col, literal } = require('sequelize');
 
 const AttendanceRecords = require('../models/AttendanceRecords');
+const AttendanceBreak = require('../models/AttendanceBreak');
+const Employee = require('../models/Employee');
+const Role = require('../models/Role');
+const User = require('../models/User');
+const ChatConversation = require('../models/ChatConversation');
+const ChatMessage = require('../models/ChatMessage');
+const { emitToChatRooms } = require('../realtime/socket');
 const { getRecentAttendanceRecords, generateAttendanceRecord, processAttendanceRecords } = require('../services/attendanceService');
 
 const getToday = () => new Date().toISOString().slice(0, 10);
@@ -94,6 +101,141 @@ const findAttendanceRecordResponse = (id) => AttendanceRecords.findByPk(id, {
     raw: true,
 });
 
+const getBreakWorkDate = () => {
+    const timezoneOffset = Number(process.env.DEVICE_TIMEZONE || 5);
+    return new Date(Date.now() + timezoneOffset * 60 * 60 * 1000).toISOString().slice(0, 10);
+};
+
+const serializeBreak = (record) => record ? ({
+    id: record.id,
+    company_id: record.companyId,
+    employee_id: record.employeeId,
+    employee_record_id: record.employeeRecordId,
+    employee_name: record.employeeName,
+    work_date: record.workDate,
+    break_start: record.breakStart,
+    break_end: record.breakEnd,
+    is_open: !record.breakEnd,
+}) : null;
+
+const getBreakEmployee = async (source = {}) => {
+    const companyId = Number(source.company_id || source.companyId);
+    const employeeRecordId = Number(source.employee_record_id || source.employeeRecordId || source.employee_pk || source.employeePk);
+    const employeeId = String(source.employee_id || source.employeeId || '').trim();
+
+    let employee = null;
+    if (Number.isInteger(employeeRecordId) && employeeRecordId > 0) {
+        employee = await Employee.findByPk(employeeRecordId);
+    }
+
+    if (!employee && employeeId) {
+        employee = await Employee.findOne({
+            where: {
+                employee_id: employeeId,
+                ...(Number.isInteger(companyId) && companyId > 0 ? { company_id: companyId } : {}),
+            },
+        });
+    }
+
+    const resolvedCompanyId = Number(companyId || employee?.company_id);
+    const resolvedEmployeeId = String(employee?.employee_id || employeeId || '').trim();
+
+    if (!Number.isInteger(resolvedCompanyId) || resolvedCompanyId <= 0 || !resolvedEmployeeId) {
+        return null;
+    }
+
+    return {
+        companyId: resolvedCompanyId,
+        employeeId: resolvedEmployeeId,
+        employeeRecordId: employee?.id || (Number.isInteger(employeeRecordId) && employeeRecordId > 0 ? employeeRecordId : null),
+        employeeName: String(employee?.name || source.employee_name || source.employeeName || 'Employee').trim(),
+    };
+};
+
+const notifyAdminsAboutBreak = async ({ breakRecord, action }) => {
+    const companyId = Number(breakRecord.companyId);
+    if (!Number.isInteger(companyId) || companyId <= 0) return null;
+
+    const adminRole = await Role.findOne({ where: { name: 'Admin' } });
+    const admins = adminRole
+        ? await User.findAll({ where: { company_id: companyId, role_id: adminRole.id, status: 'active' } })
+        : [];
+    const adminKeys = admins.map((admin) => `admin:${admin.id}`);
+    const employeeKey = breakRecord.employeeRecordId ? `employee:${breakRecord.employeeRecordId}` : `employee:${breakRecord.employeeId}`;
+    const participantKeys = Array.from(new Set([employeeKey, ...adminKeys]));
+    const conversationId = `attendance-breaks-${companyId}`;
+    const createdAt = new Date().toISOString();
+    const actionText = action === 'end' ? 'ended break' : 'started break';
+    const eventTime = new Date(action === 'end' ? breakRecord.breakEnd : breakRecord.breakStart).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Karachi',
+    });
+    const body = `${breakRecord.employeeName || 'Employee'} ${actionText} at ${eventTime}.`;
+
+    const [conversation] = await ChatConversation.findOrCreate({
+        where: { id: conversationId },
+        defaults: {
+            id: conversationId,
+            company_id: companyId,
+            payload: {
+                id: conversationId,
+                type: 'group',
+                name: 'Attendance Break Alerts',
+                created_by: 'system:attendance',
+                participant_keys: participantKeys,
+                admin_keys: adminKeys,
+                last_message: body,
+                last_message_at: createdAt,
+                unread_by: adminKeys,
+                archived_by: [],
+                settings: { only_admins_can_edit_info: true, only_admins_can_send: false },
+            },
+        },
+    });
+
+    const conversationPayload = conversation.payload || {};
+    const nextParticipantKeys = Array.from(new Set([...(conversationPayload.participant_keys || []), ...participantKeys]));
+    const nextAdminKeys = Array.from(new Set([...(conversationPayload.admin_keys || []), ...adminKeys]));
+    await conversation.update({
+        payload: {
+            ...conversationPayload,
+            participant_keys: nextParticipantKeys,
+            admin_keys: nextAdminKeys,
+            last_message: body,
+            last_message_at: createdAt,
+            unread_by: nextAdminKeys,
+            archived_by: (conversationPayload.archived_by || []).filter((key) => key === employeeKey),
+        },
+    });
+
+    const messagePayload = {
+        id: `attendance-break-${breakRecord.id}-${action}-${Date.now()}`,
+        conversation_id: conversationId,
+        type: 'system',
+        body,
+        sender_key: 'system:attendance',
+        sender_name: 'Attendance System',
+        created_at: createdAt,
+        attendance_break_id: breakRecord.id,
+        attendance_break_action: action,
+        employee_id: breakRecord.employeeId,
+        employee_record_id: breakRecord.employeeRecordId,
+    };
+    const message = await ChatMessage.create({
+        id: messagePayload.id,
+        company_id: companyId,
+        conversation_id: conversationId,
+        payload: messagePayload,
+    });
+
+    const serializedConversation = { ...conversation.payload, id: conversation.id, company_id: companyId };
+    const serializedMessage = { ...message.payload, id: message.id, conversation_id: conversationId, company_id: companyId };
+    emitToChatRooms(companyId, conversationId, 'conversation:updated', { conversation: serializedConversation });
+    emitToChatRooms(companyId, conversationId, 'message:created', { message: serializedMessage, conversation: serializedConversation });
+    return serializedMessage;
+};
+
 router.get('/', async (req, res, next) => {
     try {
         const records = await AttendanceRecords.findAll({
@@ -154,6 +296,114 @@ router.get('/summary', async (req, res, next) => {
                 completed_count: completedCount,
                 total_worked_hours: totalWorkedHours,
             },
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.get('/break/status', async (req, res, next) => {
+    try {
+        const employee = await getBreakEmployee(req.query);
+        if (!employee) {
+            return res.status(422).json({ success: false, message: 'A valid company and employee are required.' });
+        }
+
+        const workDate = String(req.query.workDate || req.query.work_date || getBreakWorkDate()).trim();
+        const openBreak = await AttendanceBreak.findOne({
+            where: {
+                companyId: employee.companyId,
+                employeeId: employee.employeeId,
+                workDate,
+                breakEnd: null,
+            },
+            order: [['breakStart', 'DESC']],
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                is_on_break: Boolean(openBreak),
+                break: serializeBreak(openBreak),
+            },
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.post('/break/start', async (req, res, next) => {
+    try {
+        const employee = await getBreakEmployee(req.body);
+        if (!employee) {
+            return res.status(422).json({ success: false, message: 'A valid company and employee are required.' });
+        }
+
+        const workDate = String(req.body?.workDate || req.body?.work_date || getBreakWorkDate()).trim();
+        const existing = await AttendanceBreak.findOne({
+            where: {
+                companyId: employee.companyId,
+                employeeId: employee.employeeId,
+                workDate,
+                breakEnd: null,
+            },
+            order: [['breakStart', 'DESC']],
+        });
+
+        if (existing) {
+            return res.status(200).json({ success: true, message: 'Break is already active.', data: serializeBreak(existing) });
+        }
+
+        const breakRecord = await AttendanceBreak.create({
+            companyId: employee.companyId,
+            employeeId: employee.employeeId,
+            employeeRecordId: employee.employeeRecordId,
+            employeeName: employee.employeeName,
+            workDate,
+            breakStart: new Date(),
+        });
+
+        await notifyAdminsAboutBreak({ breakRecord, action: 'start' });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Break started.',
+            data: serializeBreak(breakRecord),
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.post('/break/end', async (req, res, next) => {
+    try {
+        const employee = await getBreakEmployee(req.body);
+        if (!employee) {
+            return res.status(422).json({ success: false, message: 'A valid company and employee are required.' });
+        }
+
+        const workDate = String(req.body?.workDate || req.body?.work_date || getBreakWorkDate()).trim();
+        const breakRecord = await AttendanceBreak.findOne({
+            where: {
+                companyId: employee.companyId,
+                employeeId: employee.employeeId,
+                workDate,
+                breakEnd: null,
+            },
+            order: [['breakStart', 'DESC']],
+        });
+
+        if (!breakRecord) {
+            return res.status(404).json({ success: false, message: 'No active break found.' });
+        }
+
+        await breakRecord.update({ breakEnd: new Date() });
+        await notifyAdminsAboutBreak({ breakRecord, action: 'end' });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Break ended.',
+            data: serializeBreak(breakRecord),
         });
     } catch (err) {
         return next(err);

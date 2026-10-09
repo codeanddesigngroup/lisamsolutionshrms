@@ -11,6 +11,7 @@ const Role = require('../src/models/Role');
 const User = require('../src/models/User');
 const AttendanceLogs = require('../src/models/AttendanceLogs');
 const AttendanceRecords = require('../src/models/AttendanceRecords');
+const AttendanceBreak = require('../src/models/AttendanceBreak');
 const LeaveType = require('../src/models/LeaveType');
 const Leave = require('../src/models/Leave');
 const LeaveQuota = require('../src/models/LeaveQuota');
@@ -45,6 +46,7 @@ async function initDb() {
     await Employee.sync({ alter: true });
     await AttendanceLogs.sync({ alter: true });
     await AttendanceRecords.sync({ alter: true });
+    await AttendanceBreak.sync({ alter: true });
     await EmployeePermission.sync({ alter: true });
     await LeaveType.sync({ alter: true });
     await Leave.sync({ alter: true });

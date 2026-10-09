@@ -38,6 +38,7 @@ type ShiftSummary = {
 
 type EmployeeRecord = {
   id: number | string;
+  company_id?: number | string;
   name: string;
   email?: string;
   employee_id?: number | string;
@@ -221,6 +222,7 @@ export default function EmployeeDashboard() {
   const [isOnBreak, setIsOnBreak] = useState(false);
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [breakSaving, setBreakSaving] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -303,7 +305,7 @@ export default function EmployeeDashboard() {
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [showToast, user?.id]);
+  }, [showToast, user]);
 
   const currentEmployee = useMemo(() => {
     const userId = String(user?.id || "");
@@ -312,6 +314,7 @@ export default function EmployeeDashboard() {
 
   const assignedShift = currentEmployee?.employee_detail?.shift_type;
   const employeeId = currentEmployee?.id ? String(currentEmployee.id) : "";
+  const companyId = currentEmployee?.company_id || user?.company_id || "";
   const employeeDetail = currentEmployee?.employee_detail;
   const deviceEmployeeId = String(employeeDetail?.employee_id || currentEmployee?.employee_id || "");
   const designation = currentEmployee?.designation?.name || employeeDetail?.designation?.name || "Not assigned";
@@ -361,6 +364,26 @@ export default function EmployeeDashboard() {
     return () => window.clearTimeout(timeoutId);
   }, [currentEmployee, myAttendance]);
 
+  useEffect(() => {
+    if (!companyId || !deviceEmployeeId) return;
+
+    const fetchBreakStatus = async () => {
+      try {
+        const response = await api.get("/attendance/break/status", {
+          params: {
+            company_id: companyId,
+            employee_id: deviceEmployeeId,
+            employee_record_id: employeeId,
+          },
+        });
+        setIsOnBreak(Boolean(response.data?.data?.is_on_break));
+      } catch {
+        setIsOnBreak(false);
+      }
+    };
+
+    void fetchBreakStatus();
+  }, [companyId, deviceEmployeeId, employeeId]);
   useEffect(() => {
     if (!deviceEmployeeId) return;
 
@@ -422,10 +445,34 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const toggleBreak = () => {
-    if (!isClockedIn) return;
-    setIsOnBreak((current) => !current);
-    showToast(isOnBreak ? "Break ended." : "Break started.", "success");
+  const toggleBreak = async () => {
+    if (!isClockedIn) {
+      showToast("You must be clocked in before taking a break.", "error");
+      return;
+    }
+
+    if (!companyId || !deviceEmployeeId) {
+      showToast("Your employee profile is missing company or attendance device ID.", "error");
+      return;
+    }
+
+    setBreakSaving(true);
+    try {
+      const endpoint = isOnBreak ? "/attendance/break/end" : "/attendance/break/start";
+      await api.post(endpoint, {
+        company_id: companyId,
+        employee_id: deviceEmployeeId,
+        employee_record_id: employeeId,
+        employee_name: currentEmployee?.name || user?.name || "Employee",
+      });
+      setIsOnBreak((current) => !current);
+      showToast(isOnBreak ? "Break ended. Admin notified." : "Break started. Admin notified.", "success");
+    } catch (error) {
+      console.error("Break update failed:", error);
+      showToast("Could not update break status.", "error");
+    } finally {
+      setBreakSaving(false);
+    }
   };
 
   return (
@@ -673,11 +720,11 @@ export default function EmployeeDashboard() {
                 <button
                   type="button"
                   onClick={toggleBreak}
-                  disabled={!isClockedIn}
+                  disabled={!isClockedIn || breakSaving}
                   className="mt-6 flex w-full items-center justify-center rounded-xl bg-white/10 py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Coffee className="mr-2 h-3 w-3" />
-                  {isOnBreak ? "End Break" : "Take a Break"}
+                  {breakSaving ? "Saving..." : isOnBreak ? "End Break" : "Take a Break"}
                 </button>
               </div>
             </Card>
