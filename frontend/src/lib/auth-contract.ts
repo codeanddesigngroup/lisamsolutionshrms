@@ -342,7 +342,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/attendance/settings/shifts"], anyOf: ["shifts.view", "shifts.manage"] },
   { prefixes: ["/leaves/all", "/leaves/settings", "/leave-type"], anyOf: ["leaves.view", "leaves.manage", "leaves.approve"] },
   { prefixes: ["/attendance/bulk", "/attendance/settings", "/attendance/reports"], anyOf: ["attendance.manage"] },
-  { prefixes: ["/breaks"], anyOf: ["breaks.view", "attendance.view", "attendance.manage"] },
+  { prefixes: ["/breaks"], anyOf: ["breaks.view"] },
   { prefixes: ["/attendance"], anyOf: ["attendance.view", "attendance.manage"] },
   { prefixes: ["/leaves"], anyOf: ["leaves.view", "leaves.manage"] },
   { prefixes: ["/holidays/create"], anyOf: ["holidays.create", "holidays.manage"] },
@@ -363,6 +363,11 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/products"], anyOf: ["products.view", "products.manage"] },
   { prefixes: ["/profile", "/search"], anyOf: ["profile.view", "dashboard.view"] },
 ];
+
+const getMatchedPermissionRule = (pathname: string) =>
+  permissionRouteRules.find((rule) =>
+    rule.prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)),
+  );
 
 export const normalizeRole = (role?: string | null): UserRole => {
   if (role === "super-admin") return "super_admin";
@@ -397,17 +402,29 @@ export const canRoleAccessPath = (role: UserRole, pathname: string) => {
   return matchedRule.roles.includes(role);
 };
 
-export const canUserAccessPath = (user: AuthUser | null, pathname: string) =>
-  Boolean(user && canRoleAccessPath(normalizeRole(user.role), pathname) && hasPathPermission(user, pathname));
+export const canUserAccessPath = (user: AuthUser | null, pathname: string) => {
+  if (!user) return false;
+
+  const role = normalizeRole(user.role);
+  if (canRoleAccessPath(role, pathname)) {
+    return hasPathPermission(user, pathname);
+  }
+
+  if (role === "employee") {
+    const matchedRule = getMatchedPermissionRule(pathname);
+    return Boolean(matchedRule && matchedRule.anyOf.some((permission) => userHasPermission(user, permission)));
+  }
+
+  return false;
+};
 
 export const hasPathPermission = (user: AuthUser, pathname: string) => {
   const role = normalizeRole(user.role);
   if (role === "super_admin") return true;
   if (pathname === roleDefaultRoutes[role]) return true;
+  if (role === "admin" && (pathname === "/breaks" || pathname.startsWith("/breaks/"))) return true;
 
-  const matchedRule = permissionRouteRules.find((rule) =>
-    rule.prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)),
-  );
+  const matchedRule = getMatchedPermissionRule(pathname);
 
   if (!matchedRule) return true;
   return matchedRule.anyOf.some((permission) => userHasPermission(user, permission));

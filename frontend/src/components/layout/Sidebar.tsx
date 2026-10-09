@@ -237,10 +237,6 @@ const roleMenuAccess: Record<UserRole, string[]> = {
 const roleSubmenuAccess: Partial<Record<UserRole, Record<string, string[]>>> = {
   employee: {
     Dashboard: ["Employee Dashboard"],
-    HR: ["Attendance", "Holidays", "Leaves"],
-    Work: ["Projects", "Tasks", "Task Board", "Task Calendar"],
-    Events: ["Event Calendar"],
-    Payroll: ["My Payslips"],
   },
   client: {
     Dashboard: ["Client Dashboard"],
