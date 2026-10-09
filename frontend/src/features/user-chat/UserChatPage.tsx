@@ -51,6 +51,7 @@ type ChatMember = {
   avatar?: string;
   status?: "online" | "away" | "offline";
   canViewMessages?: boolean;
+  departmentId?: number | string | null;
 };
 
 type ChatAttachment = {
@@ -164,8 +165,6 @@ const isSupportedConversation = (conversation: ChatConversation, currentUserKey:
   conversation.participant_keys.includes(currentUserKey) &&
   !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
   !conversation.participants.some((participant) => participant.type === "client");
-
-const canMemberViewMessages = (member: ChatMember) => member.type !== "employee" || member.canViewMessages !== false;
 
 const hasMessagesViewAccess = (permissions: unknown) => {
   if (!Array.isArray(permissions)) return false;
@@ -284,6 +283,26 @@ export default function ChatPage() {
     [activeConversation?.pinned_message_id, activeMessages],
   );
 
+  const currentDirectoryMember = useMemo(
+    () => directory.find((member) => member.key === currentUserKey) || null,
+    [currentUserKey, directory],
+  );
+
+  const canCurrentUserAddToGroup = useCallback((member: ChatMember) => {
+    if (member.key === currentUserKey) return false;
+    if (user?.role !== "employee") return true;
+    return (
+      member.type === "employee" &&
+      Boolean(currentDirectoryMember?.departmentId) &&
+      String(member.departmentId || "") === String(currentDirectoryMember.departmentId)
+    );
+  }, [currentDirectoryMember, currentUserKey, user?.role]);
+
+  const createGroupMemberOptions = useMemo(
+    () => directory.filter(canCurrentUserAddToGroup),
+    [canCurrentUserAddToGroup, directory],
+  );
+
   const mergeConversation = useCallback((conversation: ChatConversation) => {
     if (!isSupportedConversation(conversation, currentUserKey)) return;
     setConversations((current) => {
@@ -318,7 +337,7 @@ export default function ChatPage() {
 
         const employeeMembers = asList<Record<string, unknown>>(employeeRes.data).map((employee) => {
           const id = employee.id as number | string;
-          const detail = employee.employee_detail as { designation?: { name?: string } } | undefined;
+          const detail = employee.employee_detail as { department_id?: number | string | null; designation?: { name?: string } } | undefined;
           const type: MemberType = employee.role === "admin" ? "admin" : "employee";
           return {
             key: memberKeyFor(type, id),
@@ -329,6 +348,7 @@ export default function ChatPage() {
             avatar: String(employee.avatar || employee.image || ""),
             status: String(employee.status || "online") === "active" ? "online" : "offline",
             canViewMessages: type === "admin" || hasMessagesViewAccess(employee.permissions),
+            departmentId: employee.department_id as number | string | null || detail?.department_id || null,
           } as ChatMember;
         });
 
@@ -343,6 +363,7 @@ export default function ChatPage() {
           canViewMessages: true,
         }));
 
+        const currentEmployeeMember = employeeMembers.find((member) => member.key === currentUserKey);
         const currentMember: ChatMember = {
           key: currentUserKey,
           id: user?.id || 1,
@@ -352,17 +373,16 @@ export default function ChatPage() {
           avatar: "",
           status: "online",
           canViewMessages: true,
+          departmentId: currentEmployeeMember?.departmentId || null,
         };
 
         const members = [currentMember, ...adminMembers, ...employeeMembers].filter(
           (member, index, list) => list.findIndex((item) => item.key === member.key) === index,
         );
-        const messageViewMembers = members.filter(canMemberViewMessages);
-
         const storedConversations = asList<ChatConversation>(conversationRes.data).filter((conversation) =>
           isSupportedConversation(conversation, currentUserKey),
         );
-        const directConversations = messageViewMembers
+        const directConversations = members
           .filter((member) => member.key !== currentUserKey)
           .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.includes(currentUserKey) && conversation.participant_keys.includes(member.key)))
           .map((member) => ({
@@ -378,7 +398,7 @@ export default function ChatPage() {
             created_at: new Date().toISOString(),
           }));
 
-        setDirectory(messageViewMembers);
+        setDirectory(members);
         setConversations([...storedConversations, ...directConversations]);
         setMessages(asList<ChatMessage>(messageRes.data));
         await Promise.allSettled(directConversations.map((conversation) => api.post("/chat-conversations", { ...conversation, company_id: user?.company_id })));
@@ -671,10 +691,10 @@ export default function ChatPage() {
     }
 
     const currentMember = directory.find((member) => member.key === currentUserKey);
-    const selectedMembers = directory.filter((member) => selectedMemberKeys.includes(member.key) && canMemberViewMessages(member));
+    const selectedMembers = directory.filter((member) => selectedMemberKeys.includes(member.key) && canCurrentUserAddToGroup(member));
     const skippedMembers = selectedMemberKeys.length - selectedMembers.length;
     if (skippedMembers > 0) {
-      showToast("Some selected members were skipped because they do not have Messages view permission.", "info");
+      showToast("Some selected members were skipped because they are outside your department.", "info");
     }
     if (selectedMembers.length === 0) {
       showToast("Select at least one member with Messages view permission.", "error");
@@ -1270,7 +1290,7 @@ export default function ChatPage() {
           <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Members</label>
             <div className="grid max-h-72 grid-cols-1 md:grid-cols-2 gap-2 overflow-y-auto pr-1">
-              {directory.filter((member) => member.key !== currentUserKey).map((member) => {
+              {createGroupMemberOptions.map((member) => {
                 const selected = selectedMemberKeys.includes(member.key);
                 return (
                   <button
@@ -1290,6 +1310,11 @@ export default function ChatPage() {
                   </button>
                 );
               })}
+              {createGroupMemberOptions.length === 0 && (
+                <p className="col-span-full rounded-xl bg-gray-50 p-4 text-xs font-bold text-gray-400">
+                  No department employees are available.
+                </p>
+              )}
             </div>
           </div>
 

@@ -4,16 +4,12 @@ const router = express.Router();
 const ChatConversation = require('../models/ChatConversation');
 const ChatMessage = require('../models/ChatMessage');
 const Employee = require('../models/Employee');
-const EmployeePermission = require('../models/EmployeePermission');
 const { emitToChatRooms, emitToCompany } = require('../realtime/socket');
 
 const serialize = (record) => ({ ...record.payload, id: record.id, company_id: record.company_id });
 
 const uniqueList = (items) =>
   Array.from(new Set((Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean)));
-
-const hasMessagesViewAccess = (permissions) =>
-  Array.isArray(permissions) && permissions.some((permission) => permission === '*' || permission === 'messages.*' || permission === 'messages.view');
 
 const filterGroupMessageParticipants = async (payload, companyId) => {
   if (payload.type !== 'group') return payload;
@@ -24,31 +20,32 @@ const filterGroupMessageParticipants = async (payload, companyId) => {
     .map((key) => Number(key.split(':')[1]))
     .filter((id) => Number.isInteger(id) && id > 0);
 
-  const validEmployeeIds = new Set();
+  const employeeById = new Map();
   if (employeeIds.length > 0) {
     const employees = await Employee.findAll({
       where: { id: { [Op.in]: employeeIds }, company_id: companyId },
-      attributes: ['id'],
+      attributes: ['id', 'department_id'],
     });
-    const companyEmployeeIds = employees.map((employee) => Number(employee.id));
-    const permissions = await EmployeePermission.findAll({
-      where: { employee_id: { [Op.in]: companyEmployeeIds } },
-      attributes: ['employee_id', 'permission_keys'],
-    });
-
-    permissions.forEach((record) => {
-      if (hasMessagesViewAccess(record.permission_keys)) {
-        validEmployeeIds.add(Number(record.employee_id));
-      }
+    employees.forEach((employee) => {
+      employeeById.set(Number(employee.id), employee);
     });
   }
 
   const creatorKey = String(payload.created_by || '');
+  const creatorEmployeeId = creatorKey.startsWith('employee:') ? Number(creatorKey.split(':')[1]) : null;
+  const creatorEmployee = Number.isInteger(creatorEmployeeId) ? employeeById.get(creatorEmployeeId) : null;
   const allowedParticipantKeys = participantKeys.filter((key) => {
     if (key === creatorKey) return true;
-    if (!key.startsWith('employee:')) return true;
+    if (!key.startsWith('employee:')) return !creatorEmployee;
     const employeeId = Number(key.split(':')[1]);
-    return validEmployeeIds.has(employeeId);
+    if (creatorEmployee) {
+      const employee = employeeById.get(employeeId);
+      return (
+        employee &&
+        String(employee.department_id || '') === String(creatorEmployee.department_id || '')
+      );
+    }
+    return employeeById.has(employeeId);
   });
 
   return {
