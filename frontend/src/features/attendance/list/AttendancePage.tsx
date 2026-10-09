@@ -20,6 +20,7 @@ import {
   minutesBetween,
   parseOfficeOpenDays,
   ShiftDefinition,
+  timeToMinutes,
 } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
 import axios from "axios";
@@ -146,19 +147,28 @@ const getDeviceLabel = (attendance?: AttendanceRecord) => {
   return deviceSerial ? `${deviceSerial}` : "No device";
 };
 
-const isPastDate = (date: string) => date < todayString();
 const isFutureDate = (date: string) => date > todayString();
 
 const getDateDay = (date: string) => new Date(`${date}T00:00:00`).getDay();
 
-const getEmployeeMatchCodes = (employee: EmployeeOption) =>
-  [
-    employee.id,
-    employee.employee_id,
-    employee.employee_detail?.employee_id,
-  ]
-    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-    .map((value) => String(value).trim());
+const hasShiftEnded = (workDate: string, shift?: ShiftSummary) => {
+  if (!shift?.end_time) return workDate < todayString();
+
+  const [year, month, day] = workDate.split("-").map(Number);
+  const [endHours, endMinutes] = String(shift.end_time).slice(0, 5).split(":").map(Number);
+  if ([year, month, day, endHours, endMinutes].some((value) => Number.isNaN(value))) {
+    return workDate < todayString();
+  }
+
+  const startMinutes = timeToMinutes(shift.start_time);
+  const endMinutesOfDay = timeToMinutes(shift.end_time);
+  const endDate = new Date(year, month - 1, day, endHours, endMinutes, 0, 0);
+  if (startMinutes !== null && endMinutesOfDay !== null && endMinutesOfDay <= startMinutes) {
+    endDate.setDate(endDate.getDate() + 1);
+  }
+
+  return new Date() > endDate;
+};
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
@@ -300,7 +310,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       const calculatedStatus = attendanceRecord
         ? calculateAttendanceStatus(attendanceRecord, shift as ShiftDefinition)
         : undefined;
-      const hasMissingCheckout = Boolean(attendanceRecord?.clock_in && !attendanceRecord?.clock_out && isPastDate(date));
+      const hasMissingCheckout = Boolean(attendanceRecord?.clock_in && !attendanceRecord?.clock_out && hasShiftEnded(date, shift));
 
       let status: DailyStatus;
       if (hasMissingCheckout) {
