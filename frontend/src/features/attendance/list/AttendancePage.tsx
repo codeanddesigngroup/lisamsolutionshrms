@@ -287,25 +287,25 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
           )
         )
       );
-      const displayedAttendance = isOfficeOpen ? attendanceRecord : undefined;
+
       const approvedLeave = leaves.find((leave) => getLeaveEmployeeId(leave) === employeeId && getLeaveDate(leave) === date && String(leave.status || "").toLowerCase() === "approved");
-      const shift = getShiftForEmployee(employee, displayedAttendance);
-      const calculatedStatus = displayedAttendance
-        ? calculateAttendanceStatus(displayedAttendance, shift as ShiftDefinition)
+      const shift = getShiftForEmployee(employee, attendanceRecord);
+      const calculatedStatus = attendanceRecord
+        ? calculateAttendanceStatus(attendanceRecord, shift as ShiftDefinition)
         : undefined;
-      const hasMissingCheckout = Boolean(displayedAttendance?.clock_in && !displayedAttendance?.clock_out && isPastDate(date));
+      const hasMissingCheckout = Boolean(attendanceRecord?.clock_in && !attendanceRecord?.clock_out && isPastDate(date));
 
       let status: DailyStatus;
-      if (!isOfficeOpen) {
-        status = "weekly-off";
-      } else if (hasMissingCheckout) {
+      if (hasMissingCheckout) {
         status = "missing-checkout";
-      } else if (displayedAttendance && calculatedStatus) {
+      } else if (attendanceRecord && calculatedStatus) {
         status = calculatedStatus as DailyStatus;
       } else if (holiday) {
         status = "holiday";
       } else if (approvedLeave) {
         status = "leave";
+      } else if (!isOfficeOpen) {
+        status = "weekly-off";
       } else if (isFutureDate(date)) {
         status = "future";
       } else {
@@ -317,20 +317,20 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         approvedLeave ? approvedLeave.leave_type?.type_name || approvedLeave.reason || "Approved leave" : "",
         !isOfficeOpen ? "Weekly off" : "",
       ].filter(Boolean);
-      const lateMinutes = displayedAttendance ? calculateLateMinutes(displayedAttendance.clock_in, shift as ShiftDefinition) : 0;
-      const lateAfterGraceMinutes = displayedAttendance ? calculateLateAfterGraceMinutes(displayedAttendance.clock_in, shift as ShiftDefinition) : 0;
-      const workingMinutes = displayedAttendance ? minutesBetween(displayedAttendance.clock_in, displayedAttendance.clock_out) : 0;
-      const isLateWaived = Boolean(displayedAttendance?.late_waived && lateAfterGraceMinutes > 0);
+      const lateMinutes = attendanceRecord ? calculateLateMinutes(attendanceRecord.clock_in, shift as ShiftDefinition) : 0;
+      const lateAfterGraceMinutes = attendanceRecord ? calculateLateAfterGraceMinutes(attendanceRecord.clock_in, shift as ShiftDefinition) : 0;
+      const workingMinutes = attendanceRecord ? minutesBetween(attendanceRecord.clock_in, attendanceRecord.clock_out) : 0;
+      const isLateWaived = Boolean(attendanceRecord?.late_waived && lateAfterGraceMinutes > 0);
       if (isLateWaived && status === "late") status = "present";
-      const hasCalendarOverrideContext = Boolean(displayedAttendance && contextParts.length > 0);
+      const hasCalendarOverrideContext = Boolean(attendanceRecord && contextParts.length > 0);
       const isException =
         (!isLateWaived && ["late", "absent", "half-day", "missing-checkout"].includes(status)) ||
         hasCalendarOverrideContext ||
-        Boolean(displayedAttendance?.manual_override);
+        Boolean(attendanceRecord?.manual_override);
 
       return {
         employee,
-        attendance: displayedAttendance,
+        attendance: attendanceRecord,
         shift,
         holiday,
         leave: approvedLeave,
@@ -341,7 +341,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         workingMinutes,
         isException,
         isLateWaived,
-        waiverReason: displayedAttendance?.late_waiver_reason || undefined,
+        waiverReason: attendanceRecord?.late_waiver_reason || undefined,
       };
     });
   }, [attendance, date, employees, holidays, leaves, officeOpenDays]);
