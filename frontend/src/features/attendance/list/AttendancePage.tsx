@@ -144,14 +144,16 @@ const isFutureDate = (date: string) => date > todayString();
 
 const getDateDay = (date: string) => new Date(`${date}T00:00:00`).getDay();
 
-const getEmployeeMatchCodes = (employee: EmployeeOption) =>
-  [
-    employee.id,
-    employee.employee_id,
-    employee.employee_detail?.employee_id,
-  ]
-    .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
-    .map((value) => String(value).trim());
+const getComparableCodes = (value: number | string | undefined | null) => {
+  const code = String(value ?? "").trim();
+  if (!code) return [];
+  return /^\d+$/.test(code) ? [code, String(Number(code))] : [code];
+};
+
+const hasAnyMatch = (leftValues: Array<number | string | undefined | null>, rightValues: Array<number | string | undefined | null>) => {
+  const rightCodes = new Set(rightValues.flatMap(getComparableCodes));
+  return leftValues.flatMap(getComparableCodes).some((code) => rightCodes.has(code));
+};
 
 const isCurrentUserEmployee = (employee: EmployeeOption | undefined, user: { id?: number | string; name?: string; email?: string } | null) => {
   if (!employee || !user) return false;
@@ -273,22 +275,25 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     const isOfficeOpen = officeOpenDays.includes(getDateDay(date));
 
     return employees.map((employee) => {
-      const employeeId = String(employee.id);
-      const deviceEmployeeId = String(
-        employee.employee_detail?.employee_id ?? employee.employee_id ?? "",
-      );
       const attendanceRecord = attendance.find((row) =>
         String(row.date) === date &&
         (
-          String(row.employee?.id ?? row.employee_id ?? row.user_id ?? "") === employeeId ||
-          (
-            deviceEmployeeId !== "" &&
-            String(row.employee_code ?? row.employee?.employee_id ?? row.employee?.employee_detail?.employee_id ?? "") === deviceEmployeeId
+          hasAnyMatch(
+            [employee.id],
+            [row.employee?.id, row.employee_id, row.user_id],
+          ) ||
+          hasAnyMatch(
+            [employee.employee_id, employee.employee_detail?.employee_id],
+            [row.employee_code, row.employee?.employee_id, row.employee?.employee_detail?.employee_id],
           )
         )
       );
       const displayedAttendance = isOfficeOpen ? attendanceRecord : undefined;
-      const approvedLeave = leaves.find((leave) => getLeaveEmployeeId(leave) === employeeId && getLeaveDate(leave) === date && String(leave.status || "").toLowerCase() === "approved");
+      const approvedLeave = leaves.find((leave) =>
+        hasAnyMatch([employee.id], [getLeaveEmployeeId(leave)]) &&
+        getLeaveDate(leave) === date &&
+        String(leave.status || "").toLowerCase() === "approved"
+      );
       const shift = getShiftForEmployee(employee, displayedAttendance);
       const calculatedStatus = displayedAttendance
         ? calculateAttendanceStatus(displayedAttendance, shift as ShiftDefinition)
