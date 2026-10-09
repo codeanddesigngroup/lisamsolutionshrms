@@ -291,10 +291,11 @@ export default function ChatPage() {
   const canCurrentUserAddToGroup = useCallback((member: ChatMember) => {
     if (member.key === currentUserKey) return false;
     if (user?.role !== "employee") return true;
+    const currentDepartmentId = currentDirectoryMember?.departmentId;
     return (
       member.type === "employee" &&
-      Boolean(currentDirectoryMember?.departmentId) &&
-      String(member.departmentId || "") === String(currentDirectoryMember.departmentId)
+      Boolean(currentDepartmentId) &&
+      String(member.departmentId || "") === String(currentDepartmentId)
     );
   }, [currentDirectoryMember, currentUserKey, user?.role]);
 
