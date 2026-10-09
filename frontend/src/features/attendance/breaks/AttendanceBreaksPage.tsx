@@ -37,6 +37,8 @@ type DepartmentRecord = {
   name?: string;
 };
 
+const ATTENDANCE_DAY_CUTOFF_HOUR = 6;
+
 const toLocalDateString = (value = new Date()) => {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -44,10 +46,24 @@ const toLocalDateString = (value = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+const getCurrentAttendanceDate = () => {
+  const attendanceDate = new Date();
+  if (attendanceDate.getHours() < ATTENDANCE_DAY_CUTOFF_HOUR) {
+    attendanceDate.setDate(attendanceDate.getDate() - 1);
+  }
+  return toLocalDateString(attendanceDate);
+};
+
+const parseDateTime = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(String(value).replace(" ", "T"));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const formatDateTime = (value?: string | null) => {
   if (!value) return "--";
-  const date = new Date(String(value).replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) return value;
+  const date = parseDateTime(value);
+  if (!date) return value;
 
   return date.toLocaleString(undefined, {
     month: "short",
@@ -70,12 +86,23 @@ const formatMinutes = (value?: number | string | null) => {
 
 const getEmployeeName = (record: BreakRecord) => record.employeeName || record.employee_name || "Employee";
 const getEmployeeId = (record: BreakRecord) => String(record.employeeId || record.employee_id || "--");
-const getWorkDate = (record: BreakRecord) => String(record.workDate || record.work_date || "--");
 const getBreakStart = (record: BreakRecord) => record.breakStart || record.break_start || null;
 const getBreakEnd = (record: BreakRecord) => record.breakEnd || record.break_end || null;
 const getDurationMinutes = (record: BreakRecord) => record.durationMinutes ?? record.duration_minutes;
 const getDepartmentName = (record: BreakRecord) => record.departmentName || record.department_name || "--";
 const isOpenBreak = (record: BreakRecord) => Boolean(record.is_open || !getBreakEnd(record));
+
+const getAttendanceDate = (record: BreakRecord) => {
+  const breakStart = parseDateTime(getBreakStart(record));
+  if (!breakStart) return String(record.workDate || record.work_date || "--");
+
+  const attendanceDate = new Date(breakStart);
+  if (attendanceDate.getHours() < ATTENDANCE_DAY_CUTOFF_HOUR) {
+    attendanceDate.setDate(attendanceDate.getDate() - 1);
+  }
+
+  return toLocalDateString(attendanceDate);
+};
 
 export default function AttendanceBreaksPage() {
   const { user } = useAuth();
@@ -83,8 +110,8 @@ export default function AttendanceBreaksPage() {
   const [breaks, setBreaks] = useState<BreakRecord[]>([]);
   const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState(toLocalDateString());
-  const [endDate, setEndDate] = useState(toLocalDateString());
+  const [startDate, setStartDate] = useState(getCurrentAttendanceDate());
+  const [endDate, setEndDate] = useState(getCurrentAttendanceDate());
   const [status, setStatus] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [departmentId, setDepartmentId] = useState("");
@@ -248,7 +275,7 @@ export default function AttendanceBreaksPage() {
                 <tr>
                   <th>Employee</th>
                   <th>Department</th>
-                  <th>Work Date</th>
+                  <th>Attendance Date</th>
                   <th>Break Start</th>
                   <th>Break End</th>
                   <th>Duration</th>
@@ -272,7 +299,7 @@ export default function AttendanceBreaksPage() {
                       <p className="m-0 mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">ID {getEmployeeId(record)}</p>
                     </td>
                     <td className="text-xs font-bold text-gray-600">{getDepartmentName(record)}</td>
-                    <td className="text-xs font-black text-gray-700">{getWorkDate(record)}</td>
+                    <td className="text-xs font-black text-gray-700">{getAttendanceDate(record)}</td>
                     <td className="text-xs font-bold text-gray-700">{formatDateTime(getBreakStart(record))}</td>
                     <td className="text-xs font-bold text-gray-700">{formatDateTime(getBreakEnd(record))}</td>
                     <td>

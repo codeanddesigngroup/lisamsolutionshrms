@@ -257,7 +257,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin"],
   },
   {
-    prefixes: ["/attendance/breaks"],
+    prefixes: ["/breaks"],
     roles: ["admin"],
   },
   {
@@ -339,7 +339,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/attendance/settings/shifts"], anyOf: ["shifts.view", "shifts.manage"] },
   { prefixes: ["/leaves/all", "/leaves/settings", "/leave-type"], anyOf: ["leaves.view", "leaves.manage", "leaves.approve"] },
   { prefixes: ["/attendance/bulk", "/attendance/settings", "/attendance/reports"], anyOf: ["attendance.manage"] },
-  { prefixes: ["/attendance/breaks"], anyOf: ["attendance.view", "attendance.manage"] },
+  { prefixes: ["/breaks"], anyOf: ["attendance.view", "attendance.manage"] },
   { prefixes: ["/attendance"], anyOf: ["attendance.view", "attendance.manage"] },
   { prefixes: ["/leaves"], anyOf: ["leaves.view", "leaves.manage"] },
   { prefixes: ["/holidays/create"], anyOf: ["holidays.create", "holidays.manage"] },

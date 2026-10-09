@@ -101,9 +101,15 @@ const findAttendanceRecordResponse = (id) => AttendanceRecords.findByPk(id, {
     raw: true,
 });
 
+const ATTENDANCE_DAY_CUTOFF_HOUR = 6;
+
 const getBreakWorkDate = () => {
     const timezoneOffset = Number(process.env.DEVICE_TIMEZONE || 5);
-    return new Date(Date.now() + timezoneOffset * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const localDate = new Date(Date.now() + timezoneOffset * 60 * 60 * 1000);
+    if (localDate.getUTCHours() < ATTENDANCE_DAY_CUTOFF_HOUR) {
+        localDate.setUTCDate(localDate.getUTCDate() - 1);
+    }
+    return localDate.toISOString().slice(0, 10);
 };
 
 const serializeBreak = (record) => record ? ({

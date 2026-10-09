@@ -105,7 +105,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   { icon: Cpu, label: "Device", href: "/device" },
-  { icon: Coffee, label: "Breaks", href: "/attendance/breaks" },
+  { icon: Coffee, label: "Breaks", href: "/breaks" },
   {
     icon: Layers,
     label: "Work",
