@@ -125,11 +125,7 @@ async function getEmployeeAttendanceProfile(employeeId) {
            AND COALESCE(NULLIF(LTRIM(e.employee_id, '0'), ''), '0') =
                COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
          )
-         OR e.id::text = :employeeId
-         OR (
-           :employeeId ~ '^[0-9]+$'
-           AND e.id::text = COALESCE(NULLIF(LTRIM(:employeeId, '0'), ''), '0')
-         )
+
       LIMIT 2
     `,
     { replacements: { employeeId: String(employeeId) } },
