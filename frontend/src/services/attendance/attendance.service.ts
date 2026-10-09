@@ -151,6 +151,22 @@ export interface AttendanceAuditLog {
   };
 }
 
+const toDateOnly = (value?: string | null) => {
+  if (!value) return "";
+  const raw = String(value);
+  const match = raw.match(/^\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
+
+  const date = new Date(raw);
+  if (!Number.isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  return raw.slice(0, 10);
+};
 const toClockTime = (value?: string | null) => {
   if (!value) return "";
   const rawTimeMatch = value.match(/^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
@@ -238,7 +254,7 @@ const normalizeAttendanceRecord = (
     employee_code: employeeCode,
     user_id: employee?.id,
     employee,
-    date: String(record.workDate ?? record.work_date ?? ""),
+    date: toDateOnly(record.workDate ?? record.work_date ?? ""),
     status: checkIn ? "present" : "absent",
     clock_in: toClockTime(checkIn),
     clock_out: toClockTime(checkOut),
