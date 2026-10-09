@@ -14,6 +14,7 @@ export type PermissionModuleKey =
   | "hr"
   | "shifts"
   | "attendance"
+  | "breaks"
   | "leaves"
   | "holidays"
   | "projects"
@@ -53,6 +54,7 @@ const basePermissionModules: PermissionModuleDefinition[] = [
   { key: "hr", label: "HR Setup", group: "hr", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "shifts", label: "Shift Types", group: "hr", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "attendance", label: "Attendance", group: "hr", actions: ["view", "create", "edit", "approve", "export", "manage"] },
+  { key: "breaks", label: "Breaks", group: "hr", actions: ["view"] },
   { key: "leaves", label: "Leaves", group: "hr", actions: ["view", "create", "edit", "approve", "delete", "manage"] },
   { key: "holidays", label: "Holidays", group: "hr", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "projects", label: "Projects", group: "work", actions: ["view", "create", "edit", "delete", "export", "manage"] },
@@ -172,6 +174,7 @@ export const rolePermissions: Record<UserRole, PermissionKey[]> = {
     "hr.*",
     "shifts.*",
     "attendance.*",
+    "breaks.*",
     "leaves.*",
     "holidays.*",
     "projects.*",
@@ -339,7 +342,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/attendance/settings/shifts"], anyOf: ["shifts.view", "shifts.manage"] },
   { prefixes: ["/leaves/all", "/leaves/settings", "/leave-type"], anyOf: ["leaves.view", "leaves.manage", "leaves.approve"] },
   { prefixes: ["/attendance/bulk", "/attendance/settings", "/attendance/reports"], anyOf: ["attendance.manage"] },
-  { prefixes: ["/breaks"], anyOf: ["attendance.view", "attendance.manage"] },
+  { prefixes: ["/breaks"], anyOf: ["breaks.view", "attendance.view", "attendance.manage"] },
   { prefixes: ["/attendance"], anyOf: ["attendance.view", "attendance.manage"] },
   { prefixes: ["/leaves"], anyOf: ["leaves.view", "leaves.manage"] },
   { prefixes: ["/holidays/create"], anyOf: ["holidays.create", "holidays.manage"] },

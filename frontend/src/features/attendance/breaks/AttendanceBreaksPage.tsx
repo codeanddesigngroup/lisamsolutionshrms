@@ -213,7 +213,7 @@ export default function AttendanceBreaksPage() {
             <h4 className="m-0 mt-2 text-2xl font-black text-warning">{stats.open}</h4>
           </Card>
           <Card className="p-5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Completed</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">On Seat</p>
             <h4 className="m-0 mt-2 text-2xl font-black text-success">{stats.completed}</h4>
           </Card>
           <Card className="p-5">
@@ -257,7 +257,7 @@ export default function AttendanceBreaksPage() {
               <select value={status} onChange={(event) => setStatus(event.target.value)} className="form-control">
                 <option value="">All</option>
                 <option value="open">On Break</option>
-                <option value="completed">Completed</option>
+                <option value="completed">On Seat</option>
               </select>
             </label>
             <div className="flex items-end">
@@ -316,7 +316,7 @@ export default function AttendanceBreaksPage() {
                     </td>
                     <td>
                       <span className={`label ${isOpenBreak(record) ? "label-warning" : "label-success"}`}>
-                        {isOpenBreak(record) ? "On Break" : "Completed"}
+                        {isOpenBreak(record) ? "On Break" : "On Seat"}
                       </span>
                     </td>
                   </tr>
