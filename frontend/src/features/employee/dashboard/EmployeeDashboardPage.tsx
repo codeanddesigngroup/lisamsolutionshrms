@@ -144,9 +144,17 @@ function extractRecord<T>(payload: unknown): T | null {
   return root?.data && typeof root.data === "object" ? (root.data as T) : null;
 }
 
+const ATTENDANCE_DAY_CUTOFF_HOUR = 6;
+
 function localDateString(date = new Date()) {
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return localDate.toISOString().slice(0, 10);
+  const localDate = new Date(date);
+  if (localDate.getHours() < ATTENDANCE_DAY_CUTOFF_HOUR) {
+    localDate.setDate(localDate.getDate() - 1);
+  }
+  const year = localDate.getFullYear();
+  const month = String(localDate.getMonth() + 1).padStart(2, "0");
+  const day = String(localDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function displayTime(value?: string) {
@@ -354,7 +362,10 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     if (!currentEmployee) return;
 
-    const todaysRecord = myAttendance.find((row) => getAttendanceDate(row) === localDateString());
+    const attendanceWorkDate = localDateString();
+    const todaysRecord =
+      myAttendance.find((row) => getAttendanceDate(row) === attendanceWorkDate) ||
+      myAttendance.find((row) => Boolean(getCheckIn(row) && !getCheckOut(row)));
     const checkIn = getCheckIn(todaysRecord || { id: "" });
     const checkOut = getCheckOut(todaysRecord || { id: "" });
     const timeoutId = window.setTimeout(() => {
