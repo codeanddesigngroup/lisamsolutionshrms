@@ -32,6 +32,7 @@ import {
   Search,
   Shield,
   Cpu,
+  Coffee,
   Ticket,
 } from "lucide-react";
 
@@ -104,6 +105,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   { icon: Cpu, label: "Device", href: "/device" },
+  { icon: Coffee, label: "Breaks", href: "/attendance/breaks" },
   {
     icon: Layers,
     label: "Work",

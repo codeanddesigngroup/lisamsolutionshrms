@@ -118,6 +118,38 @@ const serializeBreak = (record) => record ? ({
     is_open: !record.breakEnd,
 }) : null;
 
+const breakRecordAttributes = [
+    'id',
+    'companyId',
+    'employeeId',
+    'employeeRecordId',
+    'workDate',
+    [fn('to_char', col('break_start'), 'YYYY-MM-DD HH24:MI:SS'), 'breakStart'],
+    [fn('to_char', col('break_end'), 'YYYY-MM-DD HH24:MI:SS'), 'breakEnd'],
+    [
+        literal(`CASE
+            WHEN "AttendanceBreak"."break_end" IS NULL THEN NULL
+            ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM ("AttendanceBreak"."break_end" - "AttendanceBreak"."break_start")) / 60))
+        END`),
+        'durationMinutes',
+    ],
+    [
+        literal(`COALESCE(
+            "AttendanceBreak"."employee_name",
+            (
+                SELECT e.name
+                FROM employees e
+                WHERE e.company_id = "AttendanceBreak"."company_id"
+                  AND e.employee_id = "AttendanceBreak"."employee_id"
+                LIMIT 1
+            )
+        )`),
+        'employeeName',
+    ],
+    [fn('to_char', col('created_at'), 'YYYY-MM-DD HH24:MI:SS'), 'created_at'],
+    [fn('to_char', col('updated_at'), 'YYYY-MM-DD HH24:MI:SS'), 'updated_at'],
+];
+
 const getBreakEmployee = async (source = {}) => {
     const companyId = Number(source.company_id || source.companyId);
     const employeeRecordId = Number(source.employee_record_id || source.employeeRecordId || source.employee_pk || source.employeePk);
@@ -296,6 +328,53 @@ router.get('/summary', async (req, res, next) => {
                 completed_count: completedCount,
                 total_worked_hours: totalWorkedHours,
             },
+        });
+    } catch (err) {
+        return next(err);
+    }
+});
+
+router.get('/breaks', async (req, res, next) => {
+    try {
+        const where = {};
+        const companyId = req.query.companyId || req.query.company_id;
+        if (companyId) {
+            where.companyId = Number(companyId);
+        }
+
+        if (req.query.employeeId || req.query.employee_id) {
+            where.employeeId = String(req.query.employeeId || req.query.employee_id);
+        }
+
+        if (req.query.workDate || req.query.work_date) {
+            where.workDate = String(req.query.workDate || req.query.work_date);
+        }
+
+        if (req.query.startDate || req.query.endDate) {
+            where.workDate = {};
+            if (req.query.startDate) where.workDate[Op.gte] = String(req.query.startDate);
+            if (req.query.endDate) where.workDate[Op.lte] = String(req.query.endDate);
+        }
+
+        const status = String(req.query.status || '').toLowerCase();
+        if (status === 'open') where.breakEnd = null;
+        if (status === 'completed') where.breakEnd = { [Op.ne]: null };
+
+        const records = await AttendanceBreak.findAll({
+            attributes: breakRecordAttributes,
+            where,
+            order: [['workDate', 'DESC'], ['breakStart', 'DESC']],
+            limit: getQueryLimit(req.query.limit, 500),
+            raw: true,
+        });
+
+        return res.status(200).json({
+            success: true,
+            count: records.length,
+            data: records.map((record) => ({
+                ...record,
+                is_open: !record.breakEnd,
+            })),
         });
     } catch (err) {
         return next(err);
