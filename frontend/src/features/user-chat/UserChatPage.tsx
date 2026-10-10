@@ -183,6 +183,7 @@ export default function ChatPage() {
   const currentUserKey = useMemo(() => getCurrentUserKey(user?.role, user?.id), [user?.id, user?.role]);
   const currentUserName = user?.name || "Current User";
   const isAdminRole = user?.role === "admin";
+  const canViewMessages = isAdminRole || hasPermission("messages.view");
   const canCreateMessages = isAdminRole || hasPermission("messages.create");
   const canEditMessages = isAdminRole || hasPermission("messages.edit");
   const canDeleteOwnMessages = isAdminRole || hasPermission("messages.delete") || hasPermission("messages.manage");
@@ -383,7 +384,8 @@ export default function ChatPage() {
         const storedConversations = asList<ChatConversation>(conversationRes.data).filter((conversation) =>
           isSupportedConversation(conversation, currentUserKey),
         );
-        const directConversations = members
+        const directConversations = canViewMessages
+          ? members
           .filter((member) => member.key !== currentUserKey)
           .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.includes(currentUserKey) && conversation.participant_keys.includes(member.key)))
           .map((member) => ({
@@ -397,7 +399,8 @@ export default function ChatPage() {
             archived_by: [],
             created_by: currentUserKey,
             created_at: new Date().toISOString(),
-          }));
+          }))
+          : [];
 
         setDirectory(members);
         setConversations([...storedConversations, ...directConversations]);
@@ -412,7 +415,7 @@ export default function ChatPage() {
     };
 
     loadChat();
-  }, [currentUserKey, currentUserName, showToast, user?.company_id, user?.id, user?.role]);
+  }, [canViewMessages, currentUserKey, currentUserName, showToast, user?.company_id, user?.id, user?.role]);
 
   useEffect(() => {
     if (!user?.company_id) return;

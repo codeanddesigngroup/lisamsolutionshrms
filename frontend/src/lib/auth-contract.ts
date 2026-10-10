@@ -423,6 +423,7 @@ export const hasPathPermission = (user: AuthUser, pathname: string) => {
   if (role === "super_admin") return true;
   if (pathname === roleDefaultRoutes[role]) return true;
   if (role === "admin" && (pathname === "/breaks" || pathname.startsWith("/breaks/"))) return true;
+  if (role === "employee" && (pathname === "/user-chat" || pathname.startsWith("/user-chat/"))) return true;
 
   const matchedRule = getMatchedPermissionRule(pathname);
 
