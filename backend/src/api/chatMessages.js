@@ -23,6 +23,8 @@ router.post('/', async (req, res, next) => {
     const companyId = Number(req.body.company_id);
     if (!req.body.id || !req.body.conversation_id || !Number.isInteger(companyId) || companyId <= 0) return res.status(400).json({ success: false, message: 'Message ID, conversation, and company are required' });
     const payload = { ...req.body }; delete payload.company_id;
+    const senderKeys = Array.from(new Set([payload.sender_key, ...(Array.isArray(payload.sender_alias_keys) ? payload.sender_alias_keys : [])].map((key) => String(key || '').trim()).filter(Boolean)));
+    delete payload.sender_alias_keys;
     const row = await ChatMessage.create({ id: String(req.body.id), company_id: companyId, conversation_id: String(req.body.conversation_id), payload });
     const conversation = await ChatConversation.findByPk(String(req.body.conversation_id));
     let updatedConversation = null;
@@ -33,8 +35,8 @@ router.post('/', async (req, res, next) => {
           ...conversationPayload,
           last_message: payload.attachments?.length ? payload.attachments[0]?.name : payload.body,
           last_message_at: payload.created_at || new Date().toISOString(),
-          unread_by: (conversationPayload.participant_keys || []).filter((key) => key !== payload.sender_key),
-          archived_by: (conversationPayload.archived_by || []).filter((key) => key === payload.sender_key),
+          unread_by: (conversationPayload.participant_keys || []).filter((key) => !senderKeys.includes(key)),
+          archived_by: (conversationPayload.archived_by || []).filter((key) => senderKeys.includes(key)),
         },
       });
       updatedConversation = serializeConversation(conversation);
