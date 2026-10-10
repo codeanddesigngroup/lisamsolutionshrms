@@ -153,16 +153,24 @@ const getCurrentUserKey = (role?: string, id?: number | string) => {
   return memberKeyFor("admin", safeId);
 };
 
-const getDirectConversationName = (conversation: ChatConversation, currentUserKey: string) =>
-  conversation.participants.find((member) => member.key !== currentUserKey)?.name || conversation.name;
+const getCurrentUserKeys = (role?: string, id?: number | string, employeeId?: number | string) => {
+  const primaryKey = getCurrentUserKey(role, id);
+  if (role !== "employee" || employeeId === undefined || employeeId === null || String(employeeId) === String(id)) {
+    return [primaryKey];
+  }
+  return Array.from(new Set([primaryKey, memberKeyFor("employee", employeeId)]));
+};
 
-const getDirectAvatar = (conversation: ChatConversation, currentUserKey: string) =>
-  conversation.participants.find((member) => member.key !== currentUserKey)?.avatar || conversation.avatar || "";
+const getDirectConversationName = (conversation: ChatConversation, currentUserKeys: string[]) =>
+  conversation.participants.find((member) => !currentUserKeys.includes(member.key))?.name || conversation.name;
+
+const getDirectAvatar = (conversation: ChatConversation, currentUserKeys: string[]) =>
+  conversation.participants.find((member) => !currentUserKeys.includes(member.key))?.avatar || conversation.avatar || "";
 
 const getMessageStatus = (message: ChatMessage, currentUserKey: string) => message.status_by?.[currentUserKey] || "sent";
 
-const isSupportedConversation = (conversation: ChatConversation, currentUserKey: string) =>
-  conversation.participant_keys.includes(currentUserKey) &&
+const isSupportedConversation = (conversation: ChatConversation, currentUserKeys: string[]) =>
+  conversation.participant_keys.some((key) => currentUserKeys.includes(key)) &&
   !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
   !conversation.participants.some((participant) => participant.type === "client");
 
@@ -181,6 +189,7 @@ export default function ChatPage() {
   const conversationsRef = useRef<ChatConversation[]>([]);
 
   const currentUserKey = useMemo(() => getCurrentUserKey(user?.role, user?.id), [user?.id, user?.role]);
+  const currentUserKeys = useMemo(() => getCurrentUserKeys(user?.role, user?.id, user?.employee_id), [user?.employee_id, user?.id, user?.role]);
   const currentUserName = user?.name || "Current User";
   const isAdminRole = user?.role === "admin";
   const canViewMessages = isAdminRole || hasPermission("messages.view");
@@ -228,7 +237,7 @@ export default function ChatPage() {
   );
   const canLeaveActiveGroup = Boolean(
     activeConversation?.type === "group" &&
-    activeConversation.participant_keys.includes(currentUserKey) &&
+    activeConversation.participant_keys.some((key) => currentUserKeys.includes(key)) &&
     activeConversation.created_by !== currentUserKey,
   );
 
@@ -247,16 +256,16 @@ export default function ChatPage() {
 
   const canEditActiveGroupInfo = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "group") return false;
-    return canEditMessages && activeConversation.participant_keys.includes(currentUserKey);
-  }, [activeConversation, canEditMessages, currentUserKey]);
+    return canEditMessages && activeConversation.participant_keys.some((key) => currentUserKeys.includes(key));
+  }, [activeConversation, canEditMessages, currentUserKeys]);
 
   const canSendInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
     if (!canCreateMessages) return false;
     if (activeConversation.archived_by?.includes(currentUserKey)) return false;
     if (activeConversation.type === "group" && activeConversation.settings?.only_admins_can_send && !canManageActiveGroup) return false;
-    return activeConversation.participant_keys.includes(currentUserKey);
-  }, [activeConversation, canCreateMessages, canManageActiveGroup, currentUserKey]);
+    return activeConversation.participant_keys.some((key) => currentUserKeys.includes(key));
+  }, [activeConversation, canCreateMessages, canManageActiveGroup, currentUserKey, currentUserKeys]);
 
   const canUploadInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
@@ -267,17 +276,17 @@ export default function ChatPage() {
   const visibleConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return conversations
-      .filter((conversation) => conversation.participant_keys.includes(currentUserKey))
+      .filter((conversation) => conversation.participant_keys.some((key) => currentUserKeys.includes(key)))
       .filter((conversation) => !conversation.archived_by?.includes(currentUserKey))
       .filter((conversation) => {
-        const displayName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKey) : conversation.name;
+        const displayName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKeys) : conversation.name;
         if (query && !displayName.toLowerCase().includes(query)) return false;
         if (activeTab === "unread") return Boolean(conversation.unread_by?.includes(currentUserKey));
         if (activeTab === "groups") return conversation.type === "group";
         return true;
       })
       .sort((a, b) => String(b.last_message_at || b.created_at || "").localeCompare(String(a.last_message_at || a.created_at || "")));
-  }, [activeTab, conversations, currentUserKey, searchQuery]);
+  }, [activeTab, conversations, currentUserKey, currentUserKeys, searchQuery]);
 
   const activePinnedMessage = useMemo(
     () => activeMessages.find((message) => message.id === activeConversation?.pinned_message_id) || null,
@@ -306,7 +315,7 @@ export default function ChatPage() {
   );
 
   const mergeConversation = useCallback((conversation: ChatConversation) => {
-    if (!isSupportedConversation(conversation, currentUserKey)) return;
+    if (!isSupportedConversation(conversation, currentUserKeys)) return;
     setConversations((current) => {
       const exists = current.some((item) => item.id === conversation.id);
       if (exists) {
@@ -314,7 +323,7 @@ export default function ChatPage() {
       }
       return [conversation, ...current];
     });
-  }, [currentUserKey]);
+  }, [currentUserKeys]);
 
   const mergeMessage = useCallback((message: ChatMessage) => {
     setMessages((current) => {
@@ -382,12 +391,12 @@ export default function ChatPage() {
           (member, index, list) => list.findIndex((item) => item.key === member.key) === index,
         );
         const storedConversations = asList<ChatConversation>(conversationRes.data).filter((conversation) =>
-          isSupportedConversation(conversation, currentUserKey),
+          isSupportedConversation(conversation, currentUserKeys),
         );
         const directConversations = canViewMessages
           ? members
           .filter((member) => member.key !== currentUserKey)
-          .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.includes(currentUserKey) && conversation.participant_keys.includes(member.key)))
+          .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.some((key) => currentUserKeys.includes(key)) && conversation.participant_keys.includes(member.key)))
           .map((member) => ({
             id: `direct-${[currentUserKey, member.key].sort().join("-")}`,
             type: "direct" as const,
@@ -415,7 +424,7 @@ export default function ChatPage() {
     };
 
     loadChat();
-  }, [canViewMessages, currentUserKey, currentUserName, showToast, user?.company_id, user?.id, user?.role]);
+  }, [canViewMessages, currentUserKey, currentUserKeys, currentUserName, showToast, user?.company_id, user?.id, user?.role]);
 
   useEffect(() => {
     if (!user?.company_id) return;
@@ -426,7 +435,7 @@ export default function ChatPage() {
     const handleConversationUpsert = ({ conversation }: { conversation?: ChatConversation }) => {
       if (!conversation) return;
       const wasVisible = conversationsRef.current.some((item) => String(item.id) === String(conversation.id));
-      const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversation.participant_keys.includes(currentUserKey);
+      const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversation.participant_keys.some((key) => currentUserKeys.includes(key));
       mergeConversation(conversation);
       if (isNewGroupForUser) {
         const creatorName = conversation.participants.find((participant) => participant.key === conversation.created_by)?.name || "Someone";
@@ -442,9 +451,9 @@ export default function ChatPage() {
     };
 
     const canAccessMessage = (message: ChatMessage, conversation?: ChatConversation) => {
-      if (conversation) return isSupportedConversation(conversation, currentUserKey);
+      if (conversation) return isSupportedConversation(conversation, currentUserKeys);
       return conversationsRef.current.some(
-        (item) => String(item.id) === String(message.conversation_id) && item.participant_keys.includes(currentUserKey),
+        (item) => String(item.id) === String(message.conversation_id) && item.participant_keys.some((key) => currentUserKeys.includes(key)),
       );
     };
 
@@ -472,12 +481,12 @@ export default function ChatPage() {
       client.off("message:updated", handleMessageUpdated);
       disconnectChatSocket();
     };
-  }, [currentUserKey, currentUserName, mergeConversation, mergeMessage, showToast, user?.company_id]);
+  }, [currentUserKey, currentUserKeys, currentUserName, mergeConversation, mergeMessage, showToast, user?.company_id]);
 
   useEffect(() => {
     if (!user?.company_id) return;
     const conversationIds = conversations
-      .filter((conversation) => conversation.participant_keys.includes(currentUserKey))
+      .filter((conversation) => conversation.participant_keys.some((key) => currentUserKeys.includes(key)))
       .map((conversation) => conversation.id);
 
     if (conversationIds.length > 0) {
@@ -486,7 +495,7 @@ export default function ChatPage() {
         client.emit("chat:join-conversations", { conversation_ids: conversationIds });
       }
     }
-  }, [conversations, currentUserKey, user?.company_id]);
+  }, [conversations, currentUserKeys, user?.company_id]);
 
   useEffect(() => {
     if (!activeConversationId && visibleConversations[0]) {
@@ -855,7 +864,7 @@ export default function ChatPage() {
 
   const leaveActiveGroup = () => {
     if (!activeConversation || activeConversation.type !== "group") return;
-    if (!activeConversation.participant_keys.includes(currentUserKey)) return;
+    if (!activeConversation.participant_keys.some((key) => currentUserKeys.includes(key))) return;
     if (activeConversation.created_by === currentUserKey) {
       showToast("Group creators cannot leave. Delete the group instead.", "error");
       return;
@@ -914,7 +923,7 @@ export default function ChatPage() {
 
   const displayName = activeConversation
     ? activeConversation.type === "direct"
-      ? getDirectConversationName(activeConversation, currentUserKey)
+      ? getDirectConversationName(activeConversation, currentUserKeys)
       : activeConversation.name
     : "";
 
@@ -982,8 +991,8 @@ export default function ChatPage() {
               </div>
             )}
             {visibleConversations.map((conversation) => {
-              const conversationName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKey) : conversation.name;
-              const avatar = conversation.type === "direct" ? getDirectAvatar(conversation, currentUserKey) : conversation.avatar;
+              const conversationName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKeys) : conversation.name;
+              const avatar = conversation.type === "direct" ? getDirectAvatar(conversation, currentUserKeys) : conversation.avatar;
               const unread = conversation.unread_by?.includes(currentUserKey);
               return (
                 <button
@@ -1022,8 +1031,8 @@ export default function ChatPage() {
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <div className="h-11 w-11 rounded-2xl bg-primary text-white flex items-center justify-center overflow-hidden shadow-lg shadow-primary/20">
-                    {(activeConversation.type === "direct" ? getDirectAvatar(activeConversation, currentUserKey) : activeConversation.avatar) ? (
-                      <img src={activeConversation.type === "direct" ? getDirectAvatar(activeConversation, currentUserKey) : activeConversation.avatar} alt="" className="h-full w-full object-cover" />
+                    {(activeConversation.type === "direct" ? getDirectAvatar(activeConversation, currentUserKeys) : activeConversation.avatar) ? (
+                      <img src={activeConversation.type === "direct" ? getDirectAvatar(activeConversation, currentUserKeys) : activeConversation.avatar} alt="" className="h-full w-full object-cover" />
                     ) : activeConversation.type === "group" ? (
                       <Users className="h-5 w-5" />
                     ) : (
@@ -1035,7 +1044,7 @@ export default function ChatPage() {
                     <p className="truncate text-[10px] font-bold uppercase tracking-widest text-gray-400">
                       {activeConversation.type === "group"
                         ? `${activeConversation.participants.length} members`
-                        : activeConversation.participants.find((member) => member.key !== currentUserKey)?.role || "Direct chat"}
+                        : activeConversation.participants.find((member) => !currentUserKeys.includes(member.key))?.role || "Direct chat"}
                     </p>
                   </div>
                 </div>

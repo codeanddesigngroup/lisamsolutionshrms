@@ -102,6 +102,7 @@ export const getModulesFromPermissions = (permissions: string[] = []) => {
 
 export type AuthUser = {
   id: number | string;
+  employee_id?: number | string;
   name: string;
   email: string;
   role: UserRole;
