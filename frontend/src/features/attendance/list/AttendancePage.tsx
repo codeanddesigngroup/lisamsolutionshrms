@@ -106,6 +106,7 @@ const toLocalDateString = (value = new Date()) => {
 };
 
 const ATTENDANCE_DAY_CUTOFF_HOUR = 6;
+const MISSING_CHECKOUT_DELAY_HOURS = 5;
 
 const todayString = () => {
   const now = new Date();
@@ -160,7 +161,7 @@ const isFutureDate = (date: string) => date > todayString();
 
 const getDateDay = (date: string) => new Date(`${date}T00:00:00`).getDay();
 
-const hasShiftEnded = (workDate: string, shift?: ShiftSummary) => {
+const hasMissingCheckoutWindowPassed = (workDate: string, shift?: ShiftSummary) => {
   if (!shift?.end_time) return workDate < todayString();
 
   const [year, month, day] = workDate.split("-").map(Number);
@@ -175,6 +176,7 @@ const hasShiftEnded = (workDate: string, shift?: ShiftSummary) => {
   if (startMinutes !== null && endMinutesOfDay !== null && endMinutesOfDay <= startMinutes) {
     endDate.setDate(endDate.getDate() + 1);
   }
+  endDate.setHours(endDate.getHours() + MISSING_CHECKOUT_DELAY_HOURS);
 
   return new Date() > endDate;
 };
@@ -319,7 +321,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       const calculatedStatus = attendanceRecord
         ? calculateAttendanceStatus(attendanceRecord, shift as ShiftDefinition)
         : undefined;
-      const hasMissingCheckout = Boolean(attendanceRecord?.clock_in && !attendanceRecord?.clock_out && hasShiftEnded(date, shift));
+      const hasMissingCheckout = Boolean(attendanceRecord?.clock_in && !attendanceRecord?.clock_out && hasMissingCheckoutWindowPassed(date, shift));
 
       let status: DailyStatus;
       if (hasMissingCheckout) {
