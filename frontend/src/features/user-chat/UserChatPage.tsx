@@ -710,7 +710,7 @@ export default function ChatPage() {
       showToast("Some selected members were skipped because they are outside your department.", "info");
     }
     if (selectedMembers.length === 0) {
-      showToast("Select at least one member with Messages view permission.", "error");
+      showToast("Select at least one employee from your department.", "error");
       return;
     }
     const participants = [currentMember, ...selectedMembers].filter(Boolean) as ChatMember[];

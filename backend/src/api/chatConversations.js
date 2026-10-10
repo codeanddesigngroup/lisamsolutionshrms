@@ -15,46 +15,74 @@ const filterGroupMessageParticipants = async (payload, companyId) => {
   if (payload.type !== 'group') return payload;
 
   const participantKeys = uniqueList(payload.participant_keys);
-  const employeeIds = participantKeys
+  const employeeIdentifiers = participantKeys
     .filter((key) => key.startsWith('employee:'))
-    .map((key) => Number(key.split(':')[1]))
+    .map((key) => String(key.split(':')[1] || '').trim())
+    .filter(Boolean);
+  const numericEmployeeIdentifiers = employeeIdentifiers
+    .map(Number)
     .filter((id) => Number.isInteger(id) && id > 0);
 
-  const employeeById = new Map();
-  if (employeeIds.length > 0) {
+  const employeeByKey = new Map();
+  const employeeAliasKeys = (employee) => uniqueList([
+    `employee:${employee.id}`,
+    employee.employee_id ? `employee:${employee.employee_id}` : '',
+  ]);
+
+  if (employeeIdentifiers.length > 0) {
     const employees = await Employee.findAll({
-      where: { id: { [Op.in]: employeeIds }, company_id: companyId },
-      attributes: ['id', 'department_id'],
+      where: {
+        company_id: companyId,
+        [Op.or]: [
+          ...(numericEmployeeIdentifiers.length > 0 ? [{ id: { [Op.in]: numericEmployeeIdentifiers } }] : []),
+          { employee_id: { [Op.in]: employeeIdentifiers } },
+        ],
+      },
+      attributes: ['id', 'employee_id', 'department_id'],
     });
     employees.forEach((employee) => {
-      employeeById.set(Number(employee.id), employee);
+      employeeAliasKeys(employee).forEach((key) => employeeByKey.set(key, employee));
     });
   }
 
   const creatorKey = String(payload.created_by || '');
-  const creatorEmployeeId = creatorKey.startsWith('employee:') ? Number(creatorKey.split(':')[1]) : null;
-  const creatorEmployee = Number.isInteger(creatorEmployeeId) ? employeeById.get(creatorEmployeeId) : null;
-  const allowedParticipantKeys = participantKeys.filter((key) => {
-    if (key === creatorKey) return true;
-    if (!key.startsWith('employee:')) return !creatorEmployee;
-    const employeeId = Number(key.split(':')[1]);
+  const creatorEmployee = creatorKey.startsWith('employee:') ? employeeByKey.get(creatorKey) : null;
+  const allowedParticipantKeys = [];
+
+  participantKeys.forEach((key) => {
+    if (key === creatorKey) {
+      allowedParticipantKeys.push(key);
+      const creatorAliases = creatorEmployee ? employeeAliasKeys(creatorEmployee) : [];
+      allowedParticipantKeys.push(...creatorAliases);
+      return;
+    }
+
+    if (!key.startsWith('employee:')) {
+      if (!creatorEmployee) allowedParticipantKeys.push(key);
+      return;
+    }
+    const employee = employeeByKey.get(key);
     if (creatorEmployee) {
-      const employee = employeeById.get(employeeId);
-      return (
+      if (
         employee &&
         String(employee.department_id || '') === String(creatorEmployee.department_id || '')
-      );
+      ) {
+        allowedParticipantKeys.push(...employeeAliasKeys(employee));
+      }
+      return;
     }
-    return employeeById.has(employeeId);
+
+    if (employee) allowedParticipantKeys.push(...employeeAliasKeys(employee));
   });
+  const normalizedAllowedParticipantKeys = uniqueList(allowedParticipantKeys);
 
   return {
     ...payload,
-    participant_keys: allowedParticipantKeys,
+    participant_keys: normalizedAllowedParticipantKeys,
     participants: Array.isArray(payload.participants)
-      ? payload.participants.filter((participant) => allowedParticipantKeys.includes(String(participant?.key || '')))
+      ? payload.participants.filter((participant) => normalizedAllowedParticipantKeys.includes(String(participant?.key || '')))
       : payload.participants,
-    unread_by: uniqueList(payload.unread_by).filter((key) => allowedParticipantKeys.includes(key) && key !== creatorKey),
+    unread_by: uniqueList(payload.unread_by).filter((key) => normalizedAllowedParticipantKeys.includes(key) && key !== creatorKey),
   };
 };
 
@@ -91,6 +119,15 @@ router.get('/', async (req, res, next) => {
     const companyId = Number(req.query.company_id || req.query.companyId);
     if (!Number.isInteger(companyId) || companyId <= 0) return res.status(400).json({ success: false, message: 'A valid company is required' });
     const rows = await ChatConversation.findAll({ where: { company_id: companyId }, order: [['updated_at', 'DESC']] });
+    await Promise.all(rows.map(async (row) => {
+      if (row.payload?.type !== 'group') return;
+      const normalizedPayload = await filterGroupMessageParticipants(row.payload, row.company_id);
+      const currentKeys = uniqueList(row.payload?.participant_keys);
+      const nextKeys = uniqueList(normalizedPayload.participant_keys);
+      if (JSON.stringify(currentKeys) !== JSON.stringify(nextKeys)) {
+        await row.update({ payload: normalizedPayload });
+      }
+    }));
     return res.json({ success: true, data: rows.map(serialize) });
   } catch (err) { return next(err); }
 });
