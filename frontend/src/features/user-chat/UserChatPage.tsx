@@ -339,12 +339,18 @@ export default function ChatPage() {
     const loadChat = async () => {
       setLoading(true);
       try {
-        const [conversationRes, messageRes, employeeRes, adminRes] = await Promise.all([
+        const [conversationResult, messageResult, employeeResult, adminResult] = await Promise.allSettled([
           api.get("/chat-conversations"),
           api.get("/chat-messages"),
           api.get("/employees"),
           api.get("/admins"),
         ]);
+        if (conversationResult.status !== "fulfilled") throw conversationResult.reason;
+
+        const conversationRes = conversationResult.value;
+        const messageRes = messageResult.status === "fulfilled" ? messageResult.value : { data: [] };
+        const employeeRes = employeeResult.status === "fulfilled" ? employeeResult.value : { data: [] };
+        const adminRes = adminResult.status === "fulfilled" ? adminResult.value : { data: [] };
 
         const employeeMembers = asList<Record<string, unknown>>(employeeRes.data).map((employee) => {
           const id = employee.id as number | string;

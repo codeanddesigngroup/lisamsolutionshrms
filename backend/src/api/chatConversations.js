@@ -114,21 +114,25 @@ const buildGroupCreatedMessage = (conversation) => {
   };
 };
 
+const serializeForList = async (row) => {
+  if (row.payload?.type !== 'group') return serialize(row);
+
+  try {
+    const payload = await filterGroupMessageParticipants(row.payload, row.company_id);
+    return { ...payload, id: row.id, company_id: row.company_id };
+  } catch (err) {
+    console.error(`Chat conversation normalization skipped. conversationId=${row.id}`, err);
+    return serialize(row);
+  }
+};
+
 router.get('/', async (req, res, next) => {
   try {
     const companyId = Number(req.query.company_id || req.query.companyId);
     if (!Number.isInteger(companyId) || companyId <= 0) return res.status(400).json({ success: false, message: 'A valid company is required' });
     const rows = await ChatConversation.findAll({ where: { company_id: companyId }, order: [['updated_at', 'DESC']] });
-    await Promise.all(rows.map(async (row) => {
-      if (row.payload?.type !== 'group') return;
-      const normalizedPayload = await filterGroupMessageParticipants(row.payload, row.company_id);
-      const currentKeys = uniqueList(row.payload?.participant_keys);
-      const nextKeys = uniqueList(normalizedPayload.participant_keys);
-      if (JSON.stringify(currentKeys) !== JSON.stringify(nextKeys)) {
-        await row.update({ payload: normalizedPayload });
-      }
-    }));
-    return res.json({ success: true, data: rows.map(serialize) });
+    const data = await Promise.all(rows.map(serializeForList));
+    return res.json({ success: true, data });
   } catch (err) { return next(err); }
 });
 
