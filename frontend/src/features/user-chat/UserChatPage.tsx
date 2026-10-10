@@ -175,16 +175,22 @@ const getMemberKeys = (member?: Pick<ChatMember, "key" | "type" | "id" | "employ
 };
 
 const getDirectConversationName = (conversation: ChatConversation, currentUserKeys: string[]) =>
-  conversation.participants.find((member) => !currentUserKeys.includes(member.key))?.name || conversation.name;
+  conversation.participants.find((member) => !getMemberKeys(member).some((key) => currentUserKeys.includes(key)))?.name || conversation.name;
 
 const getDirectAvatar = (conversation: ChatConversation, currentUserKeys: string[]) =>
-  conversation.participants.find((member) => !currentUserKeys.includes(member.key))?.avatar || conversation.avatar || "";
+  conversation.participants.find((member) => !getMemberKeys(member).some((key) => currentUserKeys.includes(key)))?.avatar || conversation.avatar || "";
 
 const getMessageStatus = (message: ChatMessage, currentUserKey: string) => message.status_by?.[currentUserKey] || "sent";
 
+const conversationParticipantKeys = (conversation: Pick<ChatConversation, "participant_keys" | "participants">) =>
+  Array.from(new Set([...(conversation.participant_keys || []), ...(conversation.participants || []).flatMap((member) => getMemberKeys(member))]));
+
+const conversationHasAnyKey = (conversation: Pick<ChatConversation, "participant_keys" | "participants">, keys: string[]) =>
+  conversationParticipantKeys(conversation).some((key) => keys.includes(key));
+
 const isSupportedConversation = (conversation: ChatConversation, currentUserKeys: string[]) =>
-  conversation.participant_keys.some((key) => currentUserKeys.includes(key)) &&
-  !conversation.participant_keys.some((key) => key.startsWith("client:")) &&
+  conversationHasAnyKey(conversation, currentUserKeys) &&
+  !conversationParticipantKeys(conversation).some((key) => key.startsWith("client:")) &&
   !conversation.participants.some((participant) => participant.type === "client");
 
 const hasMessagesViewAccess = (permissions: unknown) => {
@@ -250,7 +256,7 @@ export default function ChatPage() {
   );
   const canLeaveActiveGroup = Boolean(
     activeConversation?.type === "group" &&
-    activeConversation.participant_keys.some((key) => currentUserKeys.includes(key)) &&
+    conversationHasAnyKey(activeConversation, currentUserKeys) &&
     activeConversation.created_by !== currentUserKey,
   );
 
@@ -269,16 +275,16 @@ export default function ChatPage() {
 
   const canEditActiveGroupInfo = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "group") return false;
-    return canEditMessages && activeConversation.participant_keys.some((key) => currentUserKeys.includes(key));
+    return canEditMessages && conversationHasAnyKey(activeConversation, currentUserKeys);
   }, [activeConversation, canEditMessages, currentUserKeys]);
 
   const canSendInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
-    if (activeConversation.archived_by?.includes(currentUserKey)) return false;
+    if (activeConversation.archived_by?.some((key) => currentUserKeys.includes(key))) return false;
     if (activeConversation.type === "group" && activeConversation.settings?.only_admins_can_send && !canManageActiveGroup) return false;
-    if (!activeConversation.participant_keys.some((key) => currentUserKeys.includes(key))) return false;
+    if (!conversationHasAnyKey(activeConversation, currentUserKeys)) return false;
     return activeConversation.type === "group" || canCreateMessages;
-  }, [activeConversation, canCreateMessages, canManageActiveGroup, currentUserKey, currentUserKeys]);
+  }, [activeConversation, canCreateMessages, canManageActiveGroup, currentUserKeys]);
 
   const canUploadInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
@@ -289,17 +295,17 @@ export default function ChatPage() {
   const visibleConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return conversations
-      .filter((conversation) => conversation.participant_keys.some((key) => currentUserKeys.includes(key)))
-      .filter((conversation) => !conversation.archived_by?.includes(currentUserKey))
+      .filter((conversation) => conversationHasAnyKey(conversation, currentUserKeys))
+      .filter((conversation) => !conversation.archived_by?.some((key) => currentUserKeys.includes(key)))
       .filter((conversation) => {
         const displayName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKeys) : conversation.name;
         if (query && !displayName.toLowerCase().includes(query)) return false;
-        if (activeTab === "unread") return Boolean(conversation.unread_by?.includes(currentUserKey));
+        if (activeTab === "unread") return Boolean(conversation.unread_by?.some((key) => currentUserKeys.includes(key)));
         if (activeTab === "groups") return conversation.type === "group";
         return true;
       })
       .sort((a, b) => String(b.last_message_at || b.created_at || "").localeCompare(String(a.last_message_at || a.created_at || "")));
-  }, [activeTab, conversations, currentUserKey, currentUserKeys, searchQuery]);
+  }, [activeTab, conversations, currentUserKeys, searchQuery]);
 
   const activePinnedMessage = useMemo(
     () => activeMessages.find((message) => message.id === activeConversation?.pinned_message_id) || null,
@@ -418,7 +424,7 @@ export default function ChatPage() {
         const directConversations = canViewMessages
           ? members
           .filter((member) => member.key !== currentUserKey)
-          .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversation.participant_keys.some((key) => currentUserKeys.includes(key)) && getMemberKeys(member).some((key) => conversation.participant_keys.includes(key))))
+          .filter((member) => !storedConversations.some((conversation) => conversation.type === "direct" && conversationHasAnyKey(conversation, currentUserKeys) && getMemberKeys(member).some((key) => conversationParticipantKeys(conversation).includes(key))))
           .map((member) => ({
             id: `direct-${[currentUserKey, member.key].sort().join("-")}`,
             type: "direct" as const,
@@ -457,7 +463,7 @@ export default function ChatPage() {
     const handleConversationUpsert = ({ conversation }: { conversation?: ChatConversation }) => {
       if (!conversation) return;
       const wasVisible = conversationsRef.current.some((item) => String(item.id) === String(conversation.id));
-      const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversation.participant_keys.some((key) => currentUserKeys.includes(key));
+      const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversationHasAnyKey(conversation, currentUserKeys);
       mergeConversation(conversation);
       if (isNewGroupForUser) {
         const creatorName = conversation.participants.find((participant) => participant.key === conversation.created_by)?.name || "Someone";
@@ -475,7 +481,7 @@ export default function ChatPage() {
     const canAccessMessage = (message: ChatMessage, conversation?: ChatConversation) => {
       if (conversation) return isSupportedConversation(conversation, currentUserKeys);
       return conversationsRef.current.some(
-        (item) => String(item.id) === String(message.conversation_id) && item.participant_keys.some((key) => currentUserKeys.includes(key)),
+        (item) => String(item.id) === String(message.conversation_id) && conversationHasAnyKey(item, currentUserKeys),
       );
     };
 
@@ -508,7 +514,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!user?.company_id) return;
     const conversationIds = conversations
-      .filter((conversation) => conversation.participant_keys.some((key) => currentUserKeys.includes(key)))
+      .filter((conversation) => conversationHasAnyKey(conversation, currentUserKeys))
       .map((conversation) => conversation.id);
 
     if (conversationIds.length > 0) {
@@ -552,7 +558,7 @@ export default function ChatPage() {
               ...conversationUpdate,
               last_message: message.attachments?.length ? message.attachments[0].name : message.body,
               last_message_at: message.created_at,
-              unread_by: conversation.participant_keys.filter((key) => !currentUserKeys.includes(key)),
+              unread_by: conversationParticipantKeys(conversation).filter((key) => !currentUserKeys.includes(key)),
             }
           : conversation,
       ),
@@ -608,7 +614,7 @@ export default function ChatPage() {
       body: draft.trim(),
       attachments: [],
       reply_to_id: replyingTo?.id || null,
-      status_by: Object.fromEntries(activeConversation.participant_keys.map((key) => [key, currentUserKeys.includes(key) ? "seen" : "delivered"])),
+      status_by: Object.fromEntries(conversationParticipantKeys(activeConversation).map((key) => [key, currentUserKeys.includes(key) ? "seen" : "delivered"])),
       reactions: [],
       created_at: now,
     };
@@ -643,7 +649,7 @@ export default function ChatPage() {
       body: draft.trim() || attachments.map((attachment) => attachment.name).join(", "),
       attachments,
       reply_to_id: replyingTo?.id || null,
-      status_by: Object.fromEntries(activeConversation.participant_keys.map((key) => [key, currentUserKeys.includes(key) ? "seen" : "delivered"])),
+      status_by: Object.fromEntries(conversationParticipantKeys(activeConversation).map((key) => [key, currentUserKeys.includes(key) ? "seen" : "delivered"])),
       reactions: [],
       created_at: now,
     };
@@ -798,8 +804,9 @@ export default function ChatPage() {
     if (!activeConversation || activeConversation.type !== "group" || !canManageActiveGroup) return;
     const member = directory.find((item) => item.key === memberKey);
     const memberKeys = getMemberKeys(member);
-    if (!member || memberKeys.some((key) => activeConversation.participant_keys.includes(key))) return;
-    const participantKeys = Array.from(new Set([...activeConversation.participant_keys, ...memberKeys]));
+    const activeParticipantKeys = conversationParticipantKeys(activeConversation);
+    if (!member || memberKeys.some((key) => activeParticipantKeys.includes(key))) return;
+    const participantKeys = Array.from(new Set([...activeParticipantKeys, ...memberKeys]));
     await persistConversation({
       ...activeConversation,
       participant_keys: participantKeys,
@@ -829,10 +836,11 @@ export default function ChatPage() {
     const member = activeConversation.participants.find((item) => item.key === memberKey) || directory.find((item) => item.key === memberKey);
     const memberKeys = getMemberKeys(member || { key: memberKey, id: memberKey.replace(/^employee:/, ''), type: memberKey.startsWith("employee:") ? "employee" : "admin", name: "" });
     if (memberKeys.some((key) => currentUserKeys.includes(key))) return;
+    const activeParticipantKeys = conversationParticipantKeys(activeConversation);
     await persistConversation({
       ...activeConversation,
-      participant_keys: activeConversation.participant_keys.filter((key) => !memberKeys.includes(key)),
-      participants: activeConversation.participants.filter((member) => !memberKeys.includes(member.key)),
+      participant_keys: activeParticipantKeys.filter((key) => !memberKeys.includes(key)),
+      participants: activeConversation.participants.filter((member) => !getMemberKeys(member).some((key) => memberKeys.includes(key))),
       admin_keys: (activeConversation.admin_keys || []).filter((key) => !memberKeys.includes(key)),
       unread_by: (activeConversation.unread_by || []).filter((key) => !memberKeys.includes(key)),
     });
@@ -891,7 +899,7 @@ export default function ChatPage() {
 
   const leaveActiveGroup = () => {
     if (!activeConversation || activeConversation.type !== "group") return;
-    if (!activeConversation.participant_keys.some((key) => currentUserKeys.includes(key))) return;
+    if (!conversationHasAnyKey(activeConversation, currentUserKeys)) return;
     if (activeConversation.created_by === currentUserKey) {
       showToast("Group creators cannot leave. Delete the group instead.", "error");
       return;
@@ -903,16 +911,17 @@ export default function ChatPage() {
       confirmLabel: "Leave Group",
       danger: true,
       onConfirm: async () => {
+        const activeParticipantKeys = conversationParticipantKeys(activeConversation);
         await persistConversation({
           ...activeConversation,
-          participant_keys: activeConversation.participant_keys.filter((key) => !currentUserKeys.includes(key)),
+          participant_keys: activeParticipantKeys.filter((key) => !currentUserKeys.includes(key)),
           participants: activeConversation.participants.filter((member) => !getMemberKeys(member).some((key) => currentUserKeys.includes(key))),
           admin_keys: (activeConversation.admin_keys || []).filter((key) => !currentUserKeys.includes(key)),
           unread_by: (activeConversation.unread_by || []).filter((key) => !currentUserKeys.includes(key)),
           muted_by: (activeConversation.muted_by || []).filter((key) => !currentUserKeys.includes(key)),
           archived_by: (activeConversation.archived_by || []).filter((key) => !currentUserKeys.includes(key)),
         });
-        const remainingParticipantKeys = activeConversation.participant_keys.filter((key) => !currentUserKeys.includes(key));
+        const remainingParticipantKeys = activeParticipantKeys.filter((key) => !currentUserKeys.includes(key));
         const createdAt = new Date().toISOString();
         try {
           await api.post("/chat-messages", {
@@ -1020,7 +1029,7 @@ export default function ChatPage() {
             {visibleConversations.map((conversation) => {
               const conversationName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKeys) : conversation.name;
               const avatar = conversation.type === "direct" ? getDirectAvatar(conversation, currentUserKeys) : conversation.avatar;
-              const unread = conversation.unread_by?.includes(currentUserKey);
+              const unread = conversation.unread_by?.some((key) => currentUserKeys.includes(key));
               return (
                 <button
                   key={String(conversation.id)}
@@ -1071,7 +1080,7 @@ export default function ChatPage() {
                     <p className="truncate text-[10px] font-bold uppercase tracking-widest text-gray-400">
                       {activeConversation.type === "group"
                         ? `${activeConversation.participants.length} members`
-                        : activeConversation.participants.find((member) => !currentUserKeys.includes(member.key))?.role || "Direct chat"}
+                        : activeConversation.participants.find((member) => !getMemberKeys(member).some((key) => currentUserKeys.includes(key)))?.role || "Direct chat"}
                     </p>
                   </div>
                 </div>
@@ -1494,7 +1503,8 @@ function GroupSettingsModal({
 
   if (!conversation || conversation.type !== "group") return null;
 
-  const availableMembers = directory.filter((member) => !conversation.participant_keys.includes(member.key));
+  const participantKeys = conversationParticipantKeys(conversation);
+  const availableMembers = directory.filter((member) => !getMemberKeys(member).some((key) => participantKeys.includes(key)));
   const settings = conversation.settings || {};
 
   return (

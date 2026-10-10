@@ -11,10 +11,30 @@ const serialize = (record) => ({ ...record.payload, id: record.id, company_id: r
 const uniqueList = (items) =>
   Array.from(new Set((Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean)));
 
+const participantAliasKeys = (participant) => {
+  if (!participant) return [];
+  const type = String(participant.type || '').trim();
+  if (type !== 'employee') return uniqueList([participant.key]);
+
+  return uniqueList([
+    participant.key,
+    participant.id !== undefined && participant.id !== null ? `employee:${participant.id}` : '',
+    participant.employeeCode !== undefined && participant.employeeCode !== null ? `employee:${participant.employeeCode}` : '',
+    participant.employee_id !== undefined && participant.employee_id !== null ? `employee:${participant.employee_id}` : '',
+    participant.employeeId !== undefined && participant.employeeId !== null ? `employee:${participant.employeeId}` : '',
+  ]);
+};
+
+const payloadParticipantKeys = (payload = {}) =>
+  uniqueList([
+    ...(Array.isArray(payload.participant_keys) ? payload.participant_keys : []),
+    ...(Array.isArray(payload.participants) ? payload.participants.flatMap(participantAliasKeys) : []),
+  ]);
+
 const filterGroupMessageParticipants = async (payload, companyId) => {
   if (payload.type !== 'group') return payload;
 
-  const participantKeys = uniqueList(payload.participant_keys);
+  const participantKeys = payloadParticipantKeys(payload);
   const employeeIdentifiers = participantKeys
     .filter((key) => key.startsWith('employee:'))
     .map((key) => String(key.split(':')[1] || '').trim())
@@ -80,7 +100,9 @@ const filterGroupMessageParticipants = async (payload, companyId) => {
     ...payload,
     participant_keys: normalizedAllowedParticipantKeys,
     participants: Array.isArray(payload.participants)
-      ? payload.participants.filter((participant) => normalizedAllowedParticipantKeys.includes(String(participant?.key || '')))
+      ? payload.participants.filter((participant) =>
+          participantAliasKeys(participant).some((key) => normalizedAllowedParticipantKeys.includes(key)),
+        )
       : payload.participants,
     unread_by: uniqueList(payload.unread_by).filter((key) => normalizedAllowedParticipantKeys.includes(key) && key !== creatorKey),
   };

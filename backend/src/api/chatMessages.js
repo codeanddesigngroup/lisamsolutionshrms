@@ -6,6 +6,28 @@ const { emitToChatRooms } = require('../realtime/socket');
 
 const serialize = (record) => ({ ...record.payload, id: record.id, conversation_id: record.conversation_id, company_id: record.company_id });
 const serializeConversation = (record) => ({ ...record.payload, id: record.id, company_id: record.company_id });
+const uniqueList = (items) =>
+  Array.from(new Set((Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean)));
+
+const participantAliasKeys = (participant) => {
+  if (!participant) return [];
+  const type = String(participant.type || '').trim();
+  if (type !== 'employee') return uniqueList([participant.key]);
+
+  return uniqueList([
+    participant.key,
+    participant.id !== undefined && participant.id !== null ? `employee:${participant.id}` : '',
+    participant.employeeCode !== undefined && participant.employeeCode !== null ? `employee:${participant.employeeCode}` : '',
+    participant.employee_id !== undefined && participant.employee_id !== null ? `employee:${participant.employee_id}` : '',
+    participant.employeeId !== undefined && participant.employeeId !== null ? `employee:${participant.employeeId}` : '',
+  ]);
+};
+
+const conversationParticipantKeys = (payload = {}) =>
+  uniqueList([
+    ...(Array.isArray(payload.participant_keys) ? payload.participant_keys : []),
+    ...(Array.isArray(payload.participants) ? payload.participants.flatMap(participantAliasKeys) : []),
+  ]);
 
 router.get('/', async (req, res, next) => {
   try {
@@ -30,13 +52,15 @@ router.post('/', async (req, res, next) => {
     let updatedConversation = null;
     if (conversation && conversation.company_id === companyId) {
       const conversationPayload = conversation.payload || {};
+      const participantKeys = conversationParticipantKeys(conversationPayload);
       await conversation.update({
         payload: {
           ...conversationPayload,
           last_message: payload.attachments?.length ? payload.attachments[0]?.name : payload.body,
           last_message_at: payload.created_at || new Date().toISOString(),
-          unread_by: (conversationPayload.participant_keys || []).filter((key) => !senderKeys.includes(key)),
-          archived_by: (conversationPayload.archived_by || []).filter((key) => senderKeys.includes(key)),
+          participant_keys: participantKeys,
+          unread_by: participantKeys.filter((key) => !senderKeys.includes(key)),
+          archived_by: (conversationPayload.archived_by || []).filter((key) => !senderKeys.includes(key)),
         },
       });
       updatedConversation = serializeConversation(conversation);
