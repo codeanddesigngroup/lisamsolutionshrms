@@ -155,15 +155,16 @@ export default function AttendanceSummaryPage() {
   const { showToast } = useToast();
   const { user, hasPermission } = useAuth();
   const isEmployeeSession = user?.role === "employee";
-  const canManageAttendance =
-    !isEmployeeSession && (
-      user?.role === "admin" ||
-      hasPermission("attendance.manage") ||
-      hasPermission("attendance.edit") ||
-      hasPermission("attendance.approve") ||
-      hasPermission("attendance.export")
-    );
-  const isSelfServiceAttendance = isEmployeeSession;
+  const canViewAttendance =
+    user?.role === "admin" ||
+    hasPermission("attendance.view") ||
+    hasPermission("attendance.manage");
+  const canCreateAttendance =
+    user?.role === "admin" ||
+    hasPermission("attendance.create") ||
+    hasPermission("attendance.manage");
+  const canViewCompanyAttendance = !isEmployeeSession || canViewAttendance;
+  const isSelfServiceAttendance = isEmployeeSession && !canViewCompanyAttendance;
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -195,7 +196,7 @@ export default function AttendanceSummaryPage() {
           startDate,
           endDate,
           limit: 5000,
-          ...(isEmployeeSession && attendanceDeviceEmployeeId !== undefined
+          ...(isSelfServiceAttendance && attendanceDeviceEmployeeId !== undefined
             ? { employeeId: attendanceDeviceEmployeeId }
             : {}),
         },
@@ -214,18 +215,18 @@ export default function AttendanceSummaryPage() {
           ? leaveResponse.value.data.data
           : [];
 
-      const employeesWithAttendance = isEmployeeSession
+      const employeesWithAttendance = isSelfServiceAttendance
         ? (currentEmployee ? [currentEmployee] : [])
         : employeeList;
       setEmployees(employeesWithAttendance);
       setAttendance(
-        isEmployeeSession
+        isSelfServiceAttendance
           ? attendanceList.filter((row) => isCurrentUserAttendance(row, user))
           : attendanceList,
       );
       setHolidays(holidayList);
       setLeaves(
-        isEmployeeSession
+        isSelfServiceAttendance
           ? leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(user?.id || ""))
           : leaveList,
       );
@@ -242,7 +243,7 @@ export default function AttendanceSummaryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, year, user?.id, user?.company_id, user?.role, canManageAttendance]);
+  }, [month, year, user?.id, user?.company_id, user?.role, canViewCompanyAttendance]);
 
   const resetFilters = () => {
     setSelectedEmployee("all");
@@ -366,7 +367,7 @@ export default function AttendanceSummaryPage() {
           <div className="col-sm-9 text-right flex justify-end items-center space-x-2">
             <Link href="/attendance">
               <Button className="btn-success btn-sm">
-                {canManageAttendance ? "Open Daily Attendance" : "My Attendance"} <Plus className="h-4 w-4 ml-1 inline-block" />
+                {canViewCompanyAttendance ? "Open Daily Attendance" : "My Attendance"} <Plus className="h-4 w-4 ml-1 inline-block" />
               </Button>
             </Link>
             <ol className="breadcrumb hidden-xs">
@@ -389,8 +390,8 @@ export default function AttendanceSummaryPage() {
         </div>
 
         <div className="white-box">
-          <div className={`grid grid-cols-1 gap-4 items-end ${canManageAttendance ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
-            {canManageAttendance && (
+          <div className={`grid grid-cols-1 gap-4 items-end ${canViewCompanyAttendance ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
+            {canViewCompanyAttendance && (
               <div>
                 <label className="block text-[12px] font-bold text-gray-600 mb-2">Employee Name</label>
                 <select className="form-control" value={selectedEmployee} onChange={(event) => setSelectedEmployee(event.target.value)}>
@@ -422,12 +423,14 @@ export default function AttendanceSummaryPage() {
                 Reset
               </Button>
             </div>
-            <div>
-              <Button onClick={syncTodayAttendance} disabled={syncingToday} className="btn-success btn-block h-[34px]">
-                <RefreshCw className={`h-4 w-4 mr-2 ${syncingToday ? "animate-spin" : ""}`} />
-                Sync Today
-              </Button>
-            </div>
+            {canCreateAttendance && (
+              <div>
+                <Button onClick={syncTodayAttendance} disabled={syncingToday} className="btn-success btn-block h-[34px]">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncingToday ? "animate-spin" : ""}`} />
+                  Sync Today
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 

@@ -108,11 +108,10 @@ const getShiftLabel = (shift?: ShiftSummary) => {
 export default function MarkAttendancePage() {
   const { showToast } = useToast();
   const { user, hasPermission } = useAuth();
-  const canManageAttendance =
+  const canCreateAttendance =
     user?.role === "admin" ||
-    hasPermission("attendance.manage") ||
-    hasPermission("attendance.edit") ||
-    hasPermission("attendance.approve");
+    hasPermission("attendance.create") ||
+    hasPermission("attendance.manage");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, AttendanceDraft>>({});
@@ -130,7 +129,7 @@ export default function MarkAttendancePage() {
           employee.email === user?.email ||
           employee.name === user?.name
         );
-        const visibleEmployees = canManageAttendance ? employeeList : employeeList.filter((employee) => String(employee.id) === String(selfEmployee?.id || user?.id));
+        const visibleEmployees = canCreateAttendance ? employeeList : employeeList.filter((employee) => String(employee.id) === String(selfEmployee?.id || user?.id));
         setEmployees(visibleEmployees);
         setDrafts(
           Object.fromEntries(visibleEmployees.map((employee) => [String(employee.id), getDefaultDraft(employee)])),
@@ -145,7 +144,7 @@ export default function MarkAttendancePage() {
 
     fetchEmployees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canManageAttendance, user?.email, user?.id, user?.name]);
+  }, [canCreateAttendance, user?.email, user?.id, user?.name]);
 
   const updateDraft = (employeeId: number | string, patch: Partial<AttendanceDraft>) => {
     const employee = employees.find((item) => String(item.id) === String(employeeId));

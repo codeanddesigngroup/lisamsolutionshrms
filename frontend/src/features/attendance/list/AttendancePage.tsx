@@ -203,15 +203,33 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const [hasHydrated, setHasHydrated] = useState(false);
   const hydratedUser = hasHydrated ? user : null;
   const isEmployeeSession = hydratedUser?.role === "employee";
-  const canManageAttendance =
-    hasHydrated && !isEmployeeSession && (
+  const canViewAttendance =
+    hasHydrated && (
       hydratedUser?.role === "admin" ||
-      hasPermission("attendance.manage") ||
-      hasPermission("attendance.edit") ||
-      hasPermission("attendance.approve") ||
-      hasPermission("attendance.export")
+      hasPermission("attendance.view") ||
+      hasPermission("attendance.manage")
     );
-  const isSelfServiceAttendance = isEmployeeSession;
+  const canCreateAttendance =
+    hasHydrated && (
+      hydratedUser?.role === "admin" ||
+      hasPermission("attendance.create") ||
+      hasPermission("attendance.manage")
+    );
+  const canEditAttendance =
+    hasHydrated && (
+      hydratedUser?.role === "admin" ||
+      hasPermission("attendance.edit") ||
+      hasPermission("attendance.manage")
+    );
+  const canApproveAttendance =
+    hasHydrated && (
+      hydratedUser?.role === "admin" ||
+      hasPermission("attendance.approve") ||
+      hasPermission("attendance.manage")
+    );
+  const canViewCompanyAttendance = hasHydrated && (!isEmployeeSession || canViewAttendance);
+  const canUseAttendanceActions = canEditAttendance || canApproveAttendance;
+  const isSelfServiceAttendance = isEmployeeSession && !canViewCompanyAttendance;
 
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -248,7 +266,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
           companyId,
           workDate: date,
           limit: 500,
-          ...(isEmployeeSession && attendanceDeviceEmployeeId !== undefined
+          ...(isSelfServiceAttendance && attendanceDeviceEmployeeId !== undefined
             ? { employeeId: attendanceDeviceEmployeeId }
             : {}),
         },
@@ -257,18 +275,18 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       const holidayList: HolidayRecord[] = [];
       const leaveList: LeaveRecord[] = [];
 
-      const visibleEmployees = isEmployeeSession
+      const visibleEmployees = isSelfServiceAttendance
         ? (currentEmployee ? [currentEmployee] : [])
         : employeeList;
       setEmployees(visibleEmployees);
       setAttendance(
-        isEmployeeSession
+        isSelfServiceAttendance
           ? attendanceList.filter((row) => isCurrentUserAttendance(row, hydratedUser))
           : attendanceList,
       );
       setHolidays(holidayList);
       setLeaves(
-        isEmployeeSession
+        isSelfServiceAttendance
           ? leaveList.filter((leave) => getLeaveEmployeeId(leave) === String(hydratedUser?.id || ""))
           : leaveList,
       );
@@ -430,13 +448,14 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   };
 
   const openLateWaiver = (row: DailyAttendanceRow) => {
+    if (!canApproveAttendance) return;
     setWaiverRow(row);
     setWaiverReason("Manager discretion");
     setWaiverNote("");
   };
 
   const confirmLateWaiver = async () => {
-    if (!waiverRow?.attendance?.id) return;
+    if (!canApproveAttendance || !waiverRow?.attendance?.id) return;
     try {
       await attendanceService.waiveLate(waiverRow.attendance.id, {
         reason: waiverReason,
@@ -453,7 +472,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   };
 
   const revokeLateWaiver = async (row: DailyAttendanceRow) => {
-    if (!row.attendance?.id) return;
+    if (!canApproveAttendance || !row.attendance?.id) return;
     try {
       await attendanceService.revokeLateWaiver(row.attendance.id);
       await fetchAttendance();
@@ -495,7 +514,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         </div>
 
         <div className="white-box">
-          <div className={`grid grid-cols-1 gap-4 md:items-end ${canManageAttendance ? "md:grid-cols-5" : "md:grid-cols-1"}`}>
+          <div className={`grid grid-cols-1 gap-4 md:items-end ${canViewCompanyAttendance ? "md:grid-cols-5" : "md:grid-cols-1"}`}>
             {isDateWise ? (
               <div>
                 <label className="mb-2 block text-[12px] font-bold text-gray-600">Attendance Date</label>
@@ -507,7 +526,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                 <p className="mt-1 text-xs font-bold text-gray-700">{date}</p>
               </div>
             )}
-            {canManageAttendance && (
+            {canViewCompanyAttendance && (
               <>
                 <div>
                   <label className="mb-2 block text-[12px] font-bold text-gray-600">Employee</label>
@@ -540,17 +559,19 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                 </div>
               </>
             )}
-            {canManageAttendance && (
+            {(canCreateAttendance || canViewCompanyAttendance) && (
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  onClick={handleSyncMissingAttendance}
-                  loading={isSyncingAttendance}
-                  className="h-[34px] whitespace-nowrap px-4 text-[10px] font-black uppercase tracking-widest"
-                >
-                  {!isSyncingAttendance && <RefreshCw className="h-4 w-4" />}
-                  Sync Attendance
-                </Button>
+                {canCreateAttendance && (
+                  <Button
+                    type="button"
+                    onClick={handleSyncMissingAttendance}
+                    loading={isSyncingAttendance}
+                    className="h-[34px] whitespace-nowrap px-4 text-[10px] font-black uppercase tracking-widest"
+                  >
+                    {!isSyncingAttendance && <RefreshCw className="h-4 w-4" />}
+                    Sync Attendance
+                  </Button>
+                )}
                 <Button onClick={resetFilters} className="btn-default h-[34px]">
                   Reset
                 </Button>
@@ -563,7 +584,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
           <div className="flex flex-wrap divide-x divide-[#eee]">
             <div className="min-w-[150px] flex-1 p-6 text-center">
               <h4 className="m-0 text-xl font-bold">{stats.total}</h4>
-              <p className="mt-1 text-[10px] font-bold uppercase text-gray-400">{canManageAttendance ? "Employees" : "My Record"}</p>
+              <p className="mt-1 text-[10px] font-bold uppercase text-gray-400">{canViewCompanyAttendance ? "Employees" : "My Record"}</p>
             </div>
             <div className="min-w-[150px] flex-1 p-6 text-center">
               <h4 className="m-0 text-xl font-bold text-success">{stats.present}</h4>
@@ -583,7 +604,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             </div>
             <div className="min-w-[150px] flex-1 border-l border-[#eee] p-6 text-center">
               <h4 className="m-0 text-xl font-bold text-info">{stats.review}</h4>
-              <p className="mt-1 text-[10px] font-bold uppercase text-gray-400">{canManageAttendance ? "Needs Review" : "Exceptions"}</p>
+              <p className="mt-1 text-[10px] font-bold uppercase text-gray-400">{canViewCompanyAttendance ? "Needs Review" : "Exceptions"}</p>
             </div>
           </div>
         </div>
@@ -595,7 +616,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             </div>
           )}
           <div className="table-responsive">
-            <table className={`${canManageAttendance ? "min-w-[1180px]" : "min-w-[1040px]"} border-separate border-spacing-y-2 px-3 text-left`}>
+            <table className={`${canUseAttendanceActions ? "min-w-[1180px]" : "min-w-[1040px]"} border-separate border-spacing-y-2 px-3 text-left`}>
               <thead>
                 <tr className="bg-gray-50">
                   <th className="rounded-l-lg px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Employee</th>
@@ -606,7 +627,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Work Hours</th>
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Source</th>
                   <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Context</th>
-                  {canManageAttendance && (
+                  {canUseAttendanceActions && (
                     <th className="rounded-r-lg px-4 py-3 text-right text-[10px] font-black uppercase tracking-widest text-gray-500">Actions</th>
                   )}
                 </tr>
@@ -663,7 +684,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                         </div>
                         <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{getDeviceLabel(row.attendance)}</div>
                       </td>
-                      <td className={`${canManageAttendance ? "" : "rounded-r-lg"} px-4 py-4`}>
+                      <td className={`${canUseAttendanceActions ? "" : "rounded-r-lg"} px-4 py-4`}>
                         {row.isLateWaived ? (
                           <div>
                             <div className="flex items-center gap-1 text-xs font-bold text-green-600">
@@ -691,10 +712,10 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                           </div>
                         )}
                       </td>
-                      {canManageAttendance && (
+                      {canUseAttendanceActions && (
                         <td className="rounded-r-lg px-4 py-4">
                           <div className="flex justify-end gap-2">
-                            {(row.lateAfterGraceMinutes > 0 || row.isLateWaived) && (
+                            {canApproveAttendance && (row.lateAfterGraceMinutes > 0 || row.isLateWaived) && (
                               <button
                                 type="button"
                                 onClick={() => row.isLateWaived ? revokeLateWaiver(row) : openLateWaiver(row)}
@@ -709,14 +730,16 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                                 {row.isLateWaived ? "Undo" : "Waive Late"}
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => setEditingRow(row)}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white text-gray-500 shadow-sm transition hover:text-blue-600"
-                              title={row.attendance ? "Edit attendance" : "Create attendance"}
-                            >
-                              <Edit3 className="h-4 w-4" />
-                            </button>
+                            {canEditAttendance && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingRow(row)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white text-gray-500 shadow-sm transition hover:text-blue-600"
+                                title={row.attendance ? "Edit attendance" : "Create attendance"}
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}
@@ -724,8 +747,8 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                 ))}
                 {!loading && filteredRows.length === 0 && (
                   <tr>
-                    <td colSpan={canManageAttendance ? 10 : 9} className="py-12 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
-                      {canManageAttendance ? "No API attendance found for selected filters" : "No attendance record found"}
+                    <td colSpan={canUseAttendanceActions ? 10 : 9} className="py-12 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      {canViewCompanyAttendance ? "No API attendance found for selected filters" : "No attendance record found"}
                     </td>
                   </tr>
                 )}

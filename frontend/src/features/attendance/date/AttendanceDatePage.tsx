@@ -94,12 +94,19 @@ const isCurrentUserAttendance = (attendance: AttendanceRecord, user: { id?: numb
 export default function AttendanceByDatePage() {
   const { showToast } = useToast();
   const { user, hasPermission } = useAuth();
-  const canManageAttendance =
+  const isEmployeeSession = user?.role === "employee";
+  const canViewAttendance =
     user?.role === "admin" ||
-    hasPermission("attendance.manage") ||
-    hasPermission("attendance.edit") ||
-    hasPermission("attendance.approve") ||
-    hasPermission("attendance.export");
+    hasPermission("attendance.view") ||
+    hasPermission("attendance.manage");
+  const canCreateAttendance =
+    user?.role === "admin" ||
+    hasPermission("attendance.create") ||
+    hasPermission("attendance.manage");
+  const canViewCompanyAttendance =
+    !isEmployeeSession ||
+    canViewAttendance;
+  const isSelfServiceAttendance = isEmployeeSession && !canViewCompanyAttendance;
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(DEFAULT_ATTENDANCE_DATE);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -115,14 +122,14 @@ export default function AttendanceByDatePage() {
       const employeeList = (employeeResponse.data.data || []) as EmployeeOption[];
       const attendanceList = (attendanceResponse.data.data || []) as AttendanceRecord[];
 
-      const employeesWithAttendance = canManageAttendance
+      const employeesWithAttendance = canViewCompanyAttendance
         ? employeeList.filter((employee) =>
             attendanceList.some((row) => String(row.employee_id || row.user_id || row.employee?.id || "") === String(employee.id))
           )
         : employeeList.filter((employee) => isCurrentUserEmployee(employee, user));
       setEmployees(employeesWithAttendance);
       setAttendance(attendanceList.filter((row) =>
-        canManageAttendance ||
+        !isSelfServiceAttendance ||
         isCurrentUserAttendance(row, user)
       ));
     } catch (err) {
@@ -162,11 +169,13 @@ export default function AttendanceByDatePage() {
             </h4>
           </div>
           <div className="col-sm-9 text-right flex justify-end items-center space-x-2">
-            <Link href="/attendance/create">
-              <Button className="btn-success btn-sm">
-                {canManageAttendance ? "Mark Attendance" : "Clock In"} <Plus className="h-4 w-4 ml-1 inline-block" />
-              </Button>
-            </Link>
+            {canCreateAttendance && (
+              <Link href="/attendance/create">
+                <Button className="btn-success btn-sm">
+                  Mark Attendance <Plus className="h-4 w-4 ml-1 inline-block" />
+                </Button>
+              </Link>
+            )}
             <ol className="breadcrumb hidden-xs">
               <li><Link href="/dashboard">Home</Link></li>
               <li className="active">Attendance</li>
