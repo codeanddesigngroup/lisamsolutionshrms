@@ -139,7 +139,7 @@ const renderSummaryStatusIcon = (status: SummaryStatus) => {
     case "half-day":
       return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fec107]"><Check className="h-2.5 w-2.5 text-white" /></span>;
     case "absent":
-      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fb9678]"><X className="h-2.5 w-2.5 text-white" /></span>;
+      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#FF0000]"><X className="h-2.5 w-2.5 text-white" /></span>;
     case "holiday":
       return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#5475ed]"><Star className="h-2.5 w-2.5 text-white" /></span>;
     case "leave":
@@ -435,7 +435,7 @@ export default function AttendanceSummaryPage() {
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#00c292] rounded-sm flex items-center justify-center"><Check className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Present</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#f97316] rounded-sm flex items-center justify-center"><Clock className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Late</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#fec107] rounded-sm flex items-center justify-center"><Check className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Half Day</span></div>
-          <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#fb9678] rounded-sm flex items-center justify-center"><X className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Absent</span></div>
+          <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#FF0000] rounded-sm flex items-center justify-center"><X className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Absent</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#5475ed] rounded-sm flex items-center justify-center"><Star className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Holiday</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#7c3aed] rounded-sm flex items-center justify-center"><Star className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Approved Leave</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-gray-200 rounded-sm" /><span className="text-[11px] font-bold text-gray-500 uppercase">Closed/Future</span></div>
