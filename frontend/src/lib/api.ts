@@ -81,6 +81,7 @@ api.interceptors.request.use((config) => {
   // Cleans up the URL so there are no double slashes (e.g. //api//users becomes /api/users)
   config.url = normalizeApiPath(config.url);
   config = attachCompanyScope(config);
+  const storedUser = getStoredUser();
 
   // Grab the user's login token from their browser cookies
   const token = Cookies.get("token");
@@ -89,6 +90,14 @@ api.interceptors.request.use((config) => {
   // This proves to the PHP backend that this user is authenticated.
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (storedUser) {
+    config.headers["X-User-Id"] = String(storedUser.id);
+    config.headers["X-User-Role"] = String(storedUser.role);
+    if (storedUser.company_id !== undefined && storedUser.company_id !== null) {
+      config.headers["X-Company-Id"] = String(storedUser.company_id);
+    }
   }
 
   return config;

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 
 const Company = require('../models/Company');
+const Employee = require('../models/Employee');
+const EmployeePermission = require('../models/EmployeePermission');
 const Role = require('../models/Role');
 const User = require('../models/User');
 const applyAssociations = require('../models/associations');
@@ -15,6 +17,11 @@ const userIncludes = [
 ];
 
 const publicUserAttributes = { exclude: ['password'] };
+
+const parsePositiveInteger = (value) => {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
 
 const normalizeStatus = (status) => (status === 'inactive' ? 'inactive' : 'active');
 
@@ -125,9 +132,62 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+router.get('/me', async (req, res, next) => {
+  try {
+    const userId = parsePositiveInteger(req.get('x-user-id'));
+    const role = String(req.get('x-user-role') || '').trim().toLowerCase();
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Current user is required' });
+    }
+
+    if (role === 'employee') {
+      const employee = await Employee.findByPk(userId, {
+        attributes: { exclude: ['password'] },
+        include: [
+          { model: Company, as: 'company' },
+          { model: EmployeePermission, as: 'permission_record' },
+        ],
+      });
+
+      if (!employee) {
+        return res.status(404).json({ success: false, message: 'Current employee not found' });
+      }
+
+      const data = employee.toJSON();
+      return res.status(200).json({
+        success: true,
+        data: {
+          ...data,
+          role: 'employee',
+          permissions: data.permission_record?.permission_keys || [],
+        },
+      });
+    }
+
+    const user = await User.findByPk(userId, {
+      attributes: publicUserAttributes,
+      include: userIncludes,
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Current user not found' });
+    }
+
+    return res.status(200).json({ success: true, data: serializeUser(user) });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
-    const user = await User.findByPk(req.params.id, {
+    const id = parsePositiveInteger(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'A valid user ID is required' });
+    }
+
+    const user = await User.findByPk(id, {
       attributes: publicUserAttributes,
       include: userIncludes,
     });
@@ -146,7 +206,13 @@ router.put('/:id', async (req, res, next) => {
   const transaction = await User.sequelize.transaction();
 
   try {
-    const user = await User.findByPk(req.params.id, { transaction });
+    const id = parsePositiveInteger(req.params.id);
+    if (!id) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'A valid user ID is required' });
+    }
+
+    const user = await User.findByPk(id, { transaction });
 
     if (!user) {
       await transaction.rollback();
@@ -176,7 +242,12 @@ router.put('/:id', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    const deleted = await User.destroy({ where: { id: req.params.id } });
+    const id = parsePositiveInteger(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'A valid user ID is required' });
+    }
+
+    const deleted = await User.destroy({ where: { id } });
 
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'User not found' });
