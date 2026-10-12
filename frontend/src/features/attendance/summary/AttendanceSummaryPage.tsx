@@ -2,7 +2,7 @@
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
-import { Plus, Calendar, Check, X, Star, RefreshCw } from "lucide-react";
+import { Plus, Calendar, Check, X, Star, RefreshCw, Clock } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/context/ToastContext";
@@ -57,7 +57,8 @@ type AttendanceRecord = {
 
 type HolidayRecord = { date?: string; holiday_date?: string; name?: string; occassion?: string };
 type LeaveRecord = { user_id?: number | string; employee_id?: number | string; user?: { id?: number | string; name?: string }; employee?: { id?: number | string; name?: string }; leave_date?: string; date?: string; status?: string; reason?: string; leave_type?: { type_name?: string } };
-type DayDetail = { employee: EmployeeOption; day: number; date: string; status: string; attendance?: AttendanceRecord; holiday?: HolidayRecord; leave?: LeaveRecord };
+type SummaryStatus = "present" | "late" | "half-day" | "absent" | "holiday" | "leave" | "closed" | "empty";
+type DayDetail = { employee: EmployeeOption; day: number; date: string; status: SummaryStatus; attendance?: AttendanceRecord; holiday?: HolidayRecord; leave?: LeaveRecord };
 
 const now = new Date();
 const thisYear = now.getFullYear();
@@ -116,6 +117,39 @@ const shouldMarkAbsent = (dateString: string, employee: EmployeeOption) => {
   const shiftStart = getShiftStartDate(dateString, employee.employee_detail?.shift_type);
   if (shiftStart) return new Date() >= shiftStart;
   return dateString < getTodayString();
+};
+
+const normalizeSummaryStatus = (status: string): SummaryStatus => {
+  const value = String(status || "").toLowerCase().replace(/_/g, "-").trim();
+  if (value === "late") return "late";
+  if (value === "half-day" || value === "half day") return "half-day";
+  if (value === "absent") return "absent";
+  if (value === "holiday") return "holiday";
+  if (value === "leave" || value === "approved-leave" || value === "approved leave") return "leave";
+  if (value === "closed" || value === "future") return "closed";
+  if (value === "empty") return "empty";
+  return "present";
+};
+
+const renderSummaryStatusIcon = (status: SummaryStatus) => {
+  switch (status) {
+    case "present":
+      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#00c292]"><Check className="h-2.5 w-2.5 text-white" /></span>;
+    case "late":
+      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#f97316]"><Clock className="h-2.5 w-2.5 text-white" /></span>;
+    case "half-day":
+      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fec107]"><Check className="h-2.5 w-2.5 text-white" /></span>;
+    case "absent":
+      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fb9678]"><X className="h-2.5 w-2.5 text-white" /></span>;
+    case "holiday":
+      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#5475ed]"><Star className="h-2.5 w-2.5 text-white" /></span>;
+    case "leave":
+      return <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#7c3aed]"><Star className="h-2.5 w-2.5 text-white" /></span>;
+    case "closed":
+    case "empty":
+    default:
+      return <span className="h-4 w-4 rounded-sm bg-gray-200" />;
+  }
 };
 
 export default function AttendanceSummaryPage() {
@@ -287,29 +321,29 @@ export default function AttendanceSummaryPage() {
     return undefined;
   };
 
-  const getDayStatus = (employee: EmployeeOption, day: number) => {
+  const getDayStatus = (employee: EmployeeOption, day: number): SummaryStatus => {
     const date = new Date(year, month - 1, day);
     const dateString = getDateForDay(year, month, day);
-    if (!officeOpenDays.includes(date.getDay())) return "closed";
     const record = getAttendanceForEmployeeDay(employee, day);
     if (record) {
       const shift = record.shift_type || employee.employee_detail?.shift_type;
       const explicitStatus = String(record.status || "").toLowerCase();
       if (record.half_day || explicitStatus === "half-day" || explicitStatus === "half day") return "half-day";
       if (!record.clock_in && !record.clock_out) return "absent";
+      if (record.late || explicitStatus === "late") return "late";
       if (!record.clock_in || !record.clock_out) return "present";
-      return calculateAttendanceStatus(record, shift as ShiftDefinition);
+      return normalizeSummaryStatus(calculateAttendanceStatus(record, shift as ShiftDefinition));
     }
     if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
     if (leaves.some((leave) => isApprovedLeaveForEmployee(leave, employee, dateString))) return "leave";
+    if (!officeOpenDays.includes(date.getDay())) return "closed";
     if (shouldMarkAbsent(dateString, employee)) return "absent";
     return "empty";
   };
 
   const getDayDetail = (employee: EmployeeOption, day: number): DayDetail => {
     const date = getDateForDay(year, month, day);
-    const dayDate = new Date(year, month - 1, day);
-    const attendanceRecord = officeOpenDays.includes(dayDate.getDay()) ? getAttendanceForEmployeeDay(employee, day) : undefined;
+    const attendanceRecord = getAttendanceForEmployeeDay(employee, day);
     const holiday = holidays.find((item) => getHolidayDate(item) === date);
     const leave = leaves.find((item) => isApprovedLeaveForEmployee(item, employee, date));
     return { employee, day, date, status: getDayStatus(employee, day), attendance: attendanceRecord, holiday, leave };
@@ -319,7 +353,7 @@ export default function AttendanceSummaryPage() {
     daysArray.reduce((total, day) => {
       const status = getDayStatus(employee, day);
       if (status === "half-day") return total + 0.5;
-      return ["present", "early", "late"].includes(status) ? total + 1 : total;
+      return status === "present" || status === "late" ? total + 1 : total;
     }, 0);
 
   return (
@@ -402,6 +436,7 @@ export default function AttendanceSummaryPage() {
 
         <div className="flex flex-wrap gap-6 px-2 mb-4">
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#00c292] rounded-sm flex items-center justify-center"><Check className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Present</span></div>
+          <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#f97316] rounded-sm flex items-center justify-center"><Clock className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Late</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#fec107] rounded-sm flex items-center justify-center"><Check className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Half Day</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#fb9678] rounded-sm flex items-center justify-center"><X className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Absent</span></div>
           <div className="flex items-center space-x-2"><div className="h-4 w-4 bg-[#5475ed] rounded-sm flex items-center justify-center"><Star className="h-2.5 w-2.5 text-white" /></div><span className="text-[11px] font-bold text-gray-500 uppercase">Holiday</span></div>
@@ -443,12 +478,7 @@ export default function AttendanceSummaryPage() {
                       return (
                         <td key={day} className="p-1 border-r text-center">
                           <button type="button" onClick={() => setSelectedDayDetail(getDayDetail(employee, day))} className="mx-auto flex h-6 w-6 items-center justify-center rounded-sm transition-transform hover:scale-110" title={`${employee.name} - ${day}`}>
-                            {(status === "present" || status === "early" || status === "late") && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#00c292]"><Check className="h-2.5 w-2.5 text-white" /></span>}
-                            {status === "half-day" && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fec107]"><Check className="h-2.5 w-2.5 text-white" /></span>}
-                            {status === "absent" && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#fb9678]"><X className="h-2.5 w-2.5 text-white" /></span>}
-                            {status === "holiday" && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#5475ed]"><Star className="h-2.5 w-2.5 text-white" /></span>}
-                            {status === "leave" && <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[#7c3aed]"><Star className="h-2.5 w-2.5 text-white" /></span>}
-                            {(status === "empty" || status === "closed") && <span className="h-2 w-2 rounded-full bg-gray-200" />}
+                            {renderSummaryStatusIcon(status)}
                           </button>
                         </td>
                       );

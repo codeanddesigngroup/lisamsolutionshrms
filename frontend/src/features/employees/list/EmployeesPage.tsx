@@ -44,7 +44,7 @@ export default function EmployeesPage() {
   const [userRole] = useState<UserRole>(() => getStoredRole());
   
   // Advanced Filters parity with Laravel
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active");
   const [deptFilter, setDeptFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [designationFilter, setDesignationFilter] = useState("all");
@@ -58,7 +58,7 @@ export default function EmployeesPage() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get("/employees");
+      const response = await api.get("/employees", { params: { status: statusFilter } });
       const result = response.data;
 
       setEmployees(Array.isArray(result?.data) ? result.data : []);
@@ -68,7 +68,7 @@ export default function EmployeesPage() {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, statusFilter]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -119,7 +119,7 @@ export default function EmployeesPage() {
   };
 
   const handleReset = () => {
-    setStatusFilter("all");
+    setStatusFilter("active");
     setDeptFilter("all");
     setRoleFilter("all");
     setDesignationFilter("all");

@@ -190,8 +190,12 @@ router.post('/', async (req, res, next) => {
 
 router.get('/', async (req, res, next) => {
   try {
+    const where = {};
+    if (req.query.company_id) where.company_id = req.query.company_id;
+    if (req.query.status && req.query.status !== 'all') where.status = req.query.status;
+
     const employees = await Employee.findAll({
-      where: req.query.company_id ? { company_id: req.query.company_id } : {},
+      where,
       attributes: { exclude: ['password'] },
       include: [
         { model: Company, as: 'company' },
