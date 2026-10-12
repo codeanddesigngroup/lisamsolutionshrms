@@ -337,11 +337,13 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/billing"], anyOf: ["billing.view", "billing.manage"] },
   { prefixes: ["/payroll"], anyOf: ["payroll.view", "payroll.manage"] },
   { prefixes: ["/faqs", "/employees/faq"], anyOf: ["faq.view", "faq.manage"] },
+  { prefixes: ["/employees/create"], anyOf: ["employees.create", "employees.manage"] },
+  { prefixes: ["/employees/edit"], anyOf: ["employees.edit", "employees.manage"] },
   { prefixes: ["/employees"], anyOf: ["employees.view", "employees.manage"] },
   { prefixes: ["/device"], anyOf: ["attendance.view", "attendance.manage"] },
   { prefixes: ["/teams", "/designation", "/attendance-settings"], anyOf: ["hr.view", "hr.manage"] },
   { prefixes: ["/attendance/settings/shifts"], anyOf: ["shifts.view", "shifts.manage"] },
-  { prefixes: ["/leaves/all", "/leaves/settings", "/leave-type"], anyOf: ["leaves.view", "leaves.manage", "leaves.approve"] },
+  { prefixes: ["/leaves/all", "/leaves/settings", "/leave-type"], anyOf: ["leaves.manage", "leaves.approve"] },
   { prefixes: ["/attendance/bulk", "/attendance/settings", "/attendance/reports"], anyOf: ["attendance.manage"] },
   { prefixes: ["/breaks"], anyOf: ["breaks.view"] },
   { prefixes: ["/attendance"], anyOf: ["attendance.view", "attendance.manage"] },
@@ -365,10 +367,57 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/profile", "/search"], anyOf: ["profile.view", "dashboard.view"] },
 ];
 
-const getMatchedPermissionRule = (pathname: string) =>
-  permissionRouteRules.find((rule) =>
+const actionRouteModules: Array<{ prefix: string; module: PermissionModuleKey }> = [
+  { prefix: "/clients", module: "clients" },
+  { prefix: "/employees", module: "employees" },
+  { prefix: "/leaves", module: "leaves" },
+  { prefix: "/holidays", module: "holidays" },
+  { prefix: "/projects", module: "projects" },
+  { prefix: "/tasks", module: "tasks" },
+  { prefix: "/leads", module: "leads" },
+  { prefix: "/contracts", module: "contracts" },
+  { prefix: "/products", module: "products" },
+  { prefix: "/events", module: "events" },
+  { prefix: "/event-calendar", module: "events" },
+  { prefix: "/notices", module: "notices" },
+  { prefix: "/attendance", module: "attendance" },
+  { prefix: "/invoices", module: "finance" },
+  { prefix: "/estimates", module: "finance" },
+  { prefix: "/proposals", module: "finance" },
+  { prefix: "/payments", module: "finance" },
+  { prefix: "/expenses", module: "finance" },
+  { prefix: "/credit-notes", module: "finance" },
+];
+
+const getActionPermissionRule = (pathname: string): PermissionRouteRule | undefined => {
+  const matchedModule = actionRouteModules.find((item) => pathname === item.prefix || pathname.startsWith(`${item.prefix}/`));
+  if (!matchedModule) return undefined;
+
+  if (pathname === `${matchedModule.prefix}/create`) {
+    return {
+      prefixes: [`${matchedModule.prefix}/create`],
+      anyOf: [permissionKey(matchedModule.module, "create"), permissionKey(matchedModule.module, "manage")],
+    };
+  }
+
+  if (new RegExp(`^${matchedModule.prefix}/[^/]+/edit$`).test(pathname)) {
+    return {
+      prefixes: [`${matchedModule.prefix}/[id]/edit`],
+      anyOf: [permissionKey(matchedModule.module, "edit"), permissionKey(matchedModule.module, "manage")],
+    };
+  }
+
+  return undefined;
+};
+
+const getMatchedPermissionRule = (pathname: string) => {
+  const actionRule = getActionPermissionRule(pathname);
+  if (actionRule) return actionRule;
+
+  return permissionRouteRules.find((rule) =>
     rule.prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)),
   );
+};
 
 export const normalizeRole = (role?: string | null): UserRole => {
   if (role === "super-admin") return "super_admin";

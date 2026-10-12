@@ -9,6 +9,7 @@ import { useCallback, useState, useEffect } from "react";
 import Modal from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 
 type LeadListRecord = {
   id: number;
@@ -27,12 +28,16 @@ type LeadStatusOption = {
 
 export default function LeadsPage() {
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [leads, setLeads] = useState<LeadListRecord[]>([]);
   const [statuses, setStatuses] = useState<LeadStatusOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [deletingLeadId, setDeletingLeadId] = useState<number | null>(null);
+  const canCreateLeads = hasPermission("leads.create") || hasPermission("leads.manage");
+  const canEditLeads = hasPermission("leads.edit") || hasPermission("leads.manage");
+  const canDeleteLeads = hasPermission("leads.delete") || hasPermission("leads.manage");
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -60,6 +65,11 @@ export default function LeadsPage() {
   }, [fetchLeads]);
 
   const handleDelete = async () => {
+    if (!canDeleteLeads) {
+      showToast("You do not have permission to delete leads.", "error");
+      return;
+    }
+
     if (deletingLeadId) {
       try {
         await api.delete(`/lead/${deletingLeadId}`);
@@ -98,9 +108,11 @@ export default function LeadsPage() {
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <Link href="/leads/create" className="flex items-center space-x-1 rounded border border-green-500 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-green-600 hover:bg-green-500 hover:text-white transition-colors">
-              <span>Add Lead</span><Plus className="h-3.5 w-3.5" />
-            </Link>
+            {canCreateLeads && (
+              <Link href="/leads/create" className="flex items-center space-x-1 rounded border border-green-500 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-green-600 hover:bg-green-500 hover:text-white transition-colors">
+                <span>Add Lead</span><Plus className="h-3.5 w-3.5" />
+              </Link>
+            )}
           </div>
         </div>
 
@@ -200,8 +212,12 @@ export default function LeadsPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center space-x-1 opacity-40 group-hover:opacity-100 transition-opacity">
                         <Link href={`/leads/${lead.id}`} className="p-1.5 text-gray-400 hover:text-primary transition-colors" title="View"><Eye className="h-4 w-4" /></Link>
-                        <Link href={`/leads/${lead.id}/edit`} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title="Edit"><Edit className="h-4 w-4" /></Link>
-                        <button onClick={() => setDeletingLeadId(lead.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                        {canEditLeads && (
+                          <Link href={`/leads/${lead.id}/edit`} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title="Edit"><Edit className="h-4 w-4" /></Link>
+                        )}
+                        {canDeleteLeads && (
+                          <button onClick={() => setDeletingLeadId(lead.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                        )}
                       </div>
                     </td>
                   </tr>

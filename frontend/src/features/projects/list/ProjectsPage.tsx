@@ -9,7 +9,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
-import { getStoredRole } from "@/lib/session";
+import { useAuth } from "@/context/AuthContext";
 import type { Project } from "@/types";
 
 const statusColors: Record<string, string> = {
@@ -22,14 +22,16 @@ const statusColors: Record<string, string> = {
 
 export default function ProjectsPage() {
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [clientFilter, setClientFilter] = useState("All");
   const [deletingProjectId, setDeletingProjectId] = useState<number | string | null>(null);
-  const [userRole] = useState(() => getStoredRole());
-  const canManageProjects = userRole === "admin";
+  const canCreateProjects = hasPermission("projects.create") || hasPermission("projects.manage");
+  const canEditProjects = hasPermission("projects.edit") || hasPermission("projects.manage");
+  const canDeleteProjects = hasPermission("projects.delete") || hasPermission("projects.manage");
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -67,6 +69,11 @@ export default function ProjectsPage() {
   });
 
   const handleDelete = async () => {
+    if (!canDeleteProjects) {
+      showToast("You do not have permission to delete projects.", "error");
+      return;
+    }
+
     if (deletingProjectId) {
       try {
         await api.delete(`/project/${deletingProjectId}`);
@@ -102,7 +109,7 @@ export default function ProjectsPage() {
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            {canManageProjects && (
+            {canCreateProjects && (
               <Link href="/projects/create" className="flex items-center space-x-1 rounded border border-green-500 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-green-600 hover:bg-green-500 hover:text-white transition-colors">
                 <span>Add Project</span>
                 <Plus className="h-3.5 w-3.5" />
@@ -217,11 +224,11 @@ export default function ProjectsPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center space-x-1 opacity-40 group-hover:opacity-100 transition-opacity">
                         <Link href={`/projects/${proj.id}`} className="p-1.5 text-gray-400 hover:text-primary transition-colors" title="View"><Eye className="h-4 w-4" /></Link>
-                        {canManageProjects && (
-                          <>
-                            <Link href={`/projects/${proj.id}/edit`} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title="Edit"><Edit className="h-4 w-4" /></Link>
-                            <button onClick={() => setDeletingProjectId(proj.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>
-                          </>
+                        {canEditProjects && (
+                          <Link href={`/projects/${proj.id}/edit`} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title="Edit"><Edit className="h-4 w-4" /></Link>
+                        )}
+                        {canDeleteProjects && (
+                          <button onClick={() => setDeletingProjectId(proj.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>
                         )}
                       </div>
                     </td>

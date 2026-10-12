@@ -50,7 +50,8 @@ const leaveUnits = (leave: LeaveRecord) => leave.duration?.toLowerCase().include
 export default function LeaveDashboardPage() {
   const { showToast } = useToast();
   const { user, hasPermission } = useAuth();
-  const canManageCompanyLeaves = user?.role === "admin" || hasPermission("leaves.approve") || hasPermission("leaves.manage");
+  const canCreateLeaves = hasPermission("leaves.create") || hasPermission("leaves.manage");
+  const canManageCompanyLeaves = hasPermission("leaves.approve") || hasPermission("leaves.manage");
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
@@ -185,11 +186,13 @@ export default function LeaveDashboardPage() {
                </Button>
              </Link>
              )}
-             <Link href="/leaves/create">
-               <Button variant="primary">
-                  <Plus className="h-4 w-4 mr-2" /> {canManageCompanyLeaves ? "Assign Leave" : "Apply Leave"}
-               </Button>
-             </Link>
+             {canCreateLeaves && (
+               <Link href="/leaves/create">
+                 <Button variant="primary">
+                    <Plus className="h-4 w-4 mr-2" /> {canManageCompanyLeaves ? "Assign Leave" : "Apply Leave"}
+                 </Button>
+               </Link>
+             )}
              <Button onClick={fetchData} className="btn-default p-2">
                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
              </Button>

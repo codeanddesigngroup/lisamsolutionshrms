@@ -21,8 +21,6 @@ import Card from "@/components/ui/Card";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
-import { getStoredRole } from "@/lib/session";
-import type { UserRole } from "@/lib/auth-contract";
 
 type EmployeeRecord = {
   id: number | string;
@@ -38,10 +36,9 @@ type EmployeeRecord = {
 
 export default function EmployeesPage() {
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole] = useState<UserRole>(() => getStoredRole());
   
   // Advanced Filters parity with Laravel
   const [statusFilter, setStatusFilter] = useState("active");
@@ -100,7 +97,10 @@ export default function EmployeesPage() {
     const endMatch = !endDate || (Boolean(joiningDate) && joiningDate <= endDate);
     return searchMatch && statusMatch && deptMatch && desigMatch && empMatch && roleMatch && startMatch && endMatch;
   });
-  const canManageEmployees = userRole === "admin";
+  const canCreateEmployees = hasPermission("employees.create") || hasPermission("employees.manage");
+  const canEditEmployees = hasPermission("employees.edit") || hasPermission("employees.manage");
+  const canDeleteEmployees = hasPermission("employees.delete") || hasPermission("employees.manage");
+  const canExportEmployees = hasPermission("employees.export") || hasPermission("employees.manage");
 
   const handleDelete = async () => {
     if (deletingEmployeeId) {
@@ -176,10 +176,12 @@ export default function EmployeesPage() {
              <Button onClick={fetchEmployees} className="btn-default">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Sync
              </Button>
-             <Button onClick={handleExport} className="btn-default">
-                <Download className="h-4 w-4 mr-2" /> Export
-             </Button>
-             {canManageEmployees && (
+             {canExportEmployees && (
+               <Button onClick={handleExport} className="btn-default">
+                  <Download className="h-4 w-4 mr-2" /> Export
+               </Button>
+             )}
+             {canCreateEmployees && (
                <Link href="/employees/create">
                  <Button variant="primary">
                     <Plus className="h-4 w-4 mr-2" /> Add Employee
@@ -366,11 +368,11 @@ export default function EmployeesPage() {
                     <td>
                       <div className="flex items-center justify-center space-x-2">
                         <Link href={`/employees/${emp.id}`} className="p-1 text-gray-400 hover:text-primary"><Eye className="h-4 w-4" /></Link>
-                        {canManageEmployees && (
-                          <>
-                            <Link href={`/employees/${emp.id}/edit`} className="p-1 text-gray-400 hover:text-blue-500"><Edit className="h-4 w-4" /></Link>
-                            <button onClick={() => setDeletingEmployeeId(emp.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
-                          </>
+                        {canEditEmployees && (
+                          <Link href={`/employees/${emp.id}/edit`} className="p-1 text-gray-400 hover:text-blue-500"><Edit className="h-4 w-4" /></Link>
+                        )}
+                        {canDeleteEmployees && (
+                          <button onClick={() => setDeletingEmployeeId(emp.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
                         )}
                       </div>
                     </td>

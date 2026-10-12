@@ -1,7 +1,6 @@
 "use client";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
@@ -61,8 +60,6 @@ const blankEvent = {
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
-const toDateKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-
 const colorClasses: Record<string, string> = {
   primary: "bg-primary/10 border-primary text-primary",
   blue: "bg-blue-500/10 border-blue-500 text-blue-600",
@@ -95,7 +92,7 @@ const normalizeEvent = (event: Record<string, unknown>): EventItem => ({
 
 export default function EventsPage() {
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [events, setEvents] = useState(initialEvents);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"Month" | "Week" | "Day" | "List">("Month");
@@ -105,7 +102,9 @@ export default function EventsPage() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [viewingEvent, setViewingEvent] = useState<EventItem | null>(null);
   const [eventForm, setEventForm] = useState(blankEvent);
-  const canManageEvents = user?.role === "admin" || user?.role === "super_admin";
+  const canCreateEvents = hasPermission("events.create") || hasPermission("events.manage");
+  const canDeleteEvents = hasPermission("events.delete") || hasPermission("events.manage");
+  const canManageEvents = canCreateEvents || canDeleteEvents || hasPermission("events.edit") || hasPermission("events.manage");
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
@@ -123,7 +122,11 @@ export default function EventsPage() {
   }, [user]);
 
   useEffect(() => {
-    void fetchEvents();
+    const timeoutId = window.setTimeout(() => {
+      void fetchEvents();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [fetchEvents]);
 
   const currentMonth = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -160,7 +163,7 @@ export default function EventsPage() {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canManageEvents) {
+    if (!canCreateEvents) {
       showToast("Employees can view assigned and company events but cannot create events.", "info");
       return;
     }
@@ -177,7 +180,7 @@ export default function EventsPage() {
   };
 
   const deleteEvent = (id: number | string) => {
-    if (!canManageEvents) {
+    if (!canDeleteEvents) {
       showToast("Employees can view events but cannot delete them.", "info");
       return;
     }
@@ -201,7 +204,7 @@ export default function EventsPage() {
             <button onClick={() => showToast(`${monthEvents.length} events loaded for ${currentMonth}.`, "success")} className="p-2.5 bg-gray-50 text-gray-400 hover:text-primary rounded-xl transition-all">
               <RefreshCw className="h-4 w-4" />
             </button>
-            {canManageEvents && (
+            {canCreateEvents && (
               <Button onClick={() => setIsEditorOpen(true)} className="bg-primary text-white text-[10px] font-black px-6 h-10 uppercase tracking-widest shadow-lg shadow-primary/20">
                 <Plus className="h-4 w-4 mr-2" /> Add Event
               </Button>
@@ -365,7 +368,7 @@ export default function EventsPage() {
               <div className="rounded border border-gray-100 bg-gray-50 p-3"><div className="text-[9px] font-black uppercase tracking-widest text-gray-400">Client</div><div className="mt-1 font-bold text-gray-700">{viewingEvent.client}</div></div>
               <div className="rounded border border-gray-100 bg-gray-50 p-3"><div className="text-[9px] font-black uppercase tracking-widest text-gray-400">Location</div><div className="mt-1 font-bold text-gray-700"><MapPin className="mr-1 inline h-3 w-3" />{viewingEvent.location}</div></div>
             </div>
-            {canManageEvents && (
+            {canDeleteEvents && (
               <Button onClick={() => deleteEvent(viewingEvent.id)} className="w-full bg-red-500 text-white h-11 text-[10px] font-black uppercase tracking-widest">
                 <Trash2 className="h-4 w-4 mr-2" /> Delete Event
               </Button>

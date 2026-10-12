@@ -30,6 +30,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   calculateAttendanceStatus,
   getAttendanceEmployeeId,
@@ -86,6 +87,7 @@ export default function EmployeeDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
   const [employee, setEmployee] = useState<HRRecord | null>(null);
   const [projects, setProjects] = useState<HRRecord[]>([]);
@@ -97,6 +99,8 @@ export default function EmployeeDetailPage() {
   const [leaveQuotas, setLeaveQuotas] = useState<HRRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canEditEmployees = hasPermission("employees.edit") || hasPermission("employees.manage");
+  const canDeleteEmployees = hasPermission("employees.delete") || hasPermission("employees.manage");
 
   const fetchEmployee = useCallback(async () => {
     setLoading(true);
@@ -257,11 +261,13 @@ export default function EmployeeDetailPage() {
             <span className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest ${employee.status === "deactive" ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}>
               {employee.status || "active"}
             </span>
-            <Link href={`/employees/${employee.id}/edit`}>
-              <Button className="rounded-xl border border-gray-100 bg-white p-2.5 text-gray-400 shadow-sm transition-colors hover:text-primary">
-                <Edit className="h-5 w-5" />
-              </Button>
-            </Link>
+            {canEditEmployees && (
+              <Link href={`/employees/${employee.id}/edit`}>
+                <Button className="rounded-xl border border-gray-100 bg-white p-2.5 text-gray-400 shadow-sm transition-colors hover:text-primary">
+                  <Edit className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
             <Button onClick={() => router.push("/employees")} className="rounded-xl border border-gray-100 bg-gray-50 p-2.5 text-gray-400 shadow-sm transition-colors hover:text-gray-600">
               <ChevronLeft className="h-5 w-5" />
             </Button>
@@ -432,7 +438,9 @@ export default function EmployeeDetailPage() {
                       <div className="flex items-center space-x-2">
                         <a href={doc.file_url || "#"} className="p-2 text-gray-300 transition-colors hover:text-primary" title="View"><Eye className="h-4 w-4" /></a>
                         <a href={doc.file_url || "#"} className="p-2 text-gray-300 transition-colors hover:text-primary" title="Download"><Download className="h-4 w-4" /></a>
-                        <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 text-gray-300 transition-colors hover:text-red-500" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                        {canDeleteEmployees && (
+                          <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 text-gray-300 transition-colors hover:text-red-500" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                        )}
                       </div>
                     </div>
                   ))}
