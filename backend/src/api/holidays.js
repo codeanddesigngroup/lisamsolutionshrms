@@ -2,7 +2,12 @@ const express = require('express');
 const router = express.Router();
 const Holiday = require('../models/Holiday');
 
-const getCompanyId = (req) => req.body?.company_id || req.query.company_id || req.query.companyId || null;
+const getCompanyId = (req) =>
+  req.body?.company_id ||
+  req.query.company_id ||
+  req.query.companyId ||
+  req.headers['x-company-id'] ||
+  null;
 const getOccasion = (body = {}) => String(body.occasion || body.occassion || body.name || '').trim();
 
 router.get('/', async (req, res, next) => {

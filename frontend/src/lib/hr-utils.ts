@@ -188,7 +188,7 @@ export const getLeaveEmployeeId = (record: HRRecord) =>
 
 export const getLeaveDate = (record: HRRecord) => String(record.leave_date || record.date || "");
 
-export const getHolidayDate = (record: HRRecord) => String(record.holiday_date || record.date || "");
+export const getHolidayDate = (record: HRRecord) => String(record.holiday_date || record.date || "").slice(0, 10);
 
 export const parseOfficeOpenDays = (value: unknown, fallback = [1, 2, 3, 4, 5]) => {
   if (Array.isArray(value)) return value.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);

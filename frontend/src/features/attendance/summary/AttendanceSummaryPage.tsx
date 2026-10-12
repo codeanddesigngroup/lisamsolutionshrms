@@ -55,7 +55,7 @@ type AttendanceRecord = {
   attendance_device_id?: number | string;
 };
 
-type HolidayRecord = { date?: string; holiday_date?: string; name?: string; occassion?: string };
+type HolidayRecord = { date?: string; holiday_date?: string; name?: string; occasion?: string; occassion?: string };
 type LeaveRecord = { user_id?: number | string; employee_id?: number | string; user?: { id?: number | string; name?: string }; employee?: { id?: number | string; name?: string }; leave_date?: string; date?: string; status?: string; reason?: string; leave_type?: { type_name?: string } };
 type SummaryStatus = "present" | "late" | "half-day" | "absent" | "holiday" | "leave" | "closed" | "empty";
 type DayDetail = { employee: EmployeeOption; day: number; date: string; status: SummaryStatus; attendance?: AttendanceRecord; holiday?: HolidayRecord; leave?: LeaveRecord };
@@ -200,8 +200,8 @@ export default function AttendanceSummaryPage() {
         employeeRecords,
       )) as AttendanceRecord[];
       const [holidayResponse, leaveResponse] = await Promise.allSettled([
-        api.get("/holidays"),
-        api.get("/leaves"),
+        api.get("/holidays", { params: companyId ? { company_id: companyId } : undefined }),
+        api.get("/leaves", { params: companyId ? { company_id: companyId } : undefined }),
       ]);
       const holidayList: HolidayRecord[] =
         holidayResponse.status === "fulfilled" && Array.isArray(holidayResponse.value.data?.data)
@@ -517,7 +517,7 @@ export default function AttendanceSummaryPage() {
               </div>
               <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Holiday</p>
-                <p className="mt-2 text-xs font-bold text-gray-700">{selectedDayDetail.holiday?.name || selectedDayDetail.holiday?.occassion || "No holiday"}</p>
+                <p className="mt-2 text-xs font-bold text-gray-700">{selectedDayDetail.holiday?.name || selectedDayDetail.holiday?.occasion || selectedDayDetail.holiday?.occassion || "No holiday"}</p>
               </div>
               <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Leave</p>
