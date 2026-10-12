@@ -209,6 +209,11 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       hasPermission("attendance.view") ||
       hasPermission("attendance.manage")
     );
+  const canViewOwnAttendance =
+    hasHydrated && (
+      canViewAttendance ||
+      hasPermission("attendance-self.view")
+    );
   const canCreateAttendance =
     hasHydrated && (
       hydratedUser?.role === "admin" ||
@@ -229,7 +234,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     );
   const canViewCompanyAttendance = hasHydrated && (!isEmployeeSession || canViewAttendance);
   const canUseAttendanceActions = canEditAttendance || canApproveAttendance;
-  const isSelfServiceAttendance = isEmployeeSession && !canViewCompanyAttendance;
+  const isSelfServiceAttendance = isEmployeeSession && canViewOwnAttendance && !canViewCompanyAttendance;
 
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);

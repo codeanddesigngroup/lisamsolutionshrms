@@ -159,12 +159,15 @@ export default function AttendanceSummaryPage() {
     user?.role === "admin" ||
     hasPermission("attendance.view") ||
     hasPermission("attendance.manage");
+  const canViewOwnAttendance =
+    canViewAttendance ||
+    hasPermission("attendance-self.view");
   const canCreateAttendance =
     user?.role === "admin" ||
     hasPermission("attendance.create") ||
     hasPermission("attendance.manage");
   const canViewCompanyAttendance = !isEmployeeSession || canViewAttendance;
-  const isSelfServiceAttendance = isEmployeeSession && !canViewCompanyAttendance;
+  const isSelfServiceAttendance = isEmployeeSession && canViewOwnAttendance && !canViewCompanyAttendance;
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);

@@ -13,6 +13,7 @@ export type PermissionModuleKey =
   | "clients"
   | "hr"
   | "shifts"
+  | "attendance-self"
   | "attendance"
   | "breaks"
   | "leaves"
@@ -53,6 +54,7 @@ const basePermissionModules: PermissionModuleDefinition[] = [
   { key: "clients", label: "Clients", group: "core", actions: ["view", "create", "edit", "delete", "export"] },
   { key: "hr", label: "HR Setup", group: "hr", actions: ["view", "create", "edit", "delete", "manage"] },
   { key: "shifts", label: "Shift Types", group: "hr", actions: ["view", "create", "edit", "delete", "manage"] },
+  { key: "attendance-self", label: "My Attendance", group: "hr", actions: ["view"] },
   { key: "attendance", label: "Attendance", group: "hr", actions: ["view", "create", "edit", "approve", "export", "manage"] },
   { key: "breaks", label: "Breaks", group: "hr", actions: ["view"] },
   { key: "leaves", label: "Leaves", group: "hr", actions: ["view", "create", "edit", "approve", "delete", "manage"] },
@@ -197,8 +199,7 @@ export const rolePermissions: Record<UserRole, PermissionKey[]> = {
   employee: [
     "dashboard.view",
     "profile.*",
-    "attendance.view",
-    "attendance.create",
+    "attendance-self.view",
     "leaves.view",
     "leaves.create",
     "leaves.delete",
@@ -346,7 +347,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/leaves/all", "/leaves/settings", "/leave-type"], anyOf: ["leaves.manage", "leaves.approve"] },
   { prefixes: ["/attendance/bulk", "/attendance/settings", "/attendance/reports"], anyOf: ["attendance.manage"] },
   { prefixes: ["/breaks"], anyOf: ["breaks.view"] },
-  { prefixes: ["/attendance"], anyOf: ["attendance.view", "attendance.manage"] },
+  { prefixes: ["/attendance"], anyOf: ["attendance-self.view", "attendance.view", "attendance.manage"] },
   { prefixes: ["/leaves"], anyOf: ["leaves.view", "leaves.manage"] },
   { prefixes: ["/holidays/create"], anyOf: ["holidays.create", "holidays.manage"] },
   { prefixes: ["/holidays"], anyOf: ["holidays.view", "holidays.manage"] },
