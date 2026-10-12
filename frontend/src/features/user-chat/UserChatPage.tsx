@@ -241,10 +241,16 @@ export default function ChatPage() {
   const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialog | null>(null);
   const [confirmationBusy, setConfirmationBusy] = useState(false);
   const [showConversationMenu, setShowConversationMenu] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setHasMounted(true), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
@@ -356,6 +362,10 @@ export default function ChatPage() {
 
   useEffect(() => {
     const loadChat = async () => {
+      if (!hasMounted || !user?.company_id) {
+        return;
+      }
+
       setLoading(true);
       try {
         const [conversationResult, messageResult, employeeResult, adminResult] = await Promise.allSettled([
@@ -452,7 +462,7 @@ export default function ChatPage() {
     };
 
     loadChat();
-  }, [canViewMessages, currentUserKey, currentUserKeys, currentUserName, showToast, user?.company_id, user?.employee_id, user?.id, user?.role]);
+  }, [canViewMessages, currentUserKey, currentUserKeys, currentUserName, hasMounted, showToast, user?.company_id, user?.employee_id, user?.id, user?.role]);
 
   useEffect(() => {
     if (!user?.company_id) return;
@@ -962,6 +972,19 @@ export default function ChatPage() {
       ? getDirectConversationName(activeConversation, currentUserKeys)
       : activeConversation.name
     : "";
+
+  if (!hasMounted || !user?.company_id) {
+    return (
+      <DashboardLayout>
+        <div className="h-[calc(100vh-140px)] flex items-center justify-center rounded-2xl border border-gray-200 bg-white shadow-xl -mx-6 -mt-6">
+          <div className="text-center">
+            <MessageSquare className="mx-auto mb-4 h-10 w-10 text-gray-300" />
+            <p className="text-xs font-black uppercase tracking-widest text-gray-400">Loading chats...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
