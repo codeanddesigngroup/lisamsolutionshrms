@@ -108,6 +108,8 @@ type ChatConversation = {
   unread_by?: string[];
   muted_by?: string[];
   archived_by?: string[];
+  left_by?: string[];
+  left_at_by?: Record<string, string>;
   pinned_message_id?: string | number | null;
   created_at?: string;
 };
@@ -198,8 +200,23 @@ const conversationHasActiveMember = (conversation: ChatConversation, keys: strin
   return members.some((member) => getMemberKeys(member).some((key) => keys.includes(key)));
 };
 
+const conversationHasLeftMember = (conversation: ChatConversation, keys: string[]) =>
+  conversation.type === "group" && (conversation.left_by || []).some((key) => keys.includes(key));
+
+const getConversationLeftAt = (conversation: ChatConversation | null, keys: string[]) => {
+  if (!conversation?.left_at_by) return null;
+  const values = keys
+    .map((key) => conversation.left_at_by?.[key])
+    .filter((value): value is string => Boolean(value));
+  if (values.length === 0) return null;
+  return values.sort().at(0) || null;
+};
+
+const canViewConversation = (conversation: ChatConversation, currentUserKeys: string[]) =>
+  conversationHasActiveMember(conversation, currentUserKeys) || conversationHasLeftMember(conversation, currentUserKeys);
+
 const isSupportedConversation = (conversation: ChatConversation, currentUserKeys: string[]) =>
-  conversationHasActiveMember(conversation, currentUserKeys) &&
+  canViewConversation(conversation, currentUserKeys) &&
   !conversationParticipantKeys(conversation).some((key) => key.startsWith("client:")) &&
   !conversationMembers(conversation).some((participant) => participant.type === "client");
 
@@ -267,6 +284,14 @@ export default function ChatPage() {
     [activeConversationId, conversations],
   );
   const isActiveConversationMember = Boolean(activeConversation && conversationHasActiveMember(activeConversation, currentUserKeys));
+  const hasLeftActiveConversation = Boolean(activeConversation && conversationHasLeftMember(activeConversation, currentUserKeys));
+  const activeConversationLeftAt = useMemo(
+    () => getConversationLeftAt(activeConversation, currentUserKeys),
+    [activeConversation, currentUserKeys],
+  );
+  const canInteractWithActiveConversation = Boolean(
+    activeConversation && (activeConversation.type !== "group" || isActiveConversationMember),
+  );
   const canDeleteActiveGroup = Boolean(
     activeConversation?.type === "group" &&
     isActiveConversationMember &&
@@ -282,9 +307,10 @@ export default function ChatPage() {
     const query = chatSearchQuery.trim().toLowerCase();
     return messages
       .filter((message) => message.conversation_id === activeConversation?.id)
+      .filter((message) => !activeConversationLeftAt || String(message.created_at || "") <= activeConversationLeftAt)
       .filter((message) => !query || `${message.body} ${message.attachments?.map((attachment) => attachment.name).join(" ")}`.toLowerCase().includes(query))
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }, [activeConversation?.id, chatSearchQuery, messages]);
+  }, [activeConversation?.id, activeConversationLeftAt, chatSearchQuery, messages]);
 
   const canManageActiveGroup = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "group") return false;
@@ -313,7 +339,7 @@ export default function ChatPage() {
   const visibleConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return conversations
-      .filter((conversation) => conversationHasActiveMember(conversation, currentUserKeys))
+      .filter((conversation) => canViewConversation(conversation, currentUserKeys))
       .filter((conversation) => !conversation.archived_by?.some((key) => currentUserKeys.includes(key)))
       .filter((conversation) => {
         const displayName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKeys) : conversation.name;
@@ -505,7 +531,7 @@ export default function ChatPage() {
     };
 
     const canAccessMessage = (message: ChatMessage, conversation?: ChatConversation) => {
-      if (conversation) return isSupportedConversation(conversation, currentUserKeys);
+      if (conversation) return conversationHasActiveMember(conversation, currentUserKeys);
       return conversationsRef.current.some(
         (item) => String(item.id) === String(message.conversation_id) && conversationHasActiveMember(item, currentUserKeys),
       );
@@ -611,7 +637,7 @@ export default function ChatPage() {
 
   const handleSend = async () => {
     if (!activeConversation) return;
-    if (editingMessage ? !canEditMessages : !canSendInActiveConversation) return;
+    if (editingMessage ? (!canEditMessages || !canInteractWithActiveConversation) : !canSendInActiveConversation) return;
     if (!draft.trim() && !editingMessage) return;
 
     if (editingMessage) {
@@ -940,7 +966,13 @@ export default function ChatPage() {
       danger: true,
       onConfirm: async () => {
         const activeParticipantKeys = conversationParticipantKeys(activeConversation);
-        await persistConversation({
+        const createdAt = new Date().toISOString();
+        const leftAtBy = {
+          ...(activeConversation.left_at_by || {}),
+          ...Object.fromEntries(currentUserKeys.map((key) => [key, createdAt])),
+        };
+        const leftBy = Array.from(new Set([...(activeConversation.left_by || []), ...currentUserKeys]));
+        const updatedConversation = {
           ...activeConversation,
           participant_keys: activeParticipantKeys.filter((key) => !currentUserKeys.includes(key)),
           participants: conversationMembers(activeConversation).filter((member) => !getMemberKeys(member).some((key) => currentUserKeys.includes(key))),
@@ -948,28 +980,33 @@ export default function ChatPage() {
           unread_by: (activeConversation.unread_by || []).filter((key) => !currentUserKeys.includes(key)),
           muted_by: (activeConversation.muted_by || []).filter((key) => !currentUserKeys.includes(key)),
           archived_by: (activeConversation.archived_by || []).filter((key) => !currentUserKeys.includes(key)),
+          left_by: leftBy,
+          left_at_by: leftAtBy,
+        };
+        await persistConversation({
+          ...updatedConversation,
         });
-        setConversations((current) => current.filter((conversation) => conversation.id !== activeConversation.id));
-        setMessages((current) => current.filter((message) => message.conversation_id !== activeConversation.id));
         const remainingParticipantKeys = activeParticipantKeys.filter((key) => !currentUserKeys.includes(key));
-        const createdAt = new Date().toISOString();
+        const leaveMessage: ChatMessage = {
+          id: `system-${Date.now()}`,
+          conversation_id: activeConversation.id,
+          sender_key: "system",
+          sender_name: "System",
+          body: `${currentUserName} left the group.`,
+          attachments: [],
+          reactions: [],
+          status_by: Object.fromEntries(remainingParticipantKeys.map((key) => [key, "delivered"])),
+          created_at: createdAt,
+        };
+        mergeMessage(leaveMessage);
+        setDraft("");
+        setReplyingTo(null);
+        setEditingMessage(null);
         try {
-          await api.post("/chat-messages", {
-            id: `system-${Date.now()}`,
-            conversation_id: activeConversation.id,
-            sender_key: "system",
-            sender_name: "System",
-            body: `${currentUserName} left the group.`,
-            attachments: [],
-            reactions: [],
-            status_by: Object.fromEntries(remainingParticipantKeys.map((key) => [key, "delivered"])),
-            created_at: createdAt,
-            company_id: user?.company_id,
-          });
+          await api.post("/chat-messages", { ...leaveMessage, company_id: user?.company_id });
         } catch {
           showToast("You left the group, but the notification could not be posted.", "info");
         }
-        setActiveConversationId(null);
         setShowGroupSettings(false);
         showToast("You left the group.", "success");
       },
@@ -1072,7 +1109,9 @@ export default function ChatPage() {
             {visibleConversations.map((conversation) => {
               const conversationName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKeys) : conversation.name;
               const avatar = conversation.type === "direct" ? getDirectAvatar(conversation, currentUserKeys) : conversation.avatar;
-              const unread = conversation.unread_by?.some((key) => currentUserKeys.includes(key));
+              const leftGroup = conversation.type === "group" && conversationHasLeftMember(conversation, currentUserKeys) && !conversationHasActiveMember(conversation, currentUserKeys);
+              const unread = !leftGroup && conversation.unread_by?.some((key) => currentUserKeys.includes(key));
+              const preview = leftGroup ? "You left this group" : conversation.last_message || "No messages yet";
               return (
                 <button
                   key={String(conversation.id)}
@@ -1091,7 +1130,7 @@ export default function ChatPage() {
                       <span className="text-[9px] font-bold text-gray-400">{formatTime(conversation.last_message_at)}</span>
                     </div>
                     <p className={`mt-1 truncate text-xs ${unread ? "font-black text-gray-800" : "font-medium text-gray-400"}`}>
-                      {conversation.last_message || "No messages yet"}
+                      {preview}
                     </p>
                   </div>
                   {unread && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
@@ -1265,7 +1304,7 @@ export default function ChatPage() {
                           {isMe && !deleted && (getMessageStatus(message, currentUserKey) === "seen" ? <CheckCheck className="h-3 w-3 text-blue-500" /> : <Check className="h-3 w-3" />)}
                           {!deleted && (
                             <>
-                              {canCreateMessages && (
+                              {canInteractWithActiveConversation && canCreateMessages && (
                                 <>
                                   <button type="button" onClick={() => setReplyingTo(message)} className="rounded p-1 hover:bg-white hover:text-primary" title="Reply">
                                     <Reply className="h-3 w-3" />
@@ -1276,12 +1315,12 @@ export default function ChatPage() {
                                   })}
                                 </>
                               )}
-                              {isMe && canEditMessages && (
+                              {canInteractWithActiveConversation && isMe && canEditMessages && (
                                 <button type="button" onClick={() => { setEditingMessage(message); setDraft(message.body); }} className="rounded p-1 hover:bg-white hover:text-primary" title="Edit">
                                   <Edit className="h-3 w-3" />
                                 </button>
                               )}
-                              {((isMe && canDeleteOwnMessages) || canManageMessages) && (
+                              {canInteractWithActiveConversation && ((isMe && canDeleteOwnMessages) || canManageMessages) && (
                                 <button type="button" onClick={() => handleDeleteMessage(message)} className="rounded p-1 hover:bg-white hover:text-red-500" title="Delete">
                                   <Trash2 className="h-3 w-3" />
                                 </button>
@@ -1311,7 +1350,9 @@ export default function ChatPage() {
               <footer className="border-t border-gray-200 bg-white p-4 md:p-6">
                 {!canSendInActiveConversation && (
                   <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                    {!canCreateMessages
+                    {hasLeftActiveConversation
+                      ? "You left this group. You can view previous messages or archive it from your list."
+                      : !canCreateMessages
                       ? "View-only access. Ask an admin for messages.create permission to send messages."
                       : "Group settings currently allow only group admins to send messages."}
                   </div>
@@ -1337,7 +1378,7 @@ export default function ChatPage() {
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => event.key === "Enter" && handleSend()}
                     disabled={!canSendInActiveConversation}
-                    placeholder={activeConversation.type === "group" ? "Message group..." : "Type a message..."}
+                    placeholder={hasLeftActiveConversation ? "You left this group" : activeConversation.type === "group" ? "Message group..." : "Type a message..."}
                     className="min-w-0 flex-1 border-none bg-transparent px-2 py-2 text-sm font-semibold text-gray-700 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed"
                   />
                   <button
