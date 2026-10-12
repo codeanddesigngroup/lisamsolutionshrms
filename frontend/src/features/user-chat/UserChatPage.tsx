@@ -191,8 +191,15 @@ const conversationParticipantKeys = (conversation: Pick<ChatConversation, "parti
 const conversationHasAnyKey = (conversation: Pick<ChatConversation, "participant_keys" | "participants">, keys: string[]) =>
   conversationParticipantKeys(conversation).some((key) => keys.includes(key));
 
+const conversationHasActiveMember = (conversation: ChatConversation, keys: string[]) => {
+  if (conversation.type !== "group") return conversationHasAnyKey(conversation, keys);
+  const members = conversationMembers(conversation);
+  if (members.length === 0) return conversationHasAnyKey(conversation, keys);
+  return members.some((member) => getMemberKeys(member).some((key) => keys.includes(key)));
+};
+
 const isSupportedConversation = (conversation: ChatConversation, currentUserKeys: string[]) =>
-  conversationHasAnyKey(conversation, currentUserKeys) &&
+  conversationHasActiveMember(conversation, currentUserKeys) &&
   !conversationParticipantKeys(conversation).some((key) => key.startsWith("client:")) &&
   !conversationMembers(conversation).some((participant) => participant.type === "client");
 
@@ -259,13 +266,15 @@ export default function ChatPage() {
     () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
     [activeConversationId, conversations],
   );
+  const isActiveConversationMember = Boolean(activeConversation && conversationHasActiveMember(activeConversation, currentUserKeys));
   const canDeleteActiveGroup = Boolean(
     activeConversation?.type === "group" &&
+    isActiveConversationMember &&
     (isAdminRole || (hasGroupDeletePermission && activeConversation.created_by === currentUserKey)),
   );
   const canLeaveActiveGroup = Boolean(
     activeConversation?.type === "group" &&
-    conversationHasAnyKey(activeConversation, currentUserKeys) &&
+    isActiveConversationMember &&
     activeConversation.created_by !== currentUserKey,
   );
 
@@ -279,21 +288,21 @@ export default function ChatPage() {
 
   const canManageActiveGroup = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "group") return false;
-    return canManageMessages;
-  }, [activeConversation, canManageMessages]);
+    return isActiveConversationMember && canManageMessages;
+  }, [activeConversation, canManageMessages, isActiveConversationMember]);
 
   const canEditActiveGroupInfo = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "group") return false;
-    return canEditMessages && conversationHasAnyKey(activeConversation, currentUserKeys);
-  }, [activeConversation, canEditMessages, currentUserKeys]);
+    return isActiveConversationMember && canEditMessages;
+  }, [activeConversation, canEditMessages, isActiveConversationMember]);
 
   const canSendInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
     if (activeConversation.archived_by?.some((key) => currentUserKeys.includes(key))) return false;
     if (activeConversation.type === "group" && activeConversation.settings?.only_admins_can_send && !canManageActiveGroup) return false;
-    if (!conversationHasAnyKey(activeConversation, currentUserKeys)) return false;
+    if (!isActiveConversationMember) return false;
     return activeConversation.type === "group" || canCreateMessages;
-  }, [activeConversation, canCreateMessages, canManageActiveGroup, currentUserKeys]);
+  }, [activeConversation, canCreateMessages, canManageActiveGroup, currentUserKeys, isActiveConversationMember]);
 
   const canUploadInActiveConversation = useMemo(() => {
     if (!activeConversation) return false;
@@ -304,7 +313,7 @@ export default function ChatPage() {
   const visibleConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return conversations
-      .filter((conversation) => conversationHasAnyKey(conversation, currentUserKeys))
+      .filter((conversation) => conversationHasActiveMember(conversation, currentUserKeys))
       .filter((conversation) => !conversation.archived_by?.some((key) => currentUserKeys.includes(key)))
       .filter((conversation) => {
         const displayName = conversation.type === "direct" ? getDirectConversationName(conversation, currentUserKeys) : conversation.name;
@@ -343,7 +352,11 @@ export default function ChatPage() {
   );
 
   const mergeConversation = useCallback((conversation: ChatConversation) => {
-    if (!isSupportedConversation(conversation, currentUserKeys)) return;
+    if (!isSupportedConversation(conversation, currentUserKeys)) {
+      setConversations((current) => current.filter((item) => item.id !== conversation.id));
+      setActiveConversationId((current) => (String(current) === String(conversation.id) ? null : current));
+      return;
+    }
     setConversations((current) => {
       const exists = current.some((item) => item.id === conversation.id);
       if (exists) {
@@ -476,7 +489,7 @@ export default function ChatPage() {
     const handleConversationUpsert = ({ conversation }: { conversation?: ChatConversation }) => {
       if (!conversation) return;
       const wasVisible = conversationsRef.current.some((item) => String(item.id) === String(conversation.id));
-      const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversationHasAnyKey(conversation, currentUserKeys);
+      const isNewGroupForUser = conversation.type === "group" && conversation.created_by !== currentUserKey && !wasVisible && conversationHasActiveMember(conversation, currentUserKeys);
       mergeConversation(conversation);
       if (isNewGroupForUser) {
         const creatorName = conversationMembers(conversation).find((participant) => participant.key === conversation.created_by)?.name || "Someone";
@@ -494,7 +507,7 @@ export default function ChatPage() {
     const canAccessMessage = (message: ChatMessage, conversation?: ChatConversation) => {
       if (conversation) return isSupportedConversation(conversation, currentUserKeys);
       return conversationsRef.current.some(
-        (item) => String(item.id) === String(message.conversation_id) && conversationHasAnyKey(item, currentUserKeys),
+        (item) => String(item.id) === String(message.conversation_id) && conversationHasActiveMember(item, currentUserKeys),
       );
     };
 
@@ -527,7 +540,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!user?.company_id) return;
     const conversationIds = conversations
-      .filter((conversation) => conversationHasAnyKey(conversation, currentUserKeys))
+      .filter((conversation) => conversationHasActiveMember(conversation, currentUserKeys))
       .map((conversation) => conversation.id);
 
     if (conversationIds.length > 0) {
@@ -674,6 +687,7 @@ export default function ChatPage() {
   };
 
   const handleDeleteMessage = (message: ChatMessage) => {
+    if (activeConversation?.type === "group" && !isActiveConversationMember) return;
     const isOwnMessage = message.sender_key === currentUserKey;
     if ((!isOwnMessage || !canDeleteOwnMessages) && !canManageMessages) return;
     setConfirmationDialog({
@@ -694,6 +708,7 @@ export default function ChatPage() {
   };
 
   const toggleReaction = async (message: ChatMessage, reactionKey: ChatReaction["key"]) => {
+    if (activeConversation?.type === "group" && !isActiveConversationMember) return;
     if (!canCreateMessages) return;
     const reactions = message.reactions || [];
     const existing = reactions.find((reaction) => reaction.key === reactionKey);
@@ -912,7 +927,7 @@ export default function ChatPage() {
 
   const leaveActiveGroup = () => {
     if (!activeConversation || activeConversation.type !== "group") return;
-    if (!conversationHasAnyKey(activeConversation, currentUserKeys)) return;
+    if (!conversationHasActiveMember(activeConversation, currentUserKeys)) return;
     if (activeConversation.created_by === currentUserKey) {
       showToast("Group creators cannot leave. Delete the group instead.", "error");
       return;
@@ -934,6 +949,8 @@ export default function ChatPage() {
           muted_by: (activeConversation.muted_by || []).filter((key) => !currentUserKeys.includes(key)),
           archived_by: (activeConversation.archived_by || []).filter((key) => !currentUserKeys.includes(key)),
         });
+        setConversations((current) => current.filter((conversation) => conversation.id !== activeConversation.id));
+        setMessages((current) => current.filter((message) => message.conversation_id !== activeConversation.id));
         const remainingParticipantKeys = activeParticipantKeys.filter((key) => !currentUserKeys.includes(key));
         const createdAt = new Date().toISOString();
         try {
