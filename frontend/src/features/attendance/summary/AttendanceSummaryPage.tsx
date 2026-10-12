@@ -47,6 +47,8 @@ type AttendanceRecord = {
   clock_in?: string;
   clock_out?: string;
   late?: boolean;
+  late_waived?: boolean;
+  lateWaived?: boolean;
   half_day?: boolean;
   shift_type?: ShiftSummary;
   source?: string;
@@ -327,8 +329,6 @@ export default function AttendanceSummaryPage() {
       const explicitStatus = String(record.status || "").toLowerCase();
       if (record.half_day || explicitStatus === "half-day" || explicitStatus === "half day") return "half-day";
       if (!record.clock_in && !record.clock_out) return "absent";
-      if (record.late || explicitStatus === "late") return "late";
-      if (!record.clock_in || !record.clock_out) return "present";
       return normalizeSummaryStatus(calculateAttendanceStatus(record, shift as ShiftDefinition));
     }
     if (holidays.some((holiday) => getHolidayDate(holiday) === dateString)) return "holiday";
