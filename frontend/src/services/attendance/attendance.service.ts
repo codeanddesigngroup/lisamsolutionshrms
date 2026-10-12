@@ -274,10 +274,13 @@ const normalizeAttendanceRecord = (
 };
 
 export const attendanceService = {
-  getEmployees: async (query: { companyId?: string | number; company_id?: string | number } = {}): Promise<AttendanceEmployee[]> => {
+  getEmployees: async (query: { companyId?: string | number; company_id?: string | number; status?: string } = {}): Promise<AttendanceEmployee[]> => {
     const companyId = query.companyId ?? query.company_id;
     const response = await nodeApi.get<ApiEnvelope<NodeEmployee[]> & { count?: number }>("/employees", {
-      params: companyId ? { company_id: companyId } : undefined,
+      params: {
+        ...(companyId ? { company_id: companyId } : {}),
+        ...(query.status ? { status: query.status } : {}),
+      },
     });
     return (response.data.data || [])
       .map(normalizeEmployee)

@@ -4,11 +4,12 @@ import {
   getDefaultRouteForRole,
   isPublicPath,
   normalizeRole,
+  permissionRouteRules,
 } from "@/lib/auth-contract";
 
 const TOKEN_COOKIE = "token";
 const ROLE_COOKIE = "user_role";
-const employeePermissionControlledPathPrefixes = ["/breaks"];
+const employeePermissionControlledPathPrefixes = permissionRouteRules.flatMap((rule) => rule.prefixes);
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

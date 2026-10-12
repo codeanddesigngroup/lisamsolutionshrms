@@ -233,7 +233,10 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     setLoading(true);
     try {
       const companyId = hydratedUser?.company_id ? String(hydratedUser.company_id) : "";
-      const employeeRecords = await attendanceService.getEmployees({ companyId });
+      const employeeRecords = await attendanceService.getEmployees({
+        companyId,
+        ...(isDateWise ? {} : { status: "active" }),
+      });
       const employeeList = employeeRecords as EmployeeOption[];
       const currentEmployee = isEmployeeSession
         ? employeeList.find((employee) => String(employee.id) === String(hydratedUser?.id || ""))
