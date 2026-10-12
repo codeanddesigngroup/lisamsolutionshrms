@@ -15,6 +15,8 @@ type OptionRecord = {
   id: number | string;
   name?: string;
   type_name?: string;
+  email?: string;
+  company_id?: number | string | null;
 };
 
 const getApiErrorMessage = (err: unknown, fallback: string) => {
@@ -23,6 +25,25 @@ const getApiErrorMessage = (err: unknown, fallback: string) => {
     return response?.data?.message || response?.data?.error || fallback;
   }
   return fallback;
+};
+
+const formatLocalDate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const parseDateOnly = (date: string) => {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const buildDateRange = (startDate: string, endDate: string) => {
+  const dates: string[] = [];
+  const end = parseDateOnly(endDate);
+
+  for (const cursor = parseDateOnly(startDate); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    dates.push(formatLocalDate(cursor));
+  }
+
+  return dates;
 };
 
 export default function CreateLeavePage() {
@@ -39,7 +60,7 @@ export default function CreateLeavePage() {
     user_id: "",
     type_id: "",
     duration: "single",
-    leave_date: new Date().toISOString().slice(0, 10),
+    leave_date: formatLocalDate(new Date()),
     end_date: "",
     reason: "",
     status: "pending"
@@ -50,15 +71,17 @@ export default function CreateLeavePage() {
     const fetchOptions = async () => {
       try {
         const [empRes, typeRes] = await Promise.all([
-          api.get("/employee"),
-          api.get("/leave-type")
+          api.get("/employees", { params: { status: "active" } }),
+          api.get("/leave-types")
         ]);
         const employeeOptions = empRes.data.data || [];
         setEmployees(employeeOptions);
         setLeaveTypes(typeRes.data.data || []);
         if (!canManageCompanyLeaves) {
-          const selfEmployee = employeeOptions.find((employee: OptionRecord & { email?: string; role?: string }) =>
-            String(employee.id) === String(user?.id) || employee.email === user?.email || employee.role === "employee"
+          const selfEmployee = employeeOptions.find((employee: OptionRecord) =>
+            String(employee.id) === String(user?.employee_id || "") ||
+            String(employee.id) === String(user?.id || "") ||
+            employee.email === user?.email
           );
           setFormData((current) => ({ ...current, user_id: String(selfEmployee?.id || user?.id || "") }));
         }
@@ -83,14 +106,10 @@ export default function CreateLeavePage() {
     setError("");
 
     try {
-      const start = new Date(`${formData.leave_date}T00:00:00`);
-      const end = formData.duration === "multiple" && formData.end_date
-        ? new Date(`${formData.end_date}T00:00:00`)
-        : start;
-      const dates: string[] = [];
-      for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
-        dates.push(cursor.toISOString().slice(0, 10));
-      }
+      const dates = buildDateRange(
+        formData.leave_date,
+        formData.duration === "multiple" && formData.end_date ? formData.end_date : formData.leave_date,
+      );
 
       const payload: Record<string, unknown> = {
         user_id: formData.user_id,
@@ -106,7 +125,7 @@ export default function CreateLeavePage() {
         status: canManageCompanyLeaves ? formData.status : "pending"
       };
 
-      await api.post("/leave", payload);
+      await api.post("/leaves", payload);
       showToast(canManageCompanyLeaves ? "Leave assigned successfully" : "Leave application submitted for approval", "success");
       router.push("/leaves");
       router.refresh();

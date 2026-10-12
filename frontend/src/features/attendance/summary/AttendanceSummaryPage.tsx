@@ -106,10 +106,7 @@ const getEmployeeMatchCodes = (employee: EmployeeOption) =>
   ]));
 
 const isApprovedLeaveForEmployee = (leave: LeaveRecord, employee: EmployeeOption, date: string) =>
-  getComparableCodes(getLeaveEmployeeId(leave)).some((code) =>
-    getEmployeeMatchCodes(employee).includes(`app:${code}`) ||
-    getEmployeeMatchCodes(employee).includes(`code:${code}`),
-  ) &&
+  getComparableCodes(getLeaveEmployeeId(leave)).some((code) => getComparableCodes(employee.id).includes(code)) &&
   getLeaveDate(leave) === date &&
   String(leave.status || "").toLowerCase() === "approved";
 
