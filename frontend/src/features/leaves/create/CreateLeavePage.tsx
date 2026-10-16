@@ -119,6 +119,7 @@ export default function CreateLeavePage() {
         type: { id: formData.type_id },
         duration: formData.duration,
         leave_date: formData.leave_date,
+        end_date: formData.duration === "multiple" ? formData.end_date : formData.leave_date,
         date: formData.leave_date,
         multi_date: dates.join(","),
         reason: formData.reason,

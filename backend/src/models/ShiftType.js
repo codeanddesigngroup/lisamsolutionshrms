@@ -52,7 +52,8 @@ const ShiftType = sequelize.define('ShiftType', {
   indexes: [
     {
       unique: true,
-      fields: ['company_id', 'type'],
+      name: 'shifts_company_type_time_unique',
+      fields: ['company_id', 'type', 'start_time', 'end_time'],
     },
   ],
 });

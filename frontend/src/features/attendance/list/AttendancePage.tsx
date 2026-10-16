@@ -15,7 +15,7 @@ import {
   calculateLateMinutes,
   formatDuration,
   getHolidayDate,
-  getLeaveDate,
+  isLeaveDateInRange,
   getLeaveEmployeeId,
   minutesBetween,
   parseOfficeOpenDays,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
 import axios from "axios";
-import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Clock, Cpu, Edit3, RefreshCw, RotateCcw, ShieldCheck, TimerReset, Users } from "lucide-react";
+import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Clock, Cpu, Edit3, RefreshCw, RotateCcw, Search, ShieldCheck, TimerReset, Users } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -73,6 +73,7 @@ type LeaveRecord = {
   user?: { id?: number | string; name?: string };
   employee?: { id?: number | string; name?: string };
   leave_date?: string;
+  end_date?: string;
   date?: string;
   status?: string;
   reason?: string;
@@ -243,7 +244,8 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [officeOpenDays, setOfficeOpenDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [date, setDate] = useState(() => (isDateWise && isValidDateParam(queryDate) ? String(queryDate) : DEFAULT_ATTENDANCE_DATE));
-  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState(isDateWise ? "all" : "active");
   const [statusFilter, setStatusFilter] = useState("all");
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [editingRow, setEditingRow] = useState<DailyAttendanceRow | null>(null);
@@ -258,7 +260,6 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
       const companyId = hydratedUser?.company_id ? String(hydratedUser.company_id) : "";
       const employeeRecords = await attendanceService.getEmployees({
         companyId,
-        ...(isDateWise ? {} : { status: "active" }),
       });
       const employeeList = employeeRecords as EmployeeOption[];
       const currentEmployee = isEmployeeSession
@@ -342,7 +343,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         )
       );
 
-      const approvedLeave = leaves.find((leave) => getLeaveEmployeeId(leave) === employeeId && getLeaveDate(leave) === date && String(leave.status || "").toLowerCase() === "approved");
+      const approvedLeave = leaves.find((leave) => getLeaveEmployeeId(leave) === employeeId && isLeaveDateInRange(leave, date) && String(leave.status || "").toLowerCase() === "approved");
       const shift = getShiftForEmployee(employee, attendanceRecord);
       const calculatedStatus = attendanceRecord
         ? calculateAttendanceStatus(attendanceRecord, shift as ShiftDefinition)
@@ -403,13 +404,20 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const filteredRows = useMemo(() => {
     if (isSelfServiceAttendance) return dailyRows;
 
+    const query = employeeSearch.trim().toLowerCase();
+    const inactiveStatuses = ["inactive", "deactive", "deactivated", "disabled"];
     return dailyRows.filter((row) => {
-      const employeeMatch = employeeFilter === "all" || String(row.employee.id) === employeeFilter;
+      const employeeStatus = String(row.employee.status || "").toLowerCase();
+      const employeeStatusMatch = employeeStatusFilter === "all"
+        || (employeeStatusFilter === "inactive" ? inactiveStatuses.includes(employeeStatus) : employeeStatus === "active");
+      const employeeMatch = !query
+        || row.employee.name.toLowerCase().includes(query)
+        || String(row.employee.employee_id || row.employee.employee_detail?.employee_id || "").toLowerCase().includes(query);
       const statusMatch = statusFilter === "all" || row.status === statusFilter;
       const exceptionMatch = !exceptionsOnly || row.isException;
-      return employeeMatch && statusMatch && exceptionMatch;
+      return employeeStatusMatch && employeeMatch && statusMatch && exceptionMatch;
     });
-  }, [dailyRows, employeeFilter, exceptionsOnly, isSelfServiceAttendance, statusFilter]);
+  }, [dailyRows, employeeSearch, employeeStatusFilter, exceptionsOnly, isSelfServiceAttendance, statusFilter]);
 
   const stats = useMemo(() => {
     const present = dailyRows.filter((row) => row.status === "present" || row.status === "early").length;
@@ -422,7 +430,8 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
 
   const resetFilters = () => {
     if (isDateWise) setDate(DEFAULT_ATTENDANCE_DATE);
-    setEmployeeFilter("all");
+    setEmployeeSearch("");
+    setEmployeeStatusFilter(isDateWise ? "all" : "active");
     setStatusFilter("all");
     setExceptionsOnly(false);
   };
@@ -519,7 +528,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
         </div>
 
         <div className="white-box">
-          <div className={`grid grid-cols-1 gap-4 md:items-end ${canViewCompanyAttendance ? "md:grid-cols-5" : "md:grid-cols-1"}`}>
+          <div className={`grid grid-cols-1 gap-4 md:items-end ${canViewCompanyAttendance ? "md:grid-cols-6" : "md:grid-cols-1"}`}>
             {isDateWise ? (
               <div>
                 <label className="mb-2 block text-[12px] font-bold text-gray-600">Attendance Date</label>
@@ -534,14 +543,30 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             {canViewCompanyAttendance && (
               <>
                 <div>
-                  <label className="mb-2 block text-[12px] font-bold text-gray-600">Employee</label>
-                  <select className="form-control" value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)}>
+                  <label htmlFor="attendance-employee-search" className="mb-2 block text-[12px] font-bold text-gray-600">Search Employee</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      id="attendance-employee-search"
+                      type="search"
+                      className="form-control pl-10"
+                      placeholder="Search by name or ID"
+                      value={employeeSearch}
+                      onChange={(event) => setEmployeeSearch(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="attendance-employee-status" className="mb-2 block text-[12px] font-bold text-gray-600">Employee Status</label>
+                  <select
+                    id="attendance-employee-status"
+                    className="form-control"
+                    value={employeeStatusFilter}
+                    onChange={(event) => setEmployeeStatusFilter(event.target.value)}
+                  >
                     <option value="all">All Employees</option>
-                    {employees.map((employee) => (
-                      <option key={String(employee.id)} value={String(employee.id)}>
-                        {employee.name}
-                      </option>
-                    ))}
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
                   </select>
                 </div>
                 <div>

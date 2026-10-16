@@ -2,12 +2,12 @@
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
-import { Plus, Calendar, Check, X, Star, RefreshCw, Clock } from "lucide-react";
+import { Plus, Calendar, Check, X, Star, RefreshCw, Clock, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
-import { getHolidayDate, getLeaveDate, getLeaveEmployeeId, parseOfficeOpenDays, calculateAttendanceStatus, ShiftDefinition } from "@/lib/hr-utils";
+import { getHolidayDate, getLeaveEmployeeId, isLeaveDateInRange, parseOfficeOpenDays, calculateAttendanceStatus, ShiftDefinition } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
 import api from "@/lib/api";
 
@@ -58,7 +58,7 @@ type AttendanceRecord = {
 };
 
 type HolidayRecord = { date?: string; holiday_date?: string; name?: string; occasion?: string; occassion?: string };
-type LeaveRecord = { user_id?: number | string; employee_id?: number | string; user?: { id?: number | string; name?: string }; employee?: { id?: number | string; name?: string }; leave_date?: string; date?: string; status?: string; reason?: string; leave_type?: { type_name?: string } };
+type LeaveRecord = { user_id?: number | string; employee_id?: number | string; user?: { id?: number | string; name?: string }; employee?: { id?: number | string; name?: string }; leave_date?: string; end_date?: string; date?: string; status?: string; reason?: string; leave_type?: { type_name?: string } };
 type SummaryStatus = "present" | "late" | "half-day" | "absent" | "holiday" | "leave" | "closed" | "empty";
 type DayDetail = { employee: EmployeeOption; day: number; date: string; status: SummaryStatus; attendance?: AttendanceRecord; holiday?: HolidayRecord; leave?: LeaveRecord };
 
@@ -109,7 +109,7 @@ const getEmployeeMatchCodes = (employee: EmployeeOption) =>
 
 const isApprovedLeaveForEmployee = (leave: LeaveRecord, employee: EmployeeOption, date: string) =>
   getComparableCodes(getLeaveEmployeeId(leave)).some((code) => getComparableCodes(employee.id).includes(code)) &&
-  getLeaveDate(leave) === date &&
+  isLeaveDateInRange(leave, date) &&
   String(leave.status || "").toLowerCase() === "approved";
 
 const shouldMarkAbsent = (dateString: string, employee: EmployeeOption) => {
@@ -175,7 +175,8 @@ export default function AttendanceSummaryPage() {
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [officeOpenDays, setOfficeOpenDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [selectedDayDetail, setSelectedDayDetail] = useState<DayDetail | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState("all");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState("all");
   const [month, setMonth] = useState(thisMonth);
   const [year, setYear] = useState(thisYear);
   const [syncingToday, setSyncingToday] = useState(false);
@@ -249,7 +250,8 @@ export default function AttendanceSummaryPage() {
   }, [month, year, user?.id, user?.company_id, user?.role, canViewCompanyAttendance]);
 
   const resetFilters = () => {
-    setSelectedEmployee("all");
+    setEmployeeSearch("");
+    setEmployeeStatusFilter("all");
     setMonth(thisMonth);
     setYear(thisYear);
   };
@@ -283,8 +285,20 @@ export default function AttendanceSummaryPage() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const visibleEmployees = useMemo(
-    () => employees.filter((employee) => selectedEmployee === "all" || String(employee.id) === selectedEmployee),
-    [employees, selectedEmployee],
+    () => {
+      const query = employeeSearch.trim().toLowerCase();
+      return employees.filter((employee) => {
+        const status = String(employee.status || "").toLowerCase();
+        const isInactive = ["inactive", "deactive", "deactivated", "disabled"].includes(status);
+        const statusMatches = employeeStatusFilter === "all"
+          || (employeeStatusFilter === "inactive" ? isInactive : status === "active");
+        const searchMatches = !query
+          || employee.name.toLowerCase().includes(query)
+          || String(employee.employee_id || employee.employee_detail?.employee_id || "").toLowerCase().includes(query);
+        return statusMatches && searchMatches;
+      });
+    },
+    [employeeSearch, employeeStatusFilter, employees],
   );
 
   const attendanceByEmployeeDay = useMemo(() => {
@@ -393,15 +407,35 @@ export default function AttendanceSummaryPage() {
         </div>
 
         <div className="white-box">
-          <div className={`grid grid-cols-1 gap-4 items-end ${canViewCompanyAttendance ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
+          <div className={`grid grid-cols-1 gap-4 items-end ${canViewCompanyAttendance ? (canCreateAttendance ? "md:grid-cols-6" : "md:grid-cols-5") : "md:grid-cols-4"}`}>
             {canViewCompanyAttendance && (
               <div>
-                <label className="block text-[12px] font-bold text-gray-600 mb-2">Employee Name</label>
-                <select className="form-control" value={selectedEmployee} onChange={(event) => setSelectedEmployee(event.target.value)}>
+                <label htmlFor="attendance-employee-search" className="block text-[12px] font-bold text-gray-600 mb-2">Search Employee</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="attendance-employee-search"
+                    type="search"
+                    className="form-control pl-10"
+                    placeholder="Search by name or ID"
+                    value={employeeSearch}
+                    onChange={(event) => setEmployeeSearch(event.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+            {canViewCompanyAttendance && (
+              <div>
+                <label htmlFor="attendance-employee-status" className="block text-[12px] font-bold text-gray-600 mb-2">Employee Status</label>
+                <select
+                  id="attendance-employee-status"
+                  className="form-control"
+                  value={employeeStatusFilter}
+                  onChange={(event) => setEmployeeStatusFilter(event.target.value)}
+                >
                   <option value="all">All Employees</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>{employee.name}</option>
-                  ))}
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
                 </select>
               </div>
             )}

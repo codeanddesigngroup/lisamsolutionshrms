@@ -56,6 +56,15 @@ const getCurrentAttendanceDate = () => {
   return toLocalDateString(attendanceDate);
 };
 
+const getMonthDateRange = (month: string) => {
+  const year = new Date().getFullYear();
+  const monthNumber = Number(month);
+  const monthKey = String(monthNumber).padStart(2, "0");
+  const startDate = `${year}-${monthKey}-01`;
+  const endDate = toLocalDateString(new Date(year, monthNumber, 0));
+  return { startDate, endDate };
+};
+
 const parseDateTime = (value?: string | null) => {
   if (!value) return null;
   const date = new Date(String(value).replace(" ", "T"));
@@ -113,8 +122,8 @@ export default function AttendanceBreaksPage() {
   const [breaks, setBreaks] = useState<BreakRecord[]>([]);
   const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState(getCurrentAttendanceDate());
-  const [endDate, setEndDate] = useState(getCurrentAttendanceDate());
+  const [dateFilter, setDateFilter] = useState(getCurrentAttendanceDate());
+  const [monthFilter, setMonthFilter] = useState("");
   const [status, setStatus] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [departmentId, setDepartmentId] = useState("");
@@ -122,11 +131,13 @@ export default function AttendanceBreaksPage() {
   const fetchBreaks = useCallback(async () => {
     setLoading(true);
     try {
+      const dateRange = monthFilter
+        ? getMonthDateRange(monthFilter)
+        : { startDate: dateFilter, endDate: dateFilter };
       const response = await api.get("/attendance/breaks", {
         params: {
           company_id: user?.role === "super_admin" ? undefined : user?.company_id,
-          startDate,
-          endDate,
+          ...dateRange,
           status: status || undefined,
           employeeName: employeeName.trim() || undefined,
           departmentId: departmentId || undefined,
@@ -140,7 +151,7 @@ export default function AttendanceBreaksPage() {
     } finally {
       setLoading(false);
     }
-  }, [departmentId, employeeName, endDate, showToast, startDate, status, user]);
+  }, [dateFilter, departmentId, employeeName, monthFilter, showToast, status, user]);
 
   const fetchDepartments = useCallback(async () => {
     try {
@@ -155,6 +166,16 @@ export default function AttendanceBreaksPage() {
       showToast("Failed to load departments", "error");
     }
   }, [showToast, user]);
+
+  const handleDateChange = (date: string) => {
+    setDateFilter(date);
+    if (date) setMonthFilter("");
+  };
+
+  const handleMonthChange = (month: string) => {
+    setMonthFilter(month);
+    if (month) setDateFilter("");
+  };
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -228,14 +249,20 @@ export default function AttendanceBreaksPage() {
         </div>
 
         <div className="white-box">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start Attendance Date</span>
-              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="form-control" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Attendance Date</span>
+              <input type="date" value={dateFilter} onChange={(event) => handleDateChange(event.target.value)} className="form-control" />
             </label>
             <label className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End Attendance Date</span>
-              <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="form-control" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Month</span>
+              <select value={monthFilter} onChange={(event) => handleMonthChange(event.target.value)} className="form-control">
+                <option value="">Select month</option>
+                {Array.from({ length: 12 }, (_, index) => {
+                  const value = String(index + 1).padStart(2, "0");
+                  return <option key={value} value={value}>{new Date(2000, index, 1).toLocaleString("en", { month: "long" })}</option>;
+                })}
+              </select>
             </label>
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Employee Name</span>

@@ -33,14 +33,17 @@ const serializeLeave = (leave) => {
 };
 
 const dateRangeFromBody = (body) => {
-  if (body.multi_date) {
-    return String(body.multi_date)
-      .split(',')
-      .map((date) => date.trim())
-      .filter(Boolean);
-  }
+  const dates = String(body.multi_date || '')
+    .split(',')
+    .map((date) => date.trim())
+    .filter(Boolean)
+    .sort();
+  const startDate = body.leave_date || body.date || dates[0] || '';
+  const endDate = body.duration === 'multiple'
+    ? body.end_date || dates[dates.length - 1] || startDate
+    : startDate;
 
-  return [body.leave_date || body.date].filter(Boolean);
+  return { startDate, endDate };
 };
 
 router.get('/', async (req, res, next) => {
@@ -52,9 +55,19 @@ router.get('/', async (req, res, next) => {
     if (req.query.employee_id || req.query.user_id) where.employee_id = req.query.employee_id || req.query.user_id;
     if (req.query.status) where.status = req.query.status;
     if (req.query.start_date || req.query.end_date) {
-      where.leave_date = {};
-      if (req.query.start_date) where.leave_date[Op.gte] = req.query.start_date;
-      if (req.query.end_date) where.leave_date[Op.lte] = req.query.end_date;
+      const dateOverlapConditions = [];
+      if (req.query.start_date) {
+        dateOverlapConditions.push({
+          [Op.or]: [
+            { end_date: { [Op.gte]: req.query.start_date } },
+            { [Op.and]: [{ end_date: null }, { leave_date: { [Op.gte]: req.query.start_date } }] },
+          ],
+        });
+      }
+      if (req.query.end_date) {
+        dateOverlapConditions.push({ leave_date: { [Op.lte]: req.query.end_date } });
+      }
+      where[Op.and] = dateOverlapConditions;
     }
 
     const leaves = await Leave.findAll({
@@ -79,37 +92,40 @@ router.post('/', async (req, res, next) => {
     const leaveTypeId = req.body.leave_type_id || req.body.type_id || req.body.type?.id || null;
     const employee = employeeId ? await Employee.findByPk(employeeId) : null;
     const companyId = getCompanyFilter(req.query, req.body) || employee?.company_id;
-    const dates = dateRangeFromBody(req.body);
+    const { startDate, endDate } = dateRangeFromBody(req.body);
     const reason = String(req.body.reason || '').trim();
 
-    if (!companyId || !employeeId || !dates.length || !reason) {
+    if (!companyId || !employeeId || !startDate || !endDate || !reason) {
       return res.status(400).json({
         success: false,
         message: 'company_id, employee, leave date, and reason are required',
       });
     }
 
-    const leaves = await Leave.bulkCreate(dates.map((date) => ({
+    if (endDate < startDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Leave end date must be on or after the start date',
+      });
+    }
+
+    const leave = await Leave.create({
       company_id: companyId,
       employee_id: employeeId,
       leave_type_id: leaveTypeId || null,
-      leave_date: date,
-      end_date: req.body.end_date || dates[dates.length - 1] || date,
+      leave_date: startDate,
+      end_date: endDate,
       duration: req.body.duration || 'single',
       reason,
       status: normalizeStatus(req.body.status),
-    })), { returning: true });
-
-    const createdLeaves = await Leave.findAll({
-      where: { id: leaves.map((leave) => leave.id) },
-      include,
-      order: [['leave_date', 'ASC']],
     });
+
+    const createdLeave = await Leave.findByPk(leave.id, { include });
 
     return res.status(201).json({
       success: true,
       message: 'Leave request saved successfully',
-      data: createdLeaves.length === 1 ? serializeLeave(createdLeaves[0]) : createdLeaves.map(serializeLeave),
+      data: serializeLeave(createdLeave),
     });
   } catch (err) {
     return next(err);

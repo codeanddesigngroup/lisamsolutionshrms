@@ -16,6 +16,15 @@ export type ShiftTypeOption = {
   shift_hours: number;
 };
 
+type ShiftFormData = {
+  type: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number | "";
+  late_grace_minutes: number | "";
+  shift_hours: number | "";
+};
+
 type ShiftCreateModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -33,38 +42,38 @@ export default function ShiftCreateModal({
 }: ShiftCreateModalProps) {
   const { showToast } = useToast();
 
-  const [formData, setFormData] = useState({
-    type: editingShift?.type || "morning",
+  const [formData, setFormData] = useState<ShiftFormData>({
+    type: editingShift?.type || "",
     start_time: editingShift?.start_time || "",
     end_time: editingShift?.end_time || "",
-    break_minutes: Number(editingShift?.break_minutes || 0),
-    late_grace_minutes: Number(editingShift?.late_grace_minutes || 0),
-    shift_hours: Number(editingShift?.shift_hours || 0),
+    break_minutes: editingShift ? Number(editingShift.break_minutes) : "",
+    late_grace_minutes: editingShift ? Number(editingShift.late_grace_minutes) : "",
+    shift_hours: editingShift ? Number(editingShift.shift_hours) : "",
   });
 
   const [loading, setLoading] = useState(false);
 
   const closeAndReset = () => {
     setFormData({
-      type: "morning",
+      type: "",
       start_time: "",
       end_time: "",
-      break_minutes: 0,
-      late_grace_minutes: 0,
-      shift_hours: 0,
+      break_minutes: "",
+      late_grace_minutes: "",
+      shift_hours: "",
     });
 
     onClose();
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     setFormData((prev) => ({
       ...prev,
       [e.target.name]:
         e.target.type === "number"
-          ? Number(e.target.value)
+          ? e.target.value === "" ? "" : Number(e.target.value)
           : e.target.value,
     }));
   };
@@ -77,12 +86,33 @@ export default function ShiftCreateModal({
       return;
     }
 
+    if (
+      !formData.type.trim() ||
+      !formData.start_time ||
+      !formData.end_time ||
+      formData.break_minutes === "" ||
+      formData.late_grace_minutes === "" ||
+      formData.shift_hours === ""
+    ) {
+      showToast("Complete all shift fields before saving.", "error");
+      return;
+    }
+
+    const payload = {
+      ...formData,
+      type: formData.type.trim(),
+      break_minutes: Number(formData.break_minutes),
+      late_grace_minutes: Number(formData.late_grace_minutes),
+      shift_hours: Number(formData.shift_hours),
+      company_id: companyId,
+    };
+
     try {
       setLoading(true);
 
       const response = editingShift
-        ? await api.put(`/shifts/${editingShift.id}`, { ...formData, company_id: companyId })
-        : await api.post("/shifts", { ...formData, company_id: companyId });
+        ? await api.put(`/shifts/${editingShift.id}`, payload)
+        : await api.post("/shifts", payload);
       const result = response.data;
 
       const createdShift = result.data || result.shift || result;
@@ -134,18 +164,18 @@ export default function ShiftCreateModal({
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <label className="space-y-2">
             <span className="block text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Shift Type
+              Shift Name
             </span>
-            <select
+            <input
+              type="text"
               name="type"
               value={formData.type}
               onChange={handleChange}
               className="form-control"
-            >
-              <option value="morning">Morning</option>
-              <option value="evening">Evening</option>
-              <option value="night">Night</option>
-            </select>
+              placeholder="Enter shift name"
+              autoComplete="off"
+              required
+            />
           </label>
 
           <label className="space-y-2">
@@ -187,6 +217,7 @@ export default function ShiftCreateModal({
               value={formData.break_minutes}
               onChange={handleChange}
               className="form-control"
+              required
             />
           </label>
 
@@ -201,6 +232,7 @@ export default function ShiftCreateModal({
               value={formData.late_grace_minutes}
               onChange={handleChange}
               className="form-control"
+              required
             />
           </label>
 
@@ -215,6 +247,8 @@ export default function ShiftCreateModal({
               value={formData.shift_hours}
               onChange={handleChange}
               className="form-control"
+              step="0.01"
+              required
             />
           </label>
         </div>

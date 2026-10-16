@@ -296,8 +296,7 @@ export default function AttendanceShiftsPage() {
           </h3>
 
           <p className="mx-auto mt-2 max-w-xs text-[11px] font-bold uppercase tracking-widest text-gray-400">
-            This removes the shift from the current list. Reassign employees
-            first if they still use it.
+            Employees assigned to this shift will become unassigned.
           </p>
 
           <div className="mt-8 flex gap-4">

@@ -3,6 +3,7 @@ require('dotenv').config({ quiet: true });
 const http = require('http');
 const app = require('./app');
 const sequelize = require('./config/db');
+const ensureShiftIndexes = require('./utils/shiftIndexes');
 const { startAttendanceWorker } = require('./services/attendanceWorker');
 const { initSocket } = require('./realtime/socket');
 
@@ -19,6 +20,7 @@ async function startServer() {
       await sequelize.authenticate();
       console.log('Database connected');
     }
+    await ensureShiftIndexes();
 
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

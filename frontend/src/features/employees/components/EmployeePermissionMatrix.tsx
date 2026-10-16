@@ -1,6 +1,7 @@
 "use client";
 
-import { UserRound } from "lucide-react";
+import { ChevronDown, UserRound } from "lucide-react";
+import { useState } from "react";
 import {
   adminAssignablePermissionModules,
   getModulesFromPermissions,
@@ -53,11 +54,18 @@ export default function EmployeePermissionMatrix({
   permissions,
   onPermissionsChange,
 }: EmployeePermissionMatrixProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const normalizedPermissions = normalizePermissions(permissions);
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-3">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls="employee-permission-matrix"
+        onClick={() => setIsOpen((open) => !open)}
+        className="flex w-full flex-wrap items-center justify-between gap-4 bg-gray-50 px-4 py-3 text-left"
+      >
         <div>
           <h3 className="text-xs font-black uppercase tracking-widest text-gray-700">Employee Module Permissions</h3>
           <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
@@ -68,8 +76,9 @@ export default function EmployeePermissionMatrix({
           <UserRound className="h-3.5 w-3.5" />
           Employee Access
         </span>
-      </div>
-      <div className="overflow-x-auto">
+        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+      {isOpen && <div id="employee-permission-matrix" className="overflow-x-auto border-t border-gray-100">
         <table className="w-full text-left">
           <thead className="border-b border-gray-100 bg-white">
             <tr>
@@ -131,7 +140,7 @@ export default function EmployeePermissionMatrix({
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }

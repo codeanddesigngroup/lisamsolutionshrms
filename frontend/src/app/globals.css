@@ -318,6 +318,12 @@
     background: var(--primary);
     color: #ffffff;
     border: 1px solid var(--primary);
+    display: flex;
+    align-items: center;
+  }
+
+  a.btn.btn-default {
+    display: flex;
   }
 
   .btn-success {

@@ -9,6 +9,7 @@ import Card from "@/components/ui/Card";
 import Modal from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
+import { collapseLegacyMultiDayLeaves } from "@/lib/leave-utils";
 
 type LeaveRecord = {
   id: number | string;
@@ -16,6 +17,9 @@ type LeaveRecord = {
   user?: { id?: number | string; name?: string };
   date?: string;
   leave_date?: string;
+  end_date?: string;
+  created_at?: string;
+  legacy_group_ids?: Array<number | string>;
   type?: string;
   leave_type?: { type_name?: string };
   status: "pending" | "approved" | "rejected" | string;
@@ -54,7 +58,7 @@ export default function AllLeavesPage() {
         api.get("/leave"),
         api.get("/employee"),
       ]);
-      setLeaves(leaveResponse.data.data || []);
+      setLeaves(collapseLegacyMultiDayLeaves((leaveResponse.data.data || []) as LeaveRecord[]));
       setEmployees(employeeResponse.data.data || []);
     } catch (err) {
       console.error("Fetch Leaves Error:", err);
@@ -76,7 +80,8 @@ export default function AllLeavesPage() {
       const date = leave.leave_date || leave.date || "";
       const employeeMatch = !filterEmployee || employeeId === filterEmployee;
       const statusMatch = filterStatus === "all" || leave.status === filterStatus;
-      const startMatch = !filterStartDate || date >= filterStartDate;
+      const leaveEndDate = leave.end_date || date;
+      const startMatch = !filterStartDate || leaveEndDate >= filterStartDate;
       const endMatch = !filterEndDate || date <= filterEndDate;
       return employeeMatch && statusMatch && startMatch && endMatch;
     });
@@ -85,8 +90,9 @@ export default function AllLeavesPage() {
   const handleDelete = async () => {
     if (!deletingId) return;
     try {
-      await api.delete(`/leave/${deletingId}`);
-      setLeaves((prev) => prev.filter((leave) => leave.id !== deletingId));
+      const leave = leaves.find((item) => String(item.id) === String(deletingId));
+      await Promise.all((leave?.legacy_group_ids || [deletingId]).map((id) => api.delete(`/leave/${id}`)));
+      setLeaves((prev) => prev.filter((item) => String(item.id) !== String(deletingId)));
       setDeletingId(null);
       showToast("Leave deleted successfully", "success");
     } catch (err) {
@@ -170,7 +176,7 @@ export default function AllLeavesPage() {
                     <tr key={leave.id} className="hover:bg-gray-50/20 transition-all group">
                       <td className="px-6 py-5 text-[11px] font-black text-gray-300 uppercase">#{leave.id}</td>
                       <td className="px-6 py-5"><div className="flex items-center space-x-3"><div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center text-primary font-black text-xs border border-primary/5 shadow-sm">{employeeName.charAt(0)}</div><span className="text-[11px] font-black text-gray-800 uppercase tracking-tight">{employeeName}</span></div></td>
-                      <td className="px-6 py-5"><span className="text-[11px] font-black text-gray-600 uppercase tracking-widest">{date ? new Date(date).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}</span></td>
+                      <td className="px-6 py-5"><span className="text-[11px] font-black text-gray-600 uppercase tracking-widest">{date ? `${new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })}${leave.end_date && leave.end_date !== date ? ` - ${new Date(`${leave.end_date}T00:00:00`).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })}` : ""}` : "N/A"}</span></td>
                       <td className="px-6 py-5"><span className="px-3 py-1 bg-gray-100 text-gray-600 text-[9px] font-black uppercase tracking-widest rounded-lg border border-gray-200">{leave.leave_type?.type_name || leave.type || "Leave"}</span></td>
                       <td className="px-6 py-5"><span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${getStatusColor(leave.status)}`}>{leave.status}</span></td>
                       <td className="px-6 py-5"><div className="flex items-center justify-center space-x-2"><Link href={`/leaves/${leave.id}`} className="p-2 bg-gray-50 text-gray-400 rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm"><Eye className="h-4 w-4" /></Link><button onClick={() => setDeletingId(leave.id)} className="p-2 bg-gray-50 text-gray-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 className="h-4 w-4" /></button></div></td>

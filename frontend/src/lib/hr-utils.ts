@@ -188,6 +188,12 @@ export const getLeaveEmployeeId = (record: HRRecord) =>
 
 export const getLeaveDate = (record: HRRecord) => String(record.leave_date || record.date || "");
 
+export const isLeaveDateInRange = (record: HRRecord, date: string) => {
+  const start = getLeaveDate(record).slice(0, 10);
+  const end = String(record.end_date || start).slice(0, 10);
+  return Boolean(start && date >= start && date <= end);
+};
+
 export const getHolidayDate = (record: HRRecord) => String(record.holiday_date || record.date || "").slice(0, 10);
 
 export const parseOfficeOpenDays = (value: unknown, fallback = [1, 2, 3, 4, 5]) => {

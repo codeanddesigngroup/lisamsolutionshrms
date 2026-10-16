@@ -1,6 +1,7 @@
 require('dotenv').config({ quiet: true });
 
 const sequelize = require('../src/config/db');
+const ensureShiftIndexes = require('../src/utils/shiftIndexes');
 const Department = require('../src/models/Department');
 const Designation = require('../src/models/Designation');
 const Employee = require('../src/models/Employee');
@@ -44,6 +45,7 @@ async function initDb() {
     await Designation.sync({ alter: true });
     await ShiftType.sync({ alter: true });
     await Employee.sync({ alter: true });
+    await ensureShiftIndexes();
     await AttendanceLogs.sync({ alter: true });
     await AttendanceRecords.sync({ alter: true });
     await AttendanceBreak.sync({ alter: true });

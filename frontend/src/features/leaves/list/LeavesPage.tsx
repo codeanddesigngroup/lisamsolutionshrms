@@ -18,6 +18,8 @@ import Card from "@/components/ui/Card";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
+import { isLeaveDateInRange, leaveUnits as getLeaveUnits } from "@/lib/hr-utils";
+import { collapseLegacyMultiDayLeaves, inclusiveLeaveDays } from "@/lib/leave-utils";
 
 type LeaveRecord = {
   id: number | string;
@@ -28,6 +30,8 @@ type LeaveRecord = {
   date?: string;
   leave_date?: string;
   end_date?: string;
+  created_at?: string;
+  legacy_group_ids?: Array<number | string>;
   reason?: string;
   action_reason?: string;
   status: string;
@@ -45,19 +49,33 @@ type LeaveQuota = {
 
 const getLeaveUserId = (leave: LeaveRecord) => String(leave.user?.id || leave.employee?.id || "");
 
-const leaveUnits = (leave: LeaveRecord) => leave.duration?.toLowerCase().includes("half") ? 0.5 : 1;
+const leaveUnits = (leave: LeaveRecord) => getLeaveUnits(leave);
+
+const getDurationLabel = (leave: LeaveRecord) => {
+  if (leave.duration?.toLowerCase().includes("half")) return "0.5 day";
+  const start = String(leave.leave_date || leave.date || "");
+  const end = String(leave.end_date || start);
+  const days = inclusiveLeaveDays(start, end);
+  return `${days} ${days === 1 ? "day" : "days"}`;
+};
 
 export default function LeaveDashboardPage() {
   const { showToast } = useToast();
   const { user, hasPermission } = useAuth();
-  const canCreateLeaves = hasPermission("leaves.create") || hasPermission("leaves.manage");
-  const canManageCompanyLeaves = hasPermission("leaves.approve") || hasPermission("leaves.manage");
+  const [hasHydrated, setHasHydrated] = useState(false);
+  const canCreateLeaves = hasHydrated && (hasPermission("leaves.create") || hasPermission("leaves.manage"));
+  const canManageCompanyLeaves = hasHydrated && (hasPermission("leaves.approve") || hasPermission("leaves.manage"));
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [leaveQuotas, setLeaveQuotas] = useState<LeaveQuota[]>([]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setHasHydrated(true), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -68,7 +86,7 @@ export default function LeaveDashboardPage() {
           ? api.get(`/leave-quotas?employee_id=${encodeURIComponent(String(user.id))}`)
           : Promise.resolve(null),
       ]);
-      const leaveList = (response.data.data || []) as LeaveRecord[];
+      const leaveList = collapseLegacyMultiDayLeaves((response.data.data || []) as LeaveRecord[]);
       const scopedLeaves = canManageCompanyLeaves
         ? leaveList
         : leaveList.filter((leave) => getLeaveUserId(leave) === String(user?.id) || leave.user?.name === user?.name || leave.employee?.name === user?.name);
@@ -84,10 +102,11 @@ export default function LeaveDashboardPage() {
   };
 
   useEffect(() => {
+    if (!hasHydrated) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasHydrated]);
 
   const nextMonth = () => {
     setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() + 1)));
@@ -103,7 +122,8 @@ export default function LeaveDashboardPage() {
       return;
     }
     try {
-      await api.patch(`/leave/${id}`, { status });
+      const request = leaves.find((leave) => String(leave.id) === String(id));
+      await Promise.all((request?.legacy_group_ids || [id]).map((recordId) => api.patch(`/leave/${recordId}`, { status })));
       setLeaves((prev) => prev.map((leave) => leave.id === id ? { ...leave, status } : leave));
       setPendingLeaves((prev) => prev.filter((leave) => leave.id !== id));
       showToast(`Leave ${status}`, "success");
@@ -115,9 +135,10 @@ export default function LeaveDashboardPage() {
 
   const handleCancel = async (id: number | string) => {
     try {
-      await api.delete(`/leave/${id}`);
-      setLeaves((prev) => prev.filter((leave) => leave.id !== id));
-      setPendingLeaves((prev) => prev.filter((leave) => leave.id !== id));
+      const request = leaves.find((leave) => String(leave.id) === String(id));
+      await Promise.all((request?.legacy_group_ids || [id]).map((recordId) => api.delete(`/leave/${recordId}`)));
+      setLeaves((prev) => prev.filter((leave) => String(leave.id) !== String(id)));
+      setPendingLeaves((prev) => prev.filter((leave) => String(leave.id) !== String(id)));
       showToast("Pending leave request cancelled", "success");
     } catch (err) {
       console.error("Cancel Leave Error:", err);
@@ -173,24 +194,18 @@ export default function LeaveDashboardPage() {
           </div>
           <div className="flex items-center space-x-2">
              {canManageCompanyLeaves && (
-             <Link href="/leaves/all">
-               <Button className="btn-default">
-                  <List className="h-4 w-4 mr-2" /> All Leaves
-               </Button>
+             <Link href="/leaves/all" className="btn btn-default">
+                <List className="h-4 w-4 mr-2" /> All Leaves
              </Link>
              )}
              {canManageCompanyLeaves && (
-             <Link href="/leaves/settings">
-               <Button className="btn-default p-2">
-                  <Settings className="h-4 w-4" />
-               </Button>
+             <Link href="/leaves/settings" className="btn btn-default p-2">
+                <Settings className="h-4 w-4" />
              </Link>
              )}
              {canCreateLeaves && (
-               <Link href="/leaves/create">
-                 <Button variant="primary">
-                    <Plus className="h-4 w-4 mr-2" /> {canManageCompanyLeaves ? "Assign Leave" : "Apply Leave"}
-                 </Button>
+               <Link href="/leaves/create" className="btn btn-info">
+                  <Plus className="h-4 w-4 mr-2" /> {canManageCompanyLeaves ? "Assign Leave" : "Apply Leave"}
                </Link>
              )}
              <Button onClick={fetchData} className="btn-default p-2">
@@ -268,7 +283,7 @@ export default function LeaveDashboardPage() {
                             {leave.leave_date || leave.date || "--"}
                             {leave.end_date && leave.end_date !== (leave.leave_date || leave.date) ? ` to ${leave.end_date}` : ""}
                           </td>
-                          <td className="px-6 py-4 capitalize">{leave.duration || "single"}</td>
+                          <td className="px-6 py-4">{getDurationLabel(leave)}</td>
                           <td className="max-w-[220px] px-6 py-4">{leave.reason || "--"}</td>
                           <td className="px-6 py-4">
                             <span className={`rounded-full px-2.5 py-1 text-[8px] font-black uppercase tracking-widest ${statusClass}`}>{status}</span>
@@ -313,12 +328,9 @@ export default function LeaveDashboardPage() {
                  <div className="grid grid-cols-7 min-h-[400px]">
                     {Array.from({ length: 35 }).map((_, i) => {
                        const day = i - 3;
-                       const leave = leaves.find(l => {
-                         const leaveDate = new Date(l.leave_date || l.date || "");
-                         return leaveDate.getFullYear() === currentMonth.getFullYear()
-                           && leaveDate.getMonth() === currentMonth.getMonth()
-                           && leaveDate.getDate() === day;
-                       });
+                       const calendarDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+                       const dateKey = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, "0")}-${String(calendarDate.getDate()).padStart(2, "0")}`;
+                       const leave = leaves.find((item) => isLeaveDateInRange(item, dateKey));
                        
                        return (
                          <div key={i} className={`relative p-2 border-r border-b border-t border-l border-[#9e9e9e2f] min-h-[80px] ${day < 1 || day > 31 ? 'bg-gray-50' : ''}`}>
@@ -349,7 +361,7 @@ export default function LeaveDashboardPage() {
                       <div key={request.id} className="p-4 bg-gray-50 border border-[#f2f2f3]">
                          <div className="flex items-center justify-between mb-2">
                             <div className="text-xs font-bold">{request.user?.name || request.employee?.name || "Unknown"}</div>
-                            <span className="text-[10px] text-gray-400">{request.leave_date || request.date}</span>
+                            <span className="text-[10px] text-gray-400">{request.leave_date || request.date}{request.end_date && request.end_date !== (request.leave_date || request.date) ? ` to ${request.end_date}` : ""}</span>
                          </div>
                          <div className="text-[11px] text-gray-500 mb-3">{request.reason}</div>
                          <div className="flex space-x-2">

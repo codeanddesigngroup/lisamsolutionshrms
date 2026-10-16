@@ -2,6 +2,29 @@ const express = require('express');
 const router = express.Router();
 const ShiftType = require('../models/ShiftType');
 const Employee = require('../models/Employee');
+const sequelize = require('../config/db');
+
+const normalizeTime = (value) => String(value || '').trim().slice(0, 5);
+
+const findDuplicateShift = async ({ companyId, shiftName, startTime, endTime, excludeId }) => {
+    const shifts = await ShiftType.findAll({
+        where: { company_id: companyId },
+        attributes: ['id', 'type', 'start_time', 'end_time'],
+    });
+    const normalizedName = shiftName.trim().toLowerCase();
+
+    return shifts.find((shift) =>
+        String(shift.id) !== String(excludeId || '') &&
+        String(shift.type || '').trim().toLowerCase() === normalizedName &&
+        normalizeTime(shift.start_time) === normalizeTime(startTime) &&
+        normalizeTime(shift.end_time) === normalizeTime(endTime),
+    );
+};
+
+const duplicateShiftResponse = (res) => res.status(409).json({
+    success: false,
+    message: 'A shift with this name and time already exists for this company.',
+});
 
 router.post('/', async (req, res, next) => {
     try {
@@ -24,6 +47,10 @@ router.post('/', async (req, res, next) => {
             });
         }
 
+        if (await findDuplicateShift({ companyId, shiftName, startTime: start_time, endTime: end_time })) {
+            return duplicateShiftResponse(res);
+        }
+
         const shift = await ShiftType.create({
             company_id: companyId,
             type: shiftName,
@@ -40,6 +67,9 @@ router.post('/', async (req, res, next) => {
         });
 
     } catch (err) {
+        if (err.name === 'SequelizeUniqueConstraintError') {
+            return duplicateShiftResponse(res);
+        }
         next(err);
     }
 });
@@ -103,6 +133,16 @@ router.put('/:id', async (req, res, next) => {
             });
         }
 
+        if (await findDuplicateShift({
+            companyId: shift.company_id,
+            shiftName,
+            startTime: start_time,
+            endTime: end_time,
+            excludeId: shift.id,
+        })) {
+            return duplicateShiftResponse(res);
+        }
+
         await shift.update({
             type: shiftName,
             start_time,
@@ -118,10 +158,7 @@ router.put('/:id', async (req, res, next) => {
         });
     } catch (err) {
         if (err.name === 'SequelizeUniqueConstraintError') {
-            return res.status(409).json({
-                success: false,
-                message: 'Shift already exists for this company',
-            });
+            return duplicateShiftResponse(res);
         }
 
         return next(err);
@@ -146,11 +183,13 @@ router.delete('/:id', async (req, res, next) => {
             });
         }
 
-        await Employee.update(
-            { shift_type_id: null },
-            { where: { shift_type_id: shift.id, ...(companyId ? { company_id: companyId } : {}) } },
-        );
-        await shift.destroy();
+        await sequelize.transaction(async (transaction) => {
+            await Employee.update(
+                { shift_type_id: null },
+                { where: { shift_type_id: shift.id, company_id: shift.company_id }, transaction },
+            );
+            await shift.destroy({ transaction });
+        });
 
         return res.status(200).json({
             success: true,

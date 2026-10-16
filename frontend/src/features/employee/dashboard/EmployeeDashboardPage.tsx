@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { isTaskAssignedToUser } from "@/lib/task-visibility";
 import { filterEmployeeScopedRecords } from "@/lib/employee-scope";
+import { collapseLegacyMultiDayLeaves, inclusiveLeaveDays } from "@/lib/leave-utils";
 
 type ShiftSummary = {
   id?: number | string;
@@ -91,6 +92,8 @@ type LeaveRecord = {
   status?: string;
   leave_date?: string;
   end_date?: string;
+  created_at?: string;
+  legacy_group_ids?: Array<number | string>;
   duration?: string;
   reason?: string;
   action_reason?: string;
@@ -98,6 +101,27 @@ type LeaveRecord = {
   type?: { type_name?: string; name?: string } | string;
   user?: { id?: number | string; name?: string };
   employee?: { id?: number | string; name?: string };
+};
+
+type BreakRecord = {
+  id: number | string;
+  companyId?: number | string;
+  company_id?: number | string;
+  employeeId?: number | string;
+  employee_id?: number | string;
+  employeeRecordId?: number | string | null;
+  employee_record_id?: number | string | null;
+  workDate?: string;
+  work_date?: string;
+  breakStart?: string | null;
+  break_start?: string | null;
+  breakEnd?: string | null;
+  break_end?: string | null;
+  breakCount?: number | string;
+  break_count?: number | string;
+  durationMinutes?: number | string;
+  duration_minutes?: number | string;
+  is_open?: boolean;
 };
 
 type TaskRecord = {
@@ -207,6 +231,35 @@ function getLeaveType(leave: LeaveRecord) {
   return leave.leave_type?.type_name || leave.leave_type?.name || leave.type?.type_name || leave.type?.name || "Leave";
 }
 
+function getBreakEmployeeId(record: BreakRecord) {
+  return String(record.employeeId || record.employee_id || "");
+}
+
+function getBreakEmployeeRecordId(record: BreakRecord) {
+  return String(record.employeeRecordId || record.employee_record_id || "");
+}
+
+function getBreakWorkDate(record: BreakRecord) {
+  return record.workDate || record.work_date || "";
+}
+
+function getBreakStartTime(record: BreakRecord) {
+  return record.breakStart || record.break_start || "";
+}
+
+function getBreakEndTime(record: BreakRecord) {
+  return record.breakEnd || record.break_end || "";
+}
+
+function getBreakDuration(record: BreakRecord) {
+  const minutes = Number(record.durationMinutes ?? record.duration_minutes ?? 0);
+  if (!Number.isFinite(minutes) || minutes <= 0) return "--";
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (!hours) return `${remainingMinutes} min`;
+  return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+}
+
 function getShiftLabel(shift?: ShiftSummary) {
   if (!shift) return "No shift assigned";
   return `${getShiftName(shift)} - ${shift.start_time || "--:--"} to ${shift.end_time || "--:--"}`;
@@ -235,6 +288,7 @@ export default function EmployeeDashboard() {
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
+  const [breaks, setBreaks] = useState<BreakRecord[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,11 +325,18 @@ export default function EmployeeDashboard() {
         const currentEmployee = isCurrentEmployee ? employee : null;
         setEmployees(currentEmployee ? [currentEmployee] : []);
 
-        const [attendanceResponse, leaveResponse, taskResponse, eventResponse] = await Promise.allSettled([
+        const [attendanceResponse, leaveResponse, taskResponse, eventResponse, breakResponse] = await Promise.allSettled([
           api.get(`/employee/${encodeURIComponent(String(user.id))}/attendance`),
           api.get(`/leave?employee_id=${encodeURIComponent(String(user.id))}`),
           api.get(user?.id ? `/task?include=project,users&user_id=${encodeURIComponent(String(user.id))}` : "/task?include=project,users"),
           api.get(userScope ? `/event?${userScope}` : "/event"),
+          api.get("/attendance/breaks", {
+            params: {
+              company_id: currentEmployee?.company_id || user?.company_id,
+              employeeId: deviceEmployeeId,
+              limit: 20,
+            },
+          }),
         ]);
 
         const deviceEmployeeId = String(
@@ -294,8 +355,10 @@ export default function EmployeeDashboard() {
         }
         if (leaveResponse.status === "fulfilled") {
           setLeaves(
-            extractRecords<LeaveRecord>(leaveResponse.value.data)
-              .filter((leave) => String(getLeaveEmployeeId(leave)) === applicationEmployeeId),
+            collapseLegacyMultiDayLeaves(
+              extractRecords<LeaveRecord>(leaveResponse.value.data)
+                .filter((leave) => String(getLeaveEmployeeId(leave)) === applicationEmployeeId),
+            ),
           );
         }
         if (taskResponse.status === "fulfilled") {
@@ -311,6 +374,13 @@ export default function EmployeeDashboard() {
               user,
               { includePublic: false },
             ),
+          );
+        }
+        if (breakResponse.status === "fulfilled") {
+          setBreaks(
+            extractRecords<BreakRecord>(breakResponse.value.data)
+              .filter((record) => getBreakEmployeeId(record) === deviceEmployeeId)
+              .filter((record) => !getBreakEmployeeRecordId(record) || getBreakEmployeeRecordId(record) === applicationEmployeeId),
           );
         }
       } catch {
@@ -489,6 +559,18 @@ export default function EmployeeDashboard() {
         employee_name: currentEmployee?.name || user?.name || "Employee",
       });
       setIsOnBreak((current) => !current);
+      try {
+        const breakResponse = await api.get("/attendance/breaks", {
+          params: { company_id: companyId, employeeId: deviceEmployeeId, limit: 20 },
+        });
+        setBreaks(
+          extractRecords<BreakRecord>(breakResponse.data)
+            .filter((record) => getBreakEmployeeId(record) === deviceEmployeeId)
+            .filter((record) => !getBreakEmployeeRecordId(record) || getBreakEmployeeRecordId(record) === employeeId),
+        );
+      } catch {
+        // Keep the break action successful if the history refresh fails.
+      }
       showToast(isOnBreak ? "Break ended. Admin notified." : "Break started. Admin notified.", "success");
     } catch (error) {
       console.error("Break update failed:", error);
@@ -616,7 +698,9 @@ export default function EmployeeDashboard() {
                           </div>
                           <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                             {formatDate(leave.leave_date)}{leave.end_date && leave.end_date !== leave.leave_date ? ` - ${formatDate(leave.end_date)}` : ""}
-                            {leave.duration ? ` · ${leave.duration}` : ""}
+                            {leave.duration?.toLowerCase() === "multiple"
+                              ? ` · ${inclusiveLeaveDays(leave.leave_date || "", leave.end_date || leave.leave_date || "")} DAYS`
+                              : leave.duration ? ` · ${leave.duration}` : ""}
                           </p>
                           <p className="mt-2 text-xs text-gray-600">{leave.reason || "No reason provided"}</p>
                           {leave.action_reason && <p className="mt-1 text-[10px] font-semibold text-gray-400">Response: {leave.action_reason}</p>}
@@ -626,6 +710,40 @@ export default function EmployeeDashboard() {
                   );
                 }) : (
                   <div className="px-6 py-10 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">No leave requests yet</div>
+                )}
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden border-none bg-white p-0 shadow-sm">
+              <div className="border-b border-gray-50 px-6 py-5">
+                <h3 className="flex items-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-800">
+                  <Coffee className="mr-2 h-4 w-4 text-primary" />
+                  My Breaks
+                </h3>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {breaks.slice(0, 5).length > 0 ? breaks.slice(0, 5).map((record) => {
+                  const breakEnd = getBreakEndTime(record);
+                  const onBreak = Boolean(record.is_open || !breakEnd);
+                  return (
+                    <div key={`${getBreakWorkDate(record)}-${record.id}`} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+                      <div>
+                        <p className="m-0 text-xs font-bold text-gray-800">{formatDate(getBreakWorkDate(record))}</p>
+                        <p className="m-0 mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          {displayTime(getBreakStartTime(record))} - {breakEnd ? displayTime(breakEnd) : "In progress"}
+                          {` · ${Number(record.breakCount ?? record.break_count ?? 1) || 1} ${(Number(record.breakCount ?? record.break_count ?? 1) || 1) === 1 ? "break" : "breaks"}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-black text-gray-600">{getBreakDuration(record)}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-[8px] font-black uppercase tracking-widest ${onBreak ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600"}`}>
+                          {onBreak ? "On Break" : "On Seat"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <div className="px-6 py-8 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">No breaks recorded yet</div>
                 )}
               </div>
             </Card>

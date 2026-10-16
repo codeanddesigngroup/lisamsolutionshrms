@@ -60,8 +60,9 @@ export default function LeaveReportPage() {
     return employees.map((employee) => {
       const employeeId = String(employee.id);
       const employeeLeaves = leaves.filter((leave) => {
-        const date = getLeaveDate(leave);
-        return getLeaveEmployeeId(leave) === employeeId && (!startDate || date >= startDate) && (!endDate || date <= endDate);
+        const date = getLeaveDate(leave).slice(0, 10);
+        const leaveEndDate = String(leave.end_date || date).slice(0, 10);
+        return getLeaveEmployeeId(leave) === employeeId && (!startDate || leaveEndDate >= startDate) && (!endDate || date <= endDate);
       });
       const quotas = leaveQuotas.filter((quota) => getLeaveEmployeeId(quota) === employeeId);
       const total = quotas.length > 0
