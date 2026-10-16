@@ -5,6 +5,7 @@ const { Op } = require('sequelize');
 const Leave = require('../models/Leave');
 const LeaveType = require('../models/LeaveType');
 const Employee = require('../models/Employee');
+const LeaveQuota = require('../models/LeaveQuota');
 
 const normalizeStatus = (value) => {
   if (['approved', 'rejected', 'cancelled'].includes(value)) return value;
@@ -44,6 +45,13 @@ const dateRangeFromBody = (body) => {
     : startDate;
 
   return { startDate, endDate };
+};
+
+const leaveUnits = (duration, startDate, endDate) => {
+  if (String(duration || '').toLowerCase().includes('half')) return 0.5;
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate || startDate}T00:00:00Z`);
+  return Math.max(Math.floor((end - start) / 86400000) + 1, 1);
 };
 
 router.get('/', async (req, res, next) => {
@@ -88,10 +96,13 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const employeeId = req.body.employee_id || req.body.user_id || req.body.user?.id;
+    const isEmployeeRequest = String(req.get('X-User-Role') || '').toLowerCase() === 'employee';
+    const employeeId = isEmployeeRequest
+      ? req.get('X-User-Id')
+      : req.body.employee_id || req.body.user_id || req.body.user?.id;
     const leaveTypeId = req.body.leave_type_id || req.body.type_id || req.body.type?.id || null;
     const employee = employeeId ? await Employee.findByPk(employeeId) : null;
-    const companyId = getCompanyFilter(req.query, req.body) || employee?.company_id;
+    const companyId = isEmployeeRequest ? employee?.company_id : getCompanyFilter(req.query, req.body) || employee?.company_id;
     const { startDate, endDate } = dateRangeFromBody(req.body);
     const reason = String(req.body.reason || '').trim();
 
@@ -102,11 +113,40 @@ router.post('/', async (req, res, next) => {
       });
     }
 
+    if (isEmployeeRequest && (!employee || !leaveTypeId)) {
+      return res.status(400).json({ success: false, message: 'Employee and leave type are required' });
+    }
+
     if (endDate < startDate) {
       return res.status(400).json({
         success: false,
         message: 'Leave end date must be on or after the start date',
       });
+    }
+
+    if (isEmployeeRequest) {
+      const requestedUnits = leaveUnits(req.body.duration, startDate, endDate);
+      const quota = await LeaveQuota.findOne({
+        where: { company_id: companyId, employee_id: employeeId, leave_type_id: leaveTypeId },
+      });
+      if (!quota) {
+        return res.status(400).json({ success: false, message: 'No leave balance is assigned for this leave type' });
+      }
+
+      const existingLeaves = await Leave.findAll({
+        where: { company_id: companyId, employee_id: employeeId, leave_type_id: leaveTypeId, status: { [Op.in]: ['approved', 'pending'] } },
+        attributes: ['duration', 'leave_date', 'end_date'],
+      });
+      const usedUnits = existingLeaves.reduce((total, existing) => total + leaveUnits(existing.duration, existing.leave_date, existing.end_date), 0);
+      const remainingUnits = Math.max(Number(quota.no_of_leaves || 0) - usedUnits, 0);
+      if (requestedUnits > remainingUnits) {
+        return res.status(400).json({
+          success: false,
+          message: remainingUnits > 0
+            ? `Not enough leave balance. Remaining: ${remainingUnits} day(s)`
+            : 'No leave balance remaining for this leave type',
+        });
+      }
     }
 
     const leave = await Leave.create({

@@ -19,6 +19,19 @@ type OptionRecord = {
   company_id?: number | string | null;
 };
 
+type LeaveRecord = {
+  leave_type_id?: number | string;
+  status?: string;
+  leave_date?: string;
+  end_date?: string;
+  duration?: string;
+};
+
+type QuotaRecord = {
+  leave_type_id?: number | string;
+  no_of_leaves?: number | string;
+};
+
 const getApiErrorMessage = (err: unknown, fallback: string) => {
   if (typeof err === "object" && err && "response" in err) {
     const response = (err as { response?: { data?: { message?: string; error?: string } } }).response;
@@ -52,6 +65,8 @@ export default function CreateLeavePage() {
   const { user, hasPermission } = useAuth();
   const [employees, setEmployees] = useState<OptionRecord[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<OptionRecord[]>([]);
+  const [employeeLeaves, setEmployeeLeaves] = useState<LeaveRecord[]>([]);
+  const [employeeQuotas, setEmployeeQuotas] = useState<QuotaRecord[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -65,7 +80,22 @@ export default function CreateLeavePage() {
     reason: "",
     status: "pending"
   });
-  const canManageCompanyLeaves = user?.role === "admin" || hasPermission("leaves.approve") || hasPermission("leaves.manage");
+  const canManageCompanyLeaves = user?.role === "admin" || (user?.role !== "employee" && (hasPermission("leaves.approve") || hasPermission("leaves.manage")));
+  const selectedQuota = employeeQuotas.find((quota) => String(quota.leave_type_id) === String(formData.type_id));
+  const allocatedDays = Number(selectedQuota?.no_of_leaves || 0);
+  const usedDays = employeeLeaves
+    .filter((leave) => String(leave.leave_type_id || "") === String(formData.type_id) && ["approved", "pending"].includes(String(leave.status || "").toLowerCase()))
+    .reduce((total, leave) => {
+      if (String(leave.duration || "").toLowerCase().includes("half")) return total + 0.5;
+      const start = new Date(`${leave.leave_date}T00:00:00`);
+      const end = new Date(`${leave.end_date || leave.leave_date}T00:00:00`);
+      return total + (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) ? 1 : Math.floor((end.getTime() - start.getTime()) / 86400000) + 1);
+    }, 0);
+  const remainingDays = Math.max(allocatedDays - usedDays, 0);
+  const requestedDays = formData.duration === "half day" ? 0.5 : formData.duration === "multiple" && formData.leave_date && formData.end_date
+    ? Math.floor((parseDateOnly(formData.end_date).getTime() - parseDateOnly(formData.leave_date).getTime()) / 86400000) + 1
+    : 1;
+  const insufficientBalance = !canManageCompanyLeaves && Boolean(formData.type_id) && (!selectedQuota || requestedDays > remainingDays);
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -83,7 +113,16 @@ export default function CreateLeavePage() {
             String(employee.id) === String(user?.id || "") ||
             employee.email === user?.email
           );
-          setFormData((current) => ({ ...current, user_id: String(selfEmployee?.id || user?.id || "") }));
+          const selfEmployeeId = String(selfEmployee?.id || "");
+          setFormData((current) => ({ ...current, user_id: selfEmployeeId }));
+          if (selfEmployeeId) {
+            const [quotaRes, leaveRes] = await Promise.all([
+              api.get("/leave-quotas", { params: { employee_id: selfEmployeeId } }),
+              api.get("/leave", { params: { employee_id: selfEmployeeId } }),
+            ]);
+            setEmployeeQuotas(quotaRes.data.data || []);
+            setEmployeeLeaves(leaveRes.data.data || []);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch leave options:", err);
@@ -102,6 +141,10 @@ export default function CreateLeavePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (insufficientBalance) {
+      setError(selectedQuota ? `Not enough leave balance. Remaining: ${remainingDays} day(s).` : "No leave balance is assigned for this leave type.");
+      return;
+    }
     setSaving(true);
     setError("");
 
@@ -211,6 +254,11 @@ export default function CreateLeavePage() {
                     <option key={type.id} value={type.id}>{type.type_name}</option>
                   ))}
                 </select>
+                {!canManageCompanyLeaves && formData.type_id && (
+                  <p className={`text-xs font-semibold ${remainingDays > 0 ? "text-gray-500" : "text-red-600"}`}>
+                    {selectedQuota ? `${remainingDays} day(s) remaining` : "No balance assigned for this leave type"}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -292,7 +340,7 @@ export default function CreateLeavePage() {
                   Cancel
                 </Button>
               </Link>
-              <Button type="submit" disabled={saving || loadingOptions} className="bg-primary text-white text-[10px] font-black px-8 h-10 uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center">
+              <Button type="submit" disabled={saving || loadingOptions || insufficientBalance} className="bg-primary text-white text-[10px] font-black px-8 h-10 uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center">
                 {saving ? (
                   <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" />
                 ) : (
