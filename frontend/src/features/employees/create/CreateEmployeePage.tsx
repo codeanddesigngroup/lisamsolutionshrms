@@ -76,7 +76,7 @@ const staticPermissionModules = [
   { key: "shifts", label: "Shift Types", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: [] },
   { key: "attendance-self", label: "My Attendance", group: "HR", actions: ["View"], enabled: ["View"] },
   { key: "attendance", label: "Attendance", group: "HR", actions: ["View", "Create", "Edit", "Approve", "Export", "Manage"], enabled: [] },
-  { key: "breaks", label: "Breaks", group: "HR", actions: ["View"], enabled: ["View"] },
+  { key: "breaks", label: "Breaks", group: "HR", actions: ["View"], enabled: [] },
   { key: "leaves", label: "Leaves", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Approve", "Manage"], enabled: ["View", "Create", "Edit", "Delete"] },
   { key: "holidays", label: "Holidays", group: "HR", actions: ["View", "Create", "Edit", "Delete", "Manage"], enabled: ["View"] },
   { key: "projects", label: "Projects", group: "Work", actions: ["View", "Create", "Edit", "Delete", "Export", "Manage"], enabled: [] },
