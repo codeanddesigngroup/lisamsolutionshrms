@@ -315,6 +315,7 @@ export default function EmployeeDashboard() {
       setEmployees([]);
       setAttendance([]);
       setLeaves([]);
+      setBreaks([]);
       setTasks([]);
       setEvents([]);
       try {
@@ -324,6 +325,13 @@ export default function EmployeeDashboard() {
         const isCurrentEmployee = employee && String(employee.id) === String(user.id);
         const currentEmployee = isCurrentEmployee ? employee : null;
         setEmployees(currentEmployee ? [currentEmployee] : []);
+        const deviceEmployeeId = String(
+          currentEmployee?.employee_id ||
+          currentEmployee?.employee_detail?.employee_id ||
+          currentEmployee?.id ||
+          user.id,
+        );
+        const applicationEmployeeId = String(currentEmployee?.id || user.id);
 
         const [attendanceResponse, leaveResponse, taskResponse, eventResponse, breakResponse] = await Promise.allSettled([
           api.get(`/employee/${encodeURIComponent(String(user.id))}/attendance`),
@@ -338,14 +346,6 @@ export default function EmployeeDashboard() {
             },
           }),
         ]);
-
-        const deviceEmployeeId = String(
-          currentEmployee?.employee_id ||
-          currentEmployee?.employee_detail?.employee_id ||
-          currentEmployee?.id ||
-          user.id,
-        );
-        const applicationEmployeeId = String(currentEmployee?.id || user.id);
 
         if (attendanceResponse.status === "fulfilled") {
           setAttendance(
