@@ -5,12 +5,11 @@ import Link from "next/link";
 import { 
   Plus, 
   Calendar, 
-  List, 
   Settings, 
-  ChevronLeft, 
-  ChevronRight,
   RefreshCw,
-  XCircle
+  Download,
+  MoreVertical,
+  Eye,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import Button from "@/components/ui/Button";
@@ -18,7 +17,7 @@ import Card from "@/components/ui/Card";
 import api from "@/lib/api";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
-import { isLeaveDateInRange, leaveUnits as getLeaveUnits } from "@/lib/hr-utils";
+import { leaveUnits as getLeaveUnits } from "@/lib/hr-utils";
 import { collapseLegacyMultiDayLeaves, inclusiveLeaveDays } from "@/lib/leave-utils";
 
 type LeaveRecord = {
@@ -26,7 +25,7 @@ type LeaveRecord = {
   employee_id?: number | string;
   leave_type_id?: number | string;
   user?: { id?: number | string; name?: string };
-  employee?: { id?: number | string; name?: string };
+  employee?: { id?: number | string; employee_id?: number | string; name?: string; avatar?: string | null };
   date?: string;
   leave_date?: string;
   end_date?: string;
@@ -37,7 +36,7 @@ type LeaveRecord = {
   status: string;
   duration?: string;
   type?: string | { id?: number | string; type_name?: string };
-  leave_type?: { id?: number | string; type_name?: string; color?: string };
+  leave_type?: { id?: number | string; type_name?: string; color?: string; paid?: number | string | boolean };
 };
 
 type LeaveQuota = {
@@ -66,11 +65,13 @@ export default function LeaveDashboardPage() {
   const canCreateLeaves = hasHydrated && (hasPermission("leaves.create") || hasPermission("leaves.manage"));
   const canManageCompanyLeaves = hasHydrated && (hasPermission("leaves.approve") || hasPermission("leaves.manage"));
   const [loading, setLoading] = useState(true);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [leaveQuotas, setLeaveQuotas] = useState<LeaveQuota[]>([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [selectedLeaveIds, setSelectedLeaveIds] = useState<string[]>([]);
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setHasHydrated(true), 0);
@@ -107,14 +108,6 @@ export default function LeaveDashboardPage() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHydrated]);
-
-  const nextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() + 1)));
-  };
-
-  const prevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() - 1)));
-  };
 
   const handleStatus = async (id: number | string, status: "approved" | "rejected") => {
     if (!canManageCompanyLeaves) {
@@ -168,6 +161,59 @@ export default function LeaveDashboardPage() {
     };
   });
 
+  const displayedLeaves = leaves;
+  const pageCount = Math.max(1, Math.ceil(displayedLeaves.length / pageSize));
+  const pageLeaves = displayedLeaves.slice(page * pageSize, (page + 1) * pageSize);
+
+  const toggleLeaveSelection = (id: number | string) => {
+    const key = String(id);
+    setSelectedLeaveIds((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  };
+
+  const togglePageSelection = () => {
+    const pageIds = pageLeaves.map((leave) => String(leave.id));
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedLeaveIds.includes(id));
+    setSelectedLeaveIds((current) => allSelected ? current.filter((id) => !pageIds.includes(id)) : [...new Set([...current, ...pageIds])]);
+  };
+
+  const handleExport = () => {
+    const selected = displayedLeaves.filter((leave) => selectedLeaveIds.includes(String(leave.id)));
+    const rows = selected.length ? selected : displayedLeaves;
+    const csvValue = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const csv = [
+      ["Employee", "Start Date", "End Date", "Duration", "Status", "Leave Type", "Paid"],
+      ...rows.map((leave) => [
+        leave.employee?.name || leave.user?.name || "Unknown",
+        leave.leave_date || leave.date || "",
+        leave.end_date || leave.leave_date || leave.date || "",
+        getDurationLabel(leave),
+        leave.status,
+        typeof leave.type === "string" ? leave.type : leave.leave_type?.type_name || leave.type?.type_name || "Leave",
+        leave.leave_type?.paid === undefined ? "" : (leave.leave_type.paid === true || Number(leave.leave_type.paid) === 1 ? "Paid" : "Unpaid"),
+      ]),
+    ].map((row) => row.map(csvValue).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "leave-records.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDelete = async (leave: LeaveRecord) => {
+    if (!window.confirm("Delete this leave record?")) return;
+    try {
+      await Promise.all((leave.legacy_group_ids || [leave.id]).map((id) => api.delete(`/leave/${id}`)));
+      setLeaves((current) => current.filter((item) => item.id !== leave.id));
+      setPendingLeaves((current) => current.filter((item) => item.id !== leave.id));
+      setSelectedLeaveIds((current) => current.filter((id) => id !== String(leave.id)));
+      setOpenActionId(null);
+      showToast("Leave record deleted", "success");
+    } catch {
+      showToast("Failed to delete leave record", "error");
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-full overflow-x-hidden pb-10">
@@ -192,25 +238,11 @@ export default function LeaveDashboardPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-             {canManageCompanyLeaves && (
-             <Link href="/leaves/all" className="btn btn-default">
-                <List className="h-4 w-4 mr-2" /> All Leaves
-             </Link>
-             )}
-             {canManageCompanyLeaves && (
-             <Link href="/leaves/settings" className="btn btn-default p-2">
-                <Settings className="h-4 w-4" />
-             </Link>
-             )}
-             {canCreateLeaves && (
-               <Link href="/leaves/create" className="btn btn-info">
-                  <Plus className="h-4 w-4 mr-2" /> {canManageCompanyLeaves ? "Assign Leave" : "Apply Leave"}
-               </Link>
-             )}
-             <Button onClick={fetchData} className="btn-default p-2">
-               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-             </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canCreateLeaves && <Link href="/leaves/create" className="inline-flex h-10 items-center rounded bg-blue-600 px-4 text-xs font-bold text-white transition-colors hover:bg-blue-700"><Plus className="mr-2 h-4 w-4" />New Leave</Link>}
+            <Button onClick={handleExport} className="inline-flex h-10 items-center rounded border border-gray-300 bg-white px-4 text-xs font-semibold text-gray-600 hover:bg-gray-50"><Download className="mr-2 h-4 w-4" />Export</Button>
+            {canManageCompanyLeaves && <Link href="/leaves/settings" aria-label="Leave settings" title="Leave settings" className="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"><Settings className="h-4 w-4" /></Link>}
+            <Button onClick={fetchData} aria-label="Refresh leaves" title="Refresh" className="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-200 bg-white p-0 text-gray-600 hover:bg-gray-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></Button>
           </div>
         </div>
 
@@ -244,161 +276,67 @@ export default function LeaveDashboardPage() {
           </Card>
         )}
 
-        {!canManageCompanyLeaves && (
-          <Card className="overflow-hidden p-0">
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-              <div>
-                <h4 className="m-0">My Leave Records</h4>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">All submitted leave requests</p>
-              </div>
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black text-primary">{leaves.length} Records</span>
+        <Card className="overflow-hidden rounded-md border border-gray-200 bg-white p-0 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-xs">
+                <thead className="border-b border-gray-200 text-gray-500">
+                  <tr>
+                    <th className="w-12 px-5 py-3"><input type="checkbox" aria-label="Select this page" checked={pageLeaves.length > 0 && pageLeaves.every((leave) => selectedLeaveIds.includes(String(leave.id)))} onChange={togglePageSelection} className="h-3.5 w-3.5 accent-blue-600" /></th>
+                    <th className="px-3 py-3 font-medium">Employee</th>
+                    <th className="px-3 py-3 font-medium">Leave Date</th>
+                    <th className="px-3 py-3 font-medium">Duration</th>
+                    <th className="px-3 py-3 font-medium">Leave Status</th>
+                    <th className="px-3 py-3 font-medium">Leave Type</th>
+                    <th className="px-3 py-3 font-medium">Paid</th>
+                    <th className="w-16 px-4 py-3 text-center font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pageLeaves.map((leave) => {
+                    const employeeName = leave.employee?.name || leave.user?.name || "Unknown";
+                    const start = String(leave.leave_date || leave.date || "").slice(0, 10);
+                    const end = String(leave.end_date || start).slice(0, 10);
+                    const startDate = start ? new Date(`${start}T00:00:00`) : null;
+                    const endDate = end ? new Date(`${end}T00:00:00`) : null;
+                    const dateLabel = startDate ? `${startDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })} (${startDate.toLocaleDateString("en-US", { weekday: "long" })})${endDate && end !== start ? ` - ${endDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })} (${endDate.toLocaleDateString("en-US", { weekday: "long" })})` : ""}` : "--";
+                    const status = String(leave.status || "pending").toLowerCase();
+                    const statusColor = status === "approved" ? "bg-green-500" : status === "rejected" || status === "cancelled" ? "bg-red-600" : "bg-amber-400";
+                    const typeName = leave.leave_type?.type_name || (typeof leave.type === "object" ? leave.type.type_name : leave.type) || "Leave";
+                    const paid = leave.leave_type?.paid;
+                    const paidLabel = paid === undefined ? "--" : paid === true || Number(paid) === 1 ? "Paid" : "Unpaid";
+                    const actionKey = String(leave.id);
+
+                    return (
+                      <tr key={leave.id} className="h-[50px] text-gray-700 hover:bg-gray-50/70">
+                        <td className="px-5 py-2"><input type="checkbox" aria-label={`Select ${employeeName} leave`} checked={selectedLeaveIds.includes(actionKey)} onChange={() => toggleLeaveSelection(leave.id)} className="h-3.5 w-3.5 accent-blue-600" /></td>
+                        <td className="px-3 py-2"><div className="flex items-center gap-2.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[10px] font-bold text-sky-700">{employeeName.slice(0, 1).toUpperCase()}</div><div className="min-w-0"><div className="truncate font-medium text-gray-800">{employeeName}{String(user?.name || "").toLowerCase() === employeeName.toLowerCase() && <span className="ml-1 rounded bg-gray-500 px-1 py-0.5 text-[8px] font-bold text-white">It&apos;s you</span>}</div><div className="text-[10px] text-gray-500">{leave.employee?.employee_id || "Employee"}</div></div></div></td>
+                        <td className="px-3 py-2 font-medium text-gray-800">{dateLabel}</td>
+                        <td className="px-3 py-2">{getDurationLabel(leave)}</td>
+                        <td className="px-3 py-2"><span className="inline-flex items-center gap-2 capitalize"><span className={`h-2.5 w-2.5 rounded-full ${statusColor}`} />{status}</span></td>
+                        <td className="px-3 py-2"><span className="rounded-sm bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{typeName}</span></td>
+                        <td className="px-3 py-2"><span className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold text-white ${paidLabel === "Paid" ? "bg-green-600" : paidLabel === "Unpaid" ? "bg-gray-500" : "bg-gray-300"}`}>{paidLabel}</span></td>
+                        <td className="relative px-4 py-2 text-center">
+                          <button type="button" aria-label={`Actions for ${employeeName} leave`} aria-expanded={openActionId === actionKey} onClick={() => setOpenActionId((current) => current === actionKey ? null : actionKey)} className="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-300 text-gray-500 hover:bg-gray-100"><MoreVertical className="h-4 w-4" /></button>
+                          {openActionId === actionKey && <div className="absolute right-10 top-1 z-20 w-36 rounded border border-gray-200 bg-white py-1 text-left shadow-lg">
+                            <Link href={`/leaves/${leave.id}`} onClick={() => setOpenActionId(null)} className="flex items-center gap-2 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Eye className="h-3.5 w-3.5" />View details</Link>
+                            {canManageCompanyLeaves && status === "pending" && <><button type="button" onClick={() => handleStatus(leave.id, "approved")} className="block w-full px-3 py-2 text-left text-xs text-green-700 hover:bg-green-50">Approve</button><button type="button" onClick={() => handleStatus(leave.id, "rejected")} className="block w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">Reject</button></>}
+                            {!canManageCompanyLeaves && status === "pending" && <button type="button" onClick={() => handleCancel(leave.id)} className="block w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">Cancel request</button>}
+                            {canManageCompanyLeaves && <button type="button" onClick={() => handleDelete(leave)} className="block w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">Delete</button>}
+                          </div>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!loading && pageLeaves.length === 0 && <tr><td colSpan={8} className="py-14 text-center text-sm text-gray-400">No leave records found.</td></tr>}
+                  {loading && <tr><td colSpan={8} className="py-14 text-center text-sm text-gray-400">Loading leave records...</td></tr>}
+                </tbody>
+              </table>
             </div>
-            {leaves.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left">
-                  <thead className="bg-gray-50 text-[9px] font-black uppercase tracking-widest text-gray-400">
-                    <tr>
-                      <th className="px-6 py-3">Leave Type</th>
-                      <th className="px-6 py-3">Date</th>
-                      <th className="px-6 py-3">Duration</th>
-                      <th className="px-6 py-3">Reason</th>
-                      <th className="px-6 py-3">Status</th>
-                      <th className="px-6 py-3">Response</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {leaves.map((leave) => {
-                      const leaveType = leave.leave_type?.type_name || (typeof leave.type === "object" ? leave.type.type_name : leave.type) || "Leave";
-                      const status = leave.status?.toLowerCase() || "pending";
-                      const statusClass = status === "approved"
-                        ? "bg-green-50 text-green-600"
-                        : status === "rejected" || status === "cancelled"
-                          ? "bg-red-50 text-red-600"
-                          : "bg-orange-50 text-orange-600";
-
-                      return (
-                        <tr key={leave.id} className="text-xs text-gray-600">
-                          <td className="px-6 py-4 font-black text-gray-800">{leaveType}</td>
-                          <td className="px-6 py-4 font-semibold">
-                            {leave.leave_date || leave.date || "--"}
-                            {leave.end_date && leave.end_date !== (leave.leave_date || leave.date) ? ` to ${leave.end_date}` : ""}
-                          </td>
-                          <td className="px-6 py-4">{getDurationLabel(leave)}</td>
-                          <td className="max-w-[220px] px-6 py-4">{leave.reason || "--"}</td>
-                          <td className="px-6 py-4">
-                            <span className={`rounded-full px-2.5 py-1 text-[8px] font-black uppercase tracking-widest ${statusClass}`}>{status}</span>
-                          </td>
-                          <td className="max-w-[220px] px-6 py-4 text-gray-400">{leave.action_reason || "--"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="py-12 text-center text-xs font-bold text-gray-400">No leave records found for your account.</div>
-            )}
+            <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-3 text-xs text-gray-600 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex items-center gap-2">Show <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} className="rounded border border-gray-300 bg-white px-2 py-1"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select> entries</label>
+              <div className="flex flex-wrap items-center gap-2"><span className="mr-2">Showing {displayedLeaves.length ? page * pageSize + 1 : 0} to {Math.min((page + 1) * pageSize, displayedLeaves.length)} of {displayedLeaves.length} entries</span><button type="button" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded border border-gray-300 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40">Previous</button><span className="rounded bg-blue-600 px-3 py-2 font-semibold text-white">{page + 1}</span><button type="button" disabled={page + 1 >= pageCount} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} className="rounded border border-gray-300 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40">Next</button></div>
+            </div>
           </Card>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-           
-           {/* Calendar Area */}
-           <div className="lg:col-span-8">
-              <Card className="p-0 overflow-hidden">
-                 <div className="p-6 border-b border-[#f2f2f3] flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                       <button onClick={prevMonth} className="p-1 hover:text-primary"><ChevronLeft className="h-5 w-5" /></button>
-                       <h4 className="m-0 min-w-[150px] text-center">
-                          {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                       </h4>
-                       <button onClick={nextMonth} className="p-1 hover:text-primary"><ChevronRight className="h-5 w-5" /></button>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                       <span className="label label-success">Approved</span>
-                       <span className="label label-warning">Pending</span>
-                    </div>
-                 </div>
-                 
-                 <div className="grid grid-cols-7 border-b border-[#f2f2f3]">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                       <div key={day} className="py-2 text-center text-[10px] uppercase text-gray-400 font-bold">{day}</div>
-                    ))}
-                 </div>
-                 <div className="grid grid-cols-7 min-h-[400px]">
-                    {Array.from({ length: 35 }).map((_, i) => {
-                       const day = i - 3;
-                       const calendarDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-                       const dateKey = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, "0")}-${String(calendarDate.getDate()).padStart(2, "0")}`;
-                       const leave = leaves.find((item) => isLeaveDateInRange(item, dateKey));
-                       
-                       return (
-                         <div key={i} className={`relative p-2 border-r border-b border-t border-l border-[#9e9e9e2f] min-h-[80px] ${day < 1 || day > 31 ? 'bg-gray-50' : ''}`}>
-                            {day >= 1 && day <= 31 && (
-                              <span className={`text-[16px] font-bold ${day === new Date().getDate() ? 'text-primary' : 'text-gray-400'}`}>
-                                 {day}
-                              </span>
-                            )}
-                            
-                            {day >= 1 && day <= 31 && leave && (
-                              <div className={`mt-1 p-1 text-[9px] border-l-2 ${leave.status === 'approved' ? 'bg-green-50 border-green-500 text-green-700' : 'bg-orange-50 border-orange-500 text-orange-700'}`}>
-                                 <div className="truncate">{leave.user?.name || leave.employee?.name || "Unknown"}</div>
-                              </div>
-                            )}
-                         </div>
-                       );
-                    })}
-                 </div>
-              </Card>
-           </div>
-
-           {/* Pending & Actions Column */}
-           <div className="lg:col-span-4 space-y-6">
-              <Card className="p-6">
-                 <h4 className="mb-4">{canManageCompanyLeaves ? "Pending Requests" : "My Pending Requests"}</h4>
-                 <div className="space-y-4">
-                    {pendingLeaves.length > 0 ? pendingLeaves.map((request) => (
-                      <div key={request.id} className="p-4 bg-gray-50 border border-[#f2f2f3]">
-                         <div className="flex items-center justify-between mb-2">
-                            <div className="text-xs font-bold">{request.user?.name || request.employee?.name || "Unknown"}</div>
-                            <span className="text-[10px] text-gray-400">{request.leave_date || request.date}{request.end_date && request.end_date !== (request.leave_date || request.date) ? ` to ${request.end_date}` : ""}</span>
-                         </div>
-                         <div className="text-[11px] text-gray-500 mb-3">{request.reason}</div>
-                         <div className="flex space-x-2">
-                            {canManageCompanyLeaves ? (
-                              <>
-                            <Button onClick={() => handleStatus(request.id, "approved")} className="btn-success p-1 text-[10px]">Approve</Button>
-                            <Button onClick={() => handleStatus(request.id, "rejected")} className="btn-danger p-1 text-[10px]">Reject</Button>
-                              </>
-                            ) : (
-                              <Button onClick={() => handleCancel(request.id)} className="btn-danger p-1 text-[10px]">
-                                <XCircle className="h-3 w-3 mr-1" /> Cancel Request
-                              </Button>
-                            )}
-                         </div>
-                      </div>
-                    )) : (
-                      <div className="text-center text-gray-400 py-10">No pending requests</div>
-                    )}
-                 </div>
-              </Card>
-
-              <div className="white-box bg-secondary text-white">
-                 <h4 className="text-white mb-4">{canManageCompanyLeaves ? "Quick Search" : "My Leave Scope"}</h4>
-                 {canManageCompanyLeaves ? (
-                 <input 
-                   type="text" 
-                   placeholder="FIND STAFF..."
-                   className="form-control bg-white/10 border-white/20 text-white"
-                 />
-                 ) : (
-                  <p className="text-xs font-bold leading-relaxed text-white/75">
-                    Employees can apply for their own leave and cancel pending requests. Approval, rejection, assignment to another employee, and settings remain admin-only.
-                  </p>
-                 )}
-              </div>
-           </div>
-        </div>
       </div>
     </DashboardLayout>
   );

@@ -146,7 +146,14 @@ export const calculateLateAfterGraceMinutes = (clockInTime?: string, shift?: Shi
 export const leaveUnits = (record: HRRecord): number => {
   const duration = String(record.duration || record.leave_type?.duration || "").toLowerCase();
   if (duration.includes("half") || record.half_day === true) return 0.5;
-  return 1;
+
+  const startDate = String(record.leave_date || record.date || record.leaveDate || "").slice(0, 10);
+  const endDate = String(record.end_date || record.endDate || startDate).slice(0, 10);
+  const startTime = Date.parse(`${startDate}T00:00:00Z`);
+  const endTime = Date.parse(`${endDate}T00:00:00Z`);
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime < startTime) return 1;
+
+  return Math.floor((endTime - startTime) / 86400000) + 1;
 };
 
 /**

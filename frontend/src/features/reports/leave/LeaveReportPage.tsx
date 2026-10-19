@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import StableResponsiveContainer from "@/components/charts/StableResponsiveContainer";
 import api from "@/lib/api";
 import { getEmployeeDisplayId, getLeaveDate, getLeaveEmployeeId, leaveUnits, type HRRecord } from "@/lib/hr-utils";
+import { collapseLegacyMultiDayLeaves } from "@/lib/leave-utils";
 
 const today = new Date();
 const defaultStart = new Date(today);
@@ -38,7 +39,7 @@ export default function LeaveReportPage() {
         api.get("/leave-quotas"),
       ]);
       setEmployees(employeeResponse.data.data || []);
-      setLeaves(leaveResponse.data.data || []);
+      setLeaves(collapseLegacyMultiDayLeaves(leaveResponse.data.data || []));
       setLeaveTypes(leaveTypeResponse.data.data || []);
       setLeaveQuotas(quotaResponse.data.data || []);
     } catch (error) {

@@ -7,6 +7,7 @@ import {
   Settings, 
   Check, 
   Trash2, 
+  Pencil,
   Palette,
   Calendar,
   Users,
@@ -33,6 +34,11 @@ type LeaveTypeRecord = { id: number | string; type_name: string; no_of_leaves?: 
 type EmployeeOption = { id: number | string; employee_id?: number | string; name: string };
 type LeaveQuotaRecord = { id: number | string; employee_id: number | string; leave_type_id: number | string; no_of_leaves: number | string; employee?: { name?: string }; leave_type?: { type_name?: string } };
 
+const formatLeaveCount = (value: number | string | undefined) => {
+  const count = Number(value);
+  return Number.isFinite(count) ? String(count) : "";
+};
+
 export default function LeaveSettingsPage() {
   const { showToast } = useToast();
   const { user } = useAuth();
@@ -45,6 +51,7 @@ export default function LeaveSettingsPage() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [leaveQuotas, setLeaveQuotas] = useState<LeaveQuotaRecord[]>([]);
   const [quotaForm, setQuotaForm] = useState({ employee_id: "", leave_type_id: "", no_of_leaves: "" });
+  const [editingQuotaId, setEditingQuotaId] = useState<number | string | null>(null);
   
   // New Leave Type Form
   const [newType, setNewType] = useState({
@@ -61,7 +68,10 @@ export default function LeaveSettingsPage() {
         api.get("/employees"),
         api.get("/leave-quotas"),
       ]);
-      setLeaveTypes(typeResponse.data.data || []);
+      setLeaveTypes((typeResponse.data.data || []).map((type: LeaveTypeRecord) => ({
+        ...type,
+        no_of_leaves: formatLeaveCount(type.no_of_leaves),
+      })));
       setEmployees(employeeResponse.data.data || []);
       setLeaveQuotas(quotaResponse.data.data || []);
     } catch (err) {
@@ -167,14 +177,29 @@ export default function LeaveSettingsPage() {
         leave_type_id: quotaForm.leave_type_id,
         no_of_leaves: totalLeaves,
       });
-      showToast("Employee leave balance assigned successfully.", "success");
+      showToast(editingQuotaId !== null ? "Employee leave balance updated successfully." : "Employee leave balance assigned successfully.", "success");
       setQuotaForm({ employee_id: "", leave_type_id: "", no_of_leaves: "" });
+      setEditingQuotaId(null);
       await fetchData();
     } catch {
       showToast("Failed to assign employee leave balance.", "error");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEditQuota = (quota: LeaveQuotaRecord) => {
+    setEditingQuotaId(quota.id);
+    setQuotaForm({
+      employee_id: String(quota.employee_id),
+      leave_type_id: String(quota.leave_type_id),
+      no_of_leaves: formatLeaveCount(quota.no_of_leaves),
+    });
+  };
+
+  const handleCancelQuotaEdit = () => {
+    setEditingQuotaId(null);
+    setQuotaForm({ employee_id: "", leave_type_id: "", no_of_leaves: "" });
   };
 
   const handleDeleteQuota = async (quotaId: number | string) => {
@@ -332,26 +357,29 @@ export default function LeaveSettingsPage() {
                  <form onSubmit={handleAssignQuota} className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_140px_auto] md:items-end">
                     <div className="space-y-2">
                        <label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Employee</label>
-                       <select value={quotaForm.employee_id} onChange={(event) => setQuotaForm((current) => ({ ...current, employee_id: event.target.value }))} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-black text-gray-700 outline-none focus:ring-2 focus:ring-primary/20">
+                       <select value={quotaForm.employee_id} disabled={editingQuotaId !== null} onChange={(event) => setQuotaForm((current) => ({ ...current, employee_id: event.target.value }))} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-black text-gray-700 outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70">
                           <option value="">Select employee</option>
                           {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} ({employee.employee_id})</option>)}
                        </select>
                     </div>
                     <div className="space-y-2">
                        <label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Leave Type</label>
-                       <select value={quotaForm.leave_type_id} onChange={(event) => {
+                       <select value={quotaForm.leave_type_id} disabled={editingQuotaId !== null} onChange={(event) => {
                          const leaveType = leaveTypes.find((type) => String(type.id) === event.target.value);
-                         setQuotaForm((current) => ({ ...current, leave_type_id: event.target.value, no_of_leaves: String(leaveType?.no_of_leaves ?? current.no_of_leaves) }));
-                       }} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-black text-gray-700 outline-none focus:ring-2 focus:ring-primary/20">
+                         setQuotaForm((current) => ({ ...current, leave_type_id: event.target.value, no_of_leaves: formatLeaveCount(leaveType?.no_of_leaves ?? current.no_of_leaves) }));
+                       }} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-black text-gray-700 outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70">
                           <option value="">Select leave type</option>
                           {leaveTypes.map((type) => <option key={type.id} value={type.id}>{type.type_name}</option>)}
                        </select>
                     </div>
                     <div className="space-y-2">
                        <label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Total Leaves</label>
-                       <input type="number" min="0" step="0.5" value={quotaForm.no_of_leaves} onChange={(event) => setQuotaForm((current) => ({ ...current, no_of_leaves: event.target.value }))} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-black text-gray-700 outline-none focus:ring-2 focus:ring-primary/20" />
+                       <input type="number" min="0" step="1" value={quotaForm.no_of_leaves} onChange={(event) => setQuotaForm((current) => ({ ...current, no_of_leaves: event.target.value }))} readOnly={editingQuotaId === null} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-black text-gray-700 outline-none focus:ring-2 focus:ring-primary/20 read-only:cursor-not-allowed read-only:opacity-70" />
                     </div>
-                    <Button type="submit" disabled={saving} className="h-11 rounded-xl bg-primary px-5 text-[9px] font-black uppercase tracking-widest text-white">{saving ? "Saving..." : "Assign"}</Button>
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={saving} className="h-11 rounded-xl bg-primary px-5 text-[9px] font-black uppercase tracking-widest text-white">{saving ? "Saving..." : editingQuotaId !== null ? "Update" : "Assign"}</Button>
+                      {editingQuotaId !== null && <Button type="button" onClick={handleCancelQuotaEdit} disabled={saving} className="h-11 rounded-xl bg-gray-100 px-4 text-[9px] font-black uppercase tracking-widest text-gray-600">Cancel</Button>}
+                    </div>
                  </form>
 
                  {leaveQuotas.length > 0 && (
@@ -359,7 +387,7 @@ export default function LeaveSettingsPage() {
                      <table className="w-full min-w-[520px]">
                        <thead><tr className="text-left text-[9px] font-black uppercase tracking-widest text-gray-400"><th className="pb-3">Employee</th><th className="pb-3">Leave Type</th><th className="pb-3 text-right">Total Leaves</th><th className="pb-3 text-right">Action</th></tr></thead>
                        <tbody className="divide-y divide-gray-50">
-                         {leaveQuotas.map((quota) => <tr key={quota.id} className="text-[10px] font-bold text-gray-600"><td className="py-3">{quota.employee?.name || employeeName(quota.employee_id)}</td><td className="py-3">{quota.leave_type?.type_name || leaveTypeName(quota.leave_type_id)}</td><td className="py-3 text-right font-black text-primary">{Number(quota.no_of_leaves || 0)}</td><td className="py-3 text-right"><button type="button" onClick={() => handleDeleteQuota(quota.id)} className="rounded-lg bg-red-50 p-2 text-red-500 transition-colors hover:bg-red-500 hover:text-white" title="Delete assignment"><Trash2 className="h-3.5 w-3.5" /></button></td></tr>)}
+                         {leaveQuotas.map((quota) => <tr key={quota.id} className="text-[10px] font-bold text-gray-600"><td className="py-3">{quota.employee?.name || employeeName(quota.employee_id)}</td><td className="py-3">{quota.leave_type?.type_name || leaveTypeName(quota.leave_type_id)}</td><td className="py-3 text-right font-black text-primary">{Number(quota.no_of_leaves || 0)}</td><td className="py-3 text-right"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditQuota(quota)} className="rounded-lg bg-blue-50 p-2 text-primary transition-colors hover:bg-primary hover:text-white" title="Edit assignment" aria-label={`Edit ${quota.employee?.name || employeeName(quota.employee_id)} ${quota.leave_type?.type_name || leaveTypeName(quota.leave_type_id)} balance`}><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => handleDeleteQuota(quota.id)} className="rounded-lg bg-red-50 p-2 text-red-500 transition-colors hover:bg-red-500 hover:text-white" title="Delete assignment" aria-label={`Delete ${quota.employee?.name || employeeName(quota.employee_id)} ${quota.leave_type?.type_name || leaveTypeName(quota.leave_type_id)} balance`}><Trash2 className="h-3.5 w-3.5" /></button></div></td></tr>)}
                        </tbody>
                      </table>
                    </div>

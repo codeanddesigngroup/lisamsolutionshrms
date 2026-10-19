@@ -41,6 +41,7 @@ import {
   leaveUnits,
   type HRRecord,
 } from "@/lib/hr-utils";
+import { collapseLegacyMultiDayLeaves } from "@/lib/leave-utils";
 
 const tabs = [
   { id: "activity", label: "Activity", icon: Activity },
@@ -143,7 +144,7 @@ export default function EmployeeDetailPage() {
       setEmployee(employeeData);
       setProjects((employeeData.projects || allProjects.filter((project) => hasMember(project, employeeData))) as HRRecord[]);
       setTasks((employeeData.tasks || allTasks.filter((task) => hasMember(task, employeeData) || belongsToEmployee(task))) as HRRecord[]);
-      setLeaves((employeeData.leaves || allLeaves.filter((leave) => getLeaveEmployeeId(leave) === employeeId || leave.user?.name === employeeName || leave.employee?.name === employeeName)) as HRRecord[]);
+      setLeaves(collapseLegacyMultiDayLeaves((employeeData.leaves || allLeaves.filter((leave) => getLeaveEmployeeId(leave) === employeeId || leave.user?.name === employeeName || leave.employee?.name === employeeName)) as HRRecord[]));
       setDocuments(allDocs.filter((row) => belongsToEmployee(row)));
       setActivities(allActivities.filter((row) => belongsToEmployee(row)).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))));
       setAttendanceRows(allAttendance.filter((row) => getAttendanceEmployeeId(row) === employeeId || row.employee?.name === employeeName));

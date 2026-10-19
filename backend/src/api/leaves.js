@@ -124,29 +124,57 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    if (isEmployeeRequest) {
-      const requestedUnits = leaveUnits(req.body.duration, startDate, endDate);
-      const quota = await LeaveQuota.findOne({
-        where: { company_id: companyId, employee_id: employeeId, leave_type_id: leaveTypeId },
+    if (String(req.body.duration || '').toLowerCase() === 'multiple' && endDate === startDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Multiple-day leave must end after the start date',
       });
-      if (!quota) {
-        return res.status(400).json({ success: false, message: 'No leave balance is assigned for this leave type' });
-      }
+    }
 
-      const existingLeaves = await Leave.findAll({
-        where: { company_id: companyId, employee_id: employeeId, leave_type_id: leaveTypeId, status: { [Op.in]: ['approved', 'pending'] } },
-        attributes: ['duration', 'leave_date', 'end_date'],
+    if (!leaveTypeId) {
+      return res.status(400).json({ success: false, message: 'Leave type is required' });
+    }
+
+    const overlappingLeave = await Leave.findOne({
+      where: {
+        company_id: companyId,
+        employee_id: employeeId,
+        status: { [Op.in]: ['pending', 'approved'] },
+        leave_date: { [Op.lte]: endDate },
+        [Op.or]: [
+          { end_date: { [Op.gte]: startDate } },
+          { [Op.and]: [{ end_date: null }, { leave_date: { [Op.gte]: startDate } }] },
+        ],
+      },
+    });
+    if (overlappingLeave) {
+      return res.status(409).json({
+        success: false,
+        message: 'This employee already has a pending or approved leave request for one or more selected dates',
       });
-      const usedUnits = existingLeaves.reduce((total, existing) => total + leaveUnits(existing.duration, existing.leave_date, existing.end_date), 0);
-      const remainingUnits = Math.max(Number(quota.no_of_leaves || 0) - usedUnits, 0);
-      if (requestedUnits > remainingUnits) {
-        return res.status(400).json({
-          success: false,
-          message: remainingUnits > 0
-            ? `Not enough leave balance. Remaining: ${remainingUnits} day(s)`
-            : 'No leave balance remaining for this leave type',
-        });
-      }
+    }
+
+    const requestedUnits = leaveUnits(req.body.duration, startDate, endDate);
+    const quota = await LeaveQuota.findOne({
+      where: { company_id: companyId, employee_id: employeeId, leave_type_id: leaveTypeId },
+    });
+    if (!quota) {
+      return res.status(400).json({ success: false, message: 'No leave balance is assigned for this leave type' });
+    }
+
+    const existingLeaves = await Leave.findAll({
+      where: { company_id: companyId, employee_id: employeeId, leave_type_id: leaveTypeId, status: { [Op.in]: ['approved', 'pending'] } },
+      attributes: ['duration', 'leave_date', 'end_date'],
+    });
+    const usedUnits = existingLeaves.reduce((total, existing) => total + leaveUnits(existing.duration, existing.leave_date, existing.end_date), 0);
+    const remainingUnits = Math.max(Number(quota.no_of_leaves || 0) - usedUnits, 0);
+    if (requestedUnits > remainingUnits) {
+      return res.status(400).json({
+        success: false,
+        message: remainingUnits > 0
+          ? `Not enough leave balance. Remaining: ${remainingUnits} day(s)`
+          : 'No leave balance remaining for this leave type',
+      });
     }
 
     const leave = await Leave.create({

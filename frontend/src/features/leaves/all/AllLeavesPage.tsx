@@ -56,7 +56,7 @@ export default function AllLeavesPage() {
     try {
       const [leaveResponse, employeeResponse] = await Promise.all([
         api.get("/leave"),
-        api.get("/employee"),
+        api.get("/employees"),
       ]);
       setLeaves(collapseLegacyMultiDayLeaves((leaveResponse.data.data || []) as LeaveRecord[]));
       setEmployees(employeeResponse.data.data || []);
