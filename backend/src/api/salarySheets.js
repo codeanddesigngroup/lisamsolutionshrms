@@ -24,8 +24,9 @@ router.get('/', async (req, res, next) => {
 });
 
 router.post('/', async (req, res, next) => {
-  const transaction = await sequelize.transaction();
+  let transaction;
   try {
+    transaction = await sequelize.transaction();
     const companyId = Number(req.body.company_id);
     const departmentId = Number(req.body.department_id);
     const month = Number(req.body.month);
@@ -87,7 +88,7 @@ router.post('/', async (req, res, next) => {
     await transaction.commit();
     return res.status(200).json({ success: true, count: saved.length, data: saved });
   } catch (error) {
-    if (!transaction.finished) await transaction.rollback();
+    if (transaction && !transaction.finished) await transaction.rollback();
     return next(error);
   }
 });

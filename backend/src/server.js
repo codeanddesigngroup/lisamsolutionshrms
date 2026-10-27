@@ -3,6 +3,7 @@ require('dotenv').config({ quiet: true });
 const http = require('http');
 const app = require('./app');
 const sequelize = require('./config/db');
+const SalarySheet = require('./models/SalarySheet');
 const ensureShiftIndexes = require('./utils/shiftIndexes');
 const { startAttendanceWorker } = require('./services/attendanceWorker');
 const { initSocket } = require('./realtime/socket');
@@ -20,6 +21,7 @@ async function startServer() {
       await sequelize.authenticate();
       console.log('Database connected');
     }
+    await SalarySheet.sync();
     await ensureShiftIndexes();
 
     server.listen(PORT, () => {
