@@ -250,7 +250,7 @@ export const roleRouteRules: RoleRouteRule[] = [
     roles: ["admin"],
   },
   {
-    prefixes: ["/billing", "/payroll", "/payment-gateway-credentials", "/email-settings", "/invoice-settings"],
+    prefixes: ["/billing", "/payroll/salary-sheet", "/payment-gateway-credentials", "/email-settings", "/invoice-settings"],
     roles: ["admin", "employee"],
   },
   {
@@ -336,7 +336,7 @@ export const permissionRouteRules: PermissionRouteRule[] = [
   { prefixes: ["/settings", "/account-setup", "/module-settings", "/custom-fields"], anyOf: ["settings.view", "settings.manage"] },
   { prefixes: ["/role-permission"], anyOf: ["roles.view", "roles.manage"] },
   { prefixes: ["/billing"], anyOf: ["billing.view", "billing.manage"] },
-  { prefixes: ["/payroll"], anyOf: ["payroll.view", "payroll.manage"] },
+  { prefixes: ["/payroll/salary-sheet"], anyOf: ["payroll.view", "payroll.manage"] },
   { prefixes: ["/faqs", "/employees/faq"], anyOf: ["faq.view", "faq.manage"] },
   { prefixes: ["/employees/create"], anyOf: ["employees.create", "employees.manage"] },
   { prefixes: ["/employees/edit"], anyOf: ["employees.edit", "employees.manage"] },

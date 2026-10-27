@@ -24,6 +24,7 @@ const Task = require('../src/models/Task');
 const ChatConversation = require('../src/models/ChatConversation');
 const ChatMessage = require('../src/models/ChatMessage');
 const Holiday = require('../src/models/Holiday');
+const SalarySheet = require('../src/models/SalarySheet');
 const applyAssociations = require('../src/models/associations');
 
 async function initDb() {
@@ -54,6 +55,7 @@ async function initDb() {
     await Leave.sync({ alter: true });
     await LeaveQuota.sync({ alter: true });
     await Holiday.sync({ alter: true });
+    await SalarySheet.sync({ alter: true });
     await ChatConversation.sync({ alter: true });
     await ChatMessage.sync({ alter: true });
     console.log('Database schema synced');

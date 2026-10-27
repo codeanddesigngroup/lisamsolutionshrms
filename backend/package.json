@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "db:schema": "node scripts/initDb.js",
+    "db:salary-sheets": "node scripts/createSalarySheetsTable.js",
     "dev": "nodemon src/server.js",
     "test": "node --test test/*.test.js"
   },

@@ -50,7 +50,6 @@ const settingsGroups: Array<{ title: string; items: SettingsItem[] }> = [
   {
     title: "Finance & Sales",
     items: [
-      { label: "Payroll Settings", href: "/payroll/settings", icon: DollarSign, module: "Payroll", description: "Salary components, groups, employee payroll setup, TDS, and payments." },
       { label: "Currency Settings", href: "/currencies", icon: CreditCard, module: "Finance", description: "Currency records and exchange rates used by finance screens." },
       { label: "Lead Settings", href: "/lead-settings", icon: FileText, module: "Leads", description: "Lead sources, statuses, and categories used by CRM workflows." },
     ]

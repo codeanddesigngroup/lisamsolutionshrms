@@ -8,8 +8,9 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
-import { departmentIdOf, employeeIdOf, employeeNameOf, getEmployeeMonthlySalary, getMonthRange, monthName, toNumber, type PayrollRecord } from "@/lib/payroll-utils";
+import { departmentIdOf, employeeNameOf, getEmployeeMonthlySalary, getMonthRange, monthName, toNumber, type PayrollRecord } from "@/lib/payroll-utils";
 import { calculateAttendanceStatus, leaveUnits, type HRRecord, type ShiftDefinition } from "@/lib/hr-utils";
 
 import MultipleAmountField from './MultipleAmountField';
@@ -98,6 +99,7 @@ export default function CreateSalarySheetPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [departmentId, setDepartmentId] = useState("");
@@ -105,7 +107,6 @@ export default function CreateSalarySheetPage() {
   const [departments, setDepartments] = useState<PayrollRecord[]>([]);
   const [employees, setEmployees] = useState<PayrollRecord[]>([]);
   const [salaryRecords, setSalaryRecords] = useState<PayrollRecord[]>([]);
-  const [cycles, setCycles] = useState<PayrollRecord[]>([]);
   const [templates, setTemplates] = useState<SalaryTemplate[]>(defaultTemplates);
   const [rows, setRows] = useState<FormState[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,13 +117,12 @@ export default function CreateSalarySheetPage() {
   useEffect(() => {
     setTemplates(readLocal(templateKey, defaultTemplates));
     const load = async () => {
-      const results = await Promise.allSettled([api.get("/departments"), api.get("/employees"), api.get("/employee-salaries"), api.get("/payroll-cycles")]);
+      const results = await Promise.allSettled([api.get("/departments"), api.get("/employees"), api.get("/employee-salaries")]);
       if (results[0].status === "fulfilled") setDepartments(recordsFromResponse(results[0].value.data));
       else showToast("Departments could not be fetched from the database.", "error");
       if (results[1].status === "fulfilled") setEmployees(recordsFromResponse(results[1].value.data));
       else showToast("Employees could not be fetched from the database.", "error");
       if (results[2].status === "fulfilled") setSalaryRecords(recordsFromResponse(results[2].value.data));
-      if (results[3].status === "fulfilled") setCycles(recordsFromResponse(results[3].value.data));
       setLoading(false);
     };
     void load();
@@ -187,6 +187,18 @@ export default function CreateSalarySheetPage() {
     setAttendanceLoading(true);
     try {
       const savedRows = savedRowsForPeriod(id, targetMonth, targetYear);
+      try {
+        const response = await api.get("/salary-sheets", { params: { department_id: id, month: targetMonth, year: targetYear } });
+        const databaseRows = recordsFromResponse(response.data);
+        databaseRows.forEach((record) => {
+          const employeeId = String(record.employee_id || "");
+          const values = record.values && typeof record.values === "object" ? record.values as FormState : null;
+          if (employeeId && values) savedRows.set(employeeId, values);
+        });
+      } catch (error) {
+        console.warn("Could not load saved salary sheet from database", error);
+        showToast("Saved salary sheet could not be loaded from the database.", "error");
+      }
       const loadedRows = await Promise.all(selected.map((employee) => loadEmployeeRow(employee, targetMonth, targetYear)));
       const mergedRows = loadedRows.map((row) => ({ ...row, ...savedRows.get(row.employeeId), employeeId: row.employeeId }));
       setRows(mergedRows);
@@ -225,7 +237,6 @@ export default function CreateSalarySheetPage() {
     if (!departmentId || !rows.length) { showToast("Select a department with employees.", "error"); return; }
     setSaving(true);
     try {
-      const range = getMonthRange(year, month);
       const sheetRows = rows.map((row) => {
         const employee = employees.find((item) => String(item.id) === row.employeeId);
         return {
@@ -243,40 +254,17 @@ export default function CreateSalarySheetPage() {
           savedAt: new Date().toISOString(),
         };
       });
-      let createdSheets: Record<string, unknown> = {};
-      try { createdSheets = JSON.parse(window.localStorage.getItem(createdSheetsKey) || "{}"); } catch { createdSheets = {}; }
-      sheetRows.forEach((row) => { createdSheets[row.id] = row; });
-      window.localStorage.setItem(createdSheetsKey, JSON.stringify(createdSheets));
-
-      let slips: PayrollRecord[] = [];
-      let generateWarning = "";
-      try {
-        await api.post("/payroll/generate", { year, month, payroll_cycle: String(cycles[0]?.id || 1), salary_from: range.start, salary_to: range.end, userIds: rows.map((row) => row.employeeId), useAttendance: true, markApprovedLeavesPaid: true, markAbsentUnpaid: false, includeExpenseClaims: true, addTimelogs: false });
-        const response = await api.get(`/payroll?month=${month}&year=${year}`);
-        slips = recordsFromResponse(response.data);
-      } catch (generateError) {
-        console.error("Generate payroll while saving salary sheet failed", generateError);
-        generateWarning = errorMessage(generateError) || "Payroll generation failed, but the salary sheet was saved.";
-      }
-      let saved: Record<string, unknown> = {};
-      try { saved = JSON.parse(window.localStorage.getItem("salary-sheet-manual-v1") || "{}"); } catch { saved = {}; }
-      rows.forEach((row) => {
-        const slip = slips.find((item) => String(item.employee_id || item.user_id || employeeIdOf((item.employee || item.user) as PayrollRecord)) === row.employeeId);
-        const storageId = String(slip?.id || `local-${departmentId}-${year}-${month}-${row.employeeId}`);
-        saved[storageId] = {
-          breakdowns: row.breakdowns,
-          customValues: row.customValues,
-          bankAccount: row.bankAccount, employmentType: row.employmentType, halfDays: row.halfDays,
-          halfDayDeduction: row.halfDayDeduction, casualLeaves: row.casualLeaves, sickLeaves: row.sickLeaves,
-          lateDays: row.lateDays, lateDeduction: row.lateDeduction, absentDays: row.absentDays,
-          absenceDeduction: row.absenceDeduction, penalties: row.penalties, loanAdvance: row.loanAdvance,
-          transportation: row.transportation, parking: row.parking, bankCharges: row.bankCharges,
-          attendanceBonus: row.attendanceBonus, commission: row.commission, monthlySpiffs: row.monthlySpiffs,
-          weeklySpiffs: row.weeklySpiffs,
-        };
+      await api.post("/salary-sheets", {
+        company_id: user?.company_id,
+        department_id: departmentId,
+        department_name: departmentName,
+        month,
+        year,
+        template_id: currentTemplate?.id || null,
+        template_name: currentTemplate?.name || "Department Salary Form",
+        rows: sheetRows.map(({ employeeId, values, totals }) => ({ employeeId, values, totals })),
       });
-      window.localStorage.setItem("salary-sheet-manual-v1", JSON.stringify(saved));
-      showToast(generateWarning ? `Salary sheet saved. ${generateWarning}` : "Department salary sheet created.", generateWarning ? "info" : "success");
+      showToast("Department salary sheet saved to the database.", "success");
       router.push(`/payroll/salary-sheet?month=${month}&year=${year}`);
     } catch (error) { console.error("Create department salary sheet error", error); showToast(errorMessage(error) || "Department salary sheet could not be saved.", "error"); }
     finally { setSaving(false); }

@@ -7,6 +7,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import { buildSalarySlip, canGeneratePayrollForEmployee, departmentIdOf, employeeNameOf, formatCurrency, getMonthRange, monthName, toNumber, type PayrollRecord } from "@/lib/payroll-utils";
 
@@ -228,9 +229,26 @@ const localRowsFromStorage = (targetMonth: number, targetYear: number): SheetRow
     }];
   });
 };
+const databaseRowsFromResponse = (payload: unknown): SheetRow[] => recordsFromResponse(payload).flatMap((record) => {
+  const values = nested(record.values);
+  if (!record.id || !values) return [];
+  return [{
+    id: `db-${record.id}`,
+    ...blankManualValues({}),
+    ...values,
+    employeeId: String(record.employee_id || values.employeeId || ""),
+    employeeName: String(record.employee_name || "Unknown Employee"),
+    departmentId: String(record.department_id || ""),
+    departmentName: String(record.department_name || ""),
+    basicSalary: amount(values.basicSalary),
+    presentDays: toNumber(values.presentDays),
+    absentDays: toNumber(values.absentDays),
+  } as SheetRow];
+});
 
 export default function SalarySheetPage() {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -249,13 +267,21 @@ export default function SalarySheetPage() {
     setTemplates(readLocal(templateKey, defaultTemplates));
     setLocalRows(localRowsFromStorage(month, year));
     try {
-      const [payrollResponse, departmentResponse] = await Promise.allSettled([
+      const [payrollResponse, departmentResponse, salarySheetResponse] = await Promise.allSettled([
         api.get(`/payroll?month=${month}&year=${year}`),
         api.get("/departments"),
+        api.get("/salary-sheets", { params: { month, year } }),
       ]);
 
       if (departmentResponse.status === "fulfilled") {
         setDepartments(recordsFromResponse(departmentResponse.value.data));
+      }
+      if (salarySheetResponse.status === "fulfilled") {
+        const databaseRows = databaseRowsFromResponse(salarySheetResponse.value.data);
+        setLocalRows(databaseRows.length ? databaseRows : localRowsFromStorage(month, year));
+      } else if (!isNotFound(salarySheetResponse.reason)) {
+        console.error("Salary sheet database fetch error", salarySheetResponse.reason);
+        showToast("Saved salary sheets could not be loaded from the database.", "error");
       }
       if (payrollResponse.status !== "fulfilled" && !isNotFound(payrollResponse.reason)) throw payrollResponse.reason;
       let records: PayrollRecord[] = payrollResponse.status === "fulfilled" ? recordsFromResponse(payrollResponse.value.data) : [];
@@ -329,9 +355,10 @@ export default function SalarySheetPage() {
 
   const rows = useMemo<SheetRow[]>(() => [...localRows, ...slips.map((slip, index) => {
     const id = String(slip.id ?? `${slip.employee_id ?? slip.user_id}-${index}`);
-    if (localRows.some((row) => row.id === id)) return null;
-    const values = manual[id] || blankManualValues(slip);
     const employee = nested(slip.employee || slip.user);
+    const employeeId = String(employee?.id || slip.employee_id || slip.user_id || "");
+    if (localRows.some((row) => row.id === id || row.employeeId === employeeId)) return null;
+    const values = manual[id] || blankManualValues(slip);
     const employeeDepartment = nested(employee?.department) || nested(nested(employee?.employee_detail)?.department);
     const rowDepartmentId = String(departmentIdOf(employee) || employeeDepartment?.id || "");
     return {
@@ -381,7 +408,11 @@ export default function SalarySheetPage() {
     anchor.click();
     URL.revokeObjectURL(anchor.href);
   };
-  const deleteSheet = (row: SheetRow) => {
+  const deleteSheet = async (row: SheetRow) => {
+    try {
+    if (row.id.startsWith("db-")) {
+      await api.delete(`/salary-sheets/${encodeURIComponent(row.id.slice(3))}`, { params: { company_id: user?.company_id } });
+    }
     let createdSheets: Record<string, unknown> = {};
     let manualSheets: Record<string, unknown> = {};
     try { createdSheets = JSON.parse(localStorage.getItem(createdSheetsKey) || "{}"); } catch { createdSheets = {}; }
@@ -401,6 +432,10 @@ export default function SalarySheetPage() {
     });
     showToast("Salary sheet deleted.", "success");
     setDeleteTarget(null);
+    } catch (error) {
+      console.error("Delete salary sheet failed", error);
+      showToast("Salary sheet could not be deleted.", "error");
+    }
   };
 
   return (
@@ -408,7 +443,7 @@ export default function SalarySheetPage() {
       <div className="space-y-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-start gap-3">
-            <Link href="/payroll" className="mt-1 rounded-xl border border-gray-100 bg-white p-2 text-gray-400 transition-colors hover:text-primary"><ArrowLeft className="h-4 w-4" /></Link>
+            <Link href="/dashboard" className="mt-1 rounded-xl border border-gray-100 bg-white p-2 text-gray-400 transition-colors hover:text-primary"><ArrowLeft className="h-4 w-4" /></Link>
             <div><h1 className="flex items-center gap-2 text-xl font-black text-gray-900"><FileSpreadsheet className="h-5 w-5 text-primary" /> Salary Sheet</h1><p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Salaries - Lisam · {monthName(month)} {year}</p></div>
           </div>
           <div className="flex flex-wrap items-center gap-2">

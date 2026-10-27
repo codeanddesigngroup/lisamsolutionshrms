@@ -331,7 +331,7 @@ export default function EmployeeFAQsPage() {
                  </div>
                  <div className="p-3">
                     {[
-                       { label: "Payroll Calendar 2026", href: "/payroll" },
+                       { label: "Payroll Calendar 2026", href: "/payroll/salary-sheet" },
                        { label: "Holiday Schedule", href: "/holidays" },
                        { label: "Employee Onboarding", href: "#" },
                        { label: "Insurance & Benefits", href: "#" },

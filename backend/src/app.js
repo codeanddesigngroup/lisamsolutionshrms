@@ -23,6 +23,7 @@ const tasks = require('./api/tasks');
 const chatConversations = require('./api/chatConversations');
 const chatMessages = require('./api/chatMessages');
 const holidays = require('./api/holidays');
+const salarySheets = require('./api/salarySheets');
 
 const app = express();
 
@@ -69,6 +70,7 @@ app.use('/api/chat-conversations', chatConversations);
 app.use('/api/chat-messages', chatMessages);
 app.use('/api/holidays', holidays);
 app.use('/api/holiday', holidays);
+app.use('/api/salary-sheets', salarySheets);
 app.use('/api/v1/companies', companies);
 app.use('/api/v1/devices', devices);
 app.use('/api/v1/roles', roles);
@@ -89,6 +91,7 @@ app.use('/api/v1/chat-conversations', chatConversations);
 app.use('/api/v1/chat-messages', chatMessages);
 app.use('/api/v1/holidays', holidays);
 app.use('/api/v1/holiday', holidays);
+app.use('/api/v1/salary-sheets', salarySheets);
 app.use('/api/v1/shifts', shifts);
 app.use('/api/v1/shift-types', shifts);
 app.use('/api/v1/departments', departments);

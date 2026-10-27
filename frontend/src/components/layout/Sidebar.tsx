@@ -155,12 +155,10 @@ const menuItems: MenuItem[] = [
   {
     icon: LayoutDashboard,
     label: "Payroll",
-    href: "/payroll",
+    href: "/payroll/salary-sheet",
     submenu: [
-      { label: "Payroll Dashboard", href: "/payroll" },
       { label: "Salary Sheet", href: "/payroll/salary-sheet" },
       { label: "Salary Sheet Templates", href: "/payroll/salary-sheet/templates" },
-      { label: "Salary Settings", href: "/payroll/settings" },
     ],
   },
   // { icon: ShoppingBag, label: "Products", href: "/products" },
