@@ -79,6 +79,14 @@ const getTimeParts = (value?: string) => {
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
   return { hours, minutes };
 };
+const formatPunchTime = (value?: string) => {
+  const time = getTimeParts(value);
+  if (!time) return "--";
+  return new Date(2000, 0, 1, time.hours, time.minutes).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 const getShiftStartDate = (dateString: string, shift?: ShiftSummary) => {
   const start = getTimeParts(shift?.start_time);
   if (!start) return null;
@@ -514,7 +522,13 @@ export default function AttendanceSummaryPage() {
                       const status = getDayStatus(employee, day);
                       return (
                         <td key={day} className="p-1 border-r text-center">
-                          <button type="button" onClick={() => setSelectedDayDetail(getDayDetail(employee, day))} className="mx-auto flex h-6 w-6 items-center justify-center rounded-sm transition-transform hover:scale-110" title={`${employee.name} - ${day}`}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDayDetail(getDayDetail(employee, day))}
+                            className="mx-auto flex h-6 w-6 items-center justify-center rounded-sm transition-transform hover:scale-110"
+                            title={`${employee.name} - ${getDateForDay(year, month, day)}\nCheck in: ${formatPunchTime(getAttendanceForEmployeeDay(employee, day)?.clock_in)}\nCheck out: ${formatPunchTime(getAttendanceForEmployeeDay(employee, day)?.clock_out)}`}
+                            aria-label={`${employee.name}, ${getDateForDay(year, month, day)}. Check in ${formatPunchTime(getAttendanceForEmployeeDay(employee, day)?.clock_in)}. Check out ${formatPunchTime(getAttendanceForEmployeeDay(employee, day)?.clock_out)}.`}
+                          >
                             {renderSummaryStatusIcon(status)}
                           </button>
                         </td>

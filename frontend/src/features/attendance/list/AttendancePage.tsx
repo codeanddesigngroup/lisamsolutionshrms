@@ -23,8 +23,9 @@ import {
   timeToMinutes,
 } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
+import api from "@/lib/api";
 import axios from "axios";
-import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Clock, Cpu, Edit3, RefreshCw, RotateCcw, Search, ShieldCheck, TimerReset, Users } from "lucide-react";
+import { Activity, AlertTriangle, BadgeCheck, CalendarDays, Clock, Cpu, Download, Edit3, RefreshCw, RotateCcw, Search, ShieldCheck, TimerReset, Users } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -105,6 +106,26 @@ const toLocalDateString = (value = new Date()) => {
   const day = String(value.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+const shiftDate = (date: string, days: number) => {
+  const value = new Date(`${date}T12:00:00`);
+  value.setDate(value.getDate() + days);
+  return toLocalDateString(value);
+};
+
+const formatAttendanceDetailDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", {
+  day: "2-digit", month: "short", weekday: "short",
+});
+
+const formatAttendanceDetailTime = (value?: string) => {
+  if (!value) return "-";
+  const [hours, minutes] = value.split(":").map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+  const time = new Date(2000, 0, 1, hours, minutes);
+  return time.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+};
+
+const formatAttendanceMinutes = (minutes: number) => `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 
 const ATTENDANCE_DAY_CUTOFF_HOUR = 6;
 const MISSING_CHECKOUT_DELAY_HOURS = 5;
@@ -253,6 +274,17 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
   const [waiverReason, setWaiverReason] = useState("Manager discretion");
   const [waiverNote, setWaiverNote] = useState("");
   const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOption | null>(null);
+  const initialMonthStart = `${date.slice(0, 7)}-01`;
+  const initialMonthEnd = toLocalDateString(new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0));
+  const [detailStartDate, setDetailStartDate] = useState(initialMonthStart);
+  const [detailEndDate, setDetailEndDate] = useState(initialMonthEnd);
+  const [detailPreset, setDetailPreset] = useState("month");
+  const [showGraceOnly, setShowGraceOnly] = useState(false);
+  const [detailAttendance, setDetailAttendance] = useState<AttendanceRecord[]>([]);
+  const [detailHolidays, setDetailHolidays] = useState<HolidayRecord[]>([]);
+  const [detailLeaves, setDetailLeaves] = useState<LeaveRecord[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const fetchAttendance = async () => {
     setLoading(true);
@@ -322,6 +354,48 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     fetchAttendance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, hasHydrated]);
+
+  useEffect(() => {
+    if (!selectedEmployee || !detailStartDate || !detailEndDate || detailStartDate > detailEndDate) return;
+
+    let cancelled = false;
+    const loadEmployeeAttendance = async () => {
+      setDetailLoading(true);
+      try {
+        const companyId = hydratedUser?.company_id ? String(hydratedUser.company_id) : "";
+        const employeeCode = selectedEmployee.employee_detail?.employee_id ?? selectedEmployee.employee_id;
+        const employeeForNormalization = {
+          ...selectedEmployee,
+          employee_id: selectedEmployee.employee_id ?? String(selectedEmployee.id),
+        };
+        const [records, holidayResult, leaveResult] = await Promise.all([
+          attendanceService.getRecords({
+            companyId,
+            employeeId: employeeCode ?? selectedEmployee.id,
+            startDate: detailStartDate,
+            endDate: detailEndDate,
+            limit: 500,
+          }, [employeeForNormalization]),
+          api.get("/holidays", { params: companyId ? { company_id: companyId } : undefined }).catch(() => null),
+          api.get("/leaves", { params: companyId ? { company_id: companyId } : undefined }).catch(() => null),
+        ]);
+        if (cancelled) return;
+        setDetailAttendance(records as AttendanceRecord[]);
+        setDetailHolidays(Array.isArray(holidayResult?.data?.data) ? holidayResult.data.data : []);
+        setDetailLeaves(Array.isArray(leaveResult?.data?.data) ? leaveResult.data.data : []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Fetch Employee Attendance Detail Error:", error);
+          showToast("Failed to load employee attendance details", "error");
+        }
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    };
+
+    void loadEmployeeAttendance();
+    return () => { cancelled = true; };
+  }, [detailEndDate, detailStartDate, hydratedUser?.company_id, selectedEmployee, showToast]);
 
   const dailyRows = useMemo<DailyAttendanceRow[]>(() => {
     const holiday = holidays.find((item) => getHolidayDate(item) === date);
@@ -428,6 +502,92 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
     return { total: dailyRows.length, present, late, halfDay, absent, review };
   }, [dailyRows]);
 
+  const employeeDetailRows = useMemo(() => {
+    if (!selectedEmployee || !detailStartDate || !detailEndDate || detailStartDate > detailEndDate) return [];
+    const employeeId = String(selectedEmployee.id);
+    const dates: string[] = [];
+    for (let day = detailStartDate; day <= detailEndDate && dates.length < 400; day = shiftDate(day, 1)) dates.push(day);
+
+    return dates.map((day) => {
+      const record = detailAttendance.find((item) => item.date === day);
+      const holiday = detailHolidays.find((item) => getHolidayDate(item) === day);
+      const leave = detailLeaves.find((item) => getLeaveEmployeeId(item) === employeeId && isLeaveDateInRange(item, day) && String(item.status || "").toLowerCase() === "approved");
+      const isOfficeOpen = officeOpenDays.includes(getDateDay(day));
+      const shift = getShiftForEmployee(selectedEmployee, record);
+      const baseStatus = record ? calculateAttendanceStatus(record, shift as ShiftDefinition) : undefined;
+      const lateMinutes = record ? calculateLateMinutes(record.clock_in, shift as ShiftDefinition) : 0;
+      const lateAfterGrace = record ? calculateLateAfterGraceMinutes(record.clock_in, shift as ShiftDefinition) : 0;
+      let status: "on-time" | "grace" | "late" | "absent" | "holiday" | "leave" | "weekly-off" | "future";
+      if (record) {
+        if (baseStatus === "absent") status = "absent";
+        else if (baseStatus === "late" && lateAfterGrace > 0 && !record.late_waived) status = "late";
+        else if (lateMinutes > 0 && !record.late_waived) status = "grace";
+        else status = "on-time";
+      } else if (holiday) status = "holiday";
+      else if (leave) status = "leave";
+      else if (!isOfficeOpen) status = "weekly-off";
+      else if (isFutureDate(day)) status = "future";
+      else status = "absent";
+
+      return {
+        date: day,
+        record,
+        status,
+        lateMinutes,
+        workingMinutes: record ? minutesBetween(record.clock_in, record.clock_out) : 0,
+      };
+    });
+  }, [detailAttendance, detailEndDate, detailHolidays, detailLeaves, detailStartDate, officeOpenDays, selectedEmployee]);
+
+  const employeeDetailStats = useMemo(() => {
+    const rowsToDate = employeeDetailRows.filter((row) => row.date <= todayString());
+    const workingRows = rowsToDate.filter((row) => row.status !== "weekly-off" && row.status !== "holiday" && row.status !== "leave");
+    const checkIns = rowsToDate.map((row) => row.record?.clock_in).filter((time): time is string => Boolean(time));
+    const checkInMinutes = checkIns.map(timeToMinutes).filter((value): value is number => value !== null);
+    const totalCheckInMinutes = checkInMinutes.reduce((total, value) => total + value, 0);
+    const average = checkIns.length ? Math.round(totalCheckInMinutes / checkIns.length) : null;
+    const averageTime = average === null ? "-" : `${String(Math.floor(average / 60) % 24).padStart(2, "0")}:${String(average % 60).padStart(2, "0")}`;
+    return {
+      working: workingRows.length,
+      onTime: rowsToDate.filter((row) => row.status === "on-time").length,
+      grace: rowsToDate.filter((row) => row.status === "grace").length,
+      late: rowsToDate.filter((row) => row.status === "late").length,
+      absent: rowsToDate.filter((row) => row.status === "absent").length,
+      averageTime,
+    };
+  }, [employeeDetailRows]);
+
+  const setEmployeeDetailPreset = (preset: string) => {
+    const today = todayString();
+    if (preset === "month") {
+      setDetailStartDate(`${today.slice(0, 7)}-01`);
+      setDetailEndDate(toLocalDateString(new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)));
+    } else if (preset === "last-month") {
+      const previousMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 2, 1);
+      setDetailStartDate(toLocalDateString(new Date(previousMonth.getFullYear(), previousMonth.getMonth(), 1)));
+      setDetailEndDate(toLocalDateString(new Date(previousMonth.getFullYear(), previousMonth.getMonth() + 1, 0)));
+    } else if (preset === "last-7-days") {
+      setDetailStartDate(shiftDate(today, -6));
+      setDetailEndDate(today);
+    }
+    setDetailPreset(preset);
+  };
+
+  const exportEmployeeDetail = () => {
+    if (!selectedEmployee) return;
+    const rows = [
+      ["Date", "Status", "Check In", "Check Out", "Late Minutes", "Hours"],
+      ...employeeDetailRows.map((row) => [row.date, row.status, row.record?.clock_in || "", row.record?.clock_out || "", row.lateMinutes, row.workingMinutes ? formatDuration(row.workingMinutes) : ""]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${selectedEmployee.name.replaceAll(/[^a-z0-9]+/gi, "-").toLowerCase()}-attendance.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const resetFilters = () => {
     if (isDateWise) setDate(DEFAULT_ATTENDANCE_DATE);
     setEmployeeSearch("");
@@ -526,6 +686,88 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             </div>
           </div>
         </div>
+
+        <Modal
+          isOpen={Boolean(selectedEmployee)}
+          onClose={() => { setSelectedEmployee(null); setShowGraceOnly(false); }}
+          title={selectedEmployee ? `${selectedEmployee.name} Attendance` : "Employee Attendance"}
+          size="xl"
+        >
+        {selectedEmployee && (
+          <section className="space-y-5" aria-label={`${selectedEmployee.name} attendance details`}>
+            <div className="white-box space-y-4">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end">
+                <div>
+                  <label className="mb-2 block text-[11px] font-bold text-gray-500">Employee</label>
+                  <div className="form-control flex items-center gap-2 bg-gray-50 text-gray-800"><Users className="h-4 w-4 text-primary" />{selectedEmployee.name}</div>
+                </div>
+                <div>
+                  <label htmlFor="employee-attendance-from" className="mb-2 block text-[11px] font-bold text-gray-500">From</label>
+                  <input id="employee-attendance-from" type="date" className="form-control" value={detailStartDate} max={detailEndDate || undefined} onChange={(event) => { setDetailStartDate(event.target.value); setDetailPreset("custom"); setShowGraceOnly(false); }} />
+                </div>
+                <div>
+                  <label htmlFor="employee-attendance-to" className="mb-2 block text-[11px] font-bold text-gray-500">To</label>
+                  <input id="employee-attendance-to" type="date" className="form-control" value={detailEndDate} min={detailStartDate || undefined} onChange={(event) => { setDetailEndDate(event.target.value); setDetailPreset("custom"); setShowGraceOnly(false); }} />
+                </div>
+                <Button type="button" onClick={exportEmployeeDetail} className="h-[38px] whitespace-nowrap"><Download className="mr-2 h-4 w-4" />Export</Button>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Attendance date range">
+                  {[["month", "This month"], ["last-month", "Last month"], ["last-7-days", "Last 7 days"], ["custom", "Custom"]].map(([key, label]) => (
+                    <button key={key} type="button" onClick={() => key !== "custom" && setEmployeeDetailPreset(key)} aria-pressed={detailPreset === key} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${detailPreset === key ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="text-sm font-semibold text-gray-600">
+                {selectedEmployee.name} · {selectedEmployee.employee_detail?.designation?.name || "Employee"} · Shift {selectedEmployee.employee_detail?.shift_type?.start_time || "--:--"} · Grace {selectedEmployee.employee_detail?.shift_type?.late_grace_minutes ?? 0} min
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              {[
+                ["Working days", employeeDetailStats.working, "text-gray-900"],
+                ["On time", employeeDetailStats.onTime, "text-green-600"],
+                ["Grace used", employeeDetailStats.grace, "text-amber-600"],
+                ["Late", employeeDetailStats.late, "text-red-600"],
+                ["Absent", employeeDetailStats.absent, "text-gray-900"],
+                ["Avg check-in", formatAttendanceDetailTime(employeeDetailStats.averageTime), "text-gray-900"],
+              ].map(([label, value, color]) => (
+                <div key={String(label)} className={`white-box p-4 text-center ${label === "Grace used" ? "cursor-pointer transition hover:border-amber-300" : ""}`}>
+                  {label === "Grace used" ? (
+                    <button type="button" onClick={() => setShowGraceOnly((current) => !current)} aria-pressed={showGraceOnly} className="w-full">
+                      <div className={`text-2xl font-bold ${color}`}>{value}</div><div className="mt-1 text-xs font-semibold text-gray-500">{label}</div>
+                    </button>
+                  ) : <><div className={`text-2xl font-bold ${color}`}>{value}</div><div className="mt-1 text-xs font-semibold text-gray-500">{label}</div></>}
+                </div>
+              ))}
+            </div>
+
+            <div className="white-box overflow-hidden p-0">
+              {detailLoading && <div className="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">Loading attendance details...</div>}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead><tr className="border-b border-gray-200 bg-gray-50 text-gray-600"><th className="px-4 py-3">Date</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">In</th><th className="px-4 py-3">Out</th><th className="px-4 py-3">Late</th><th className="px-4 py-3">Hours</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {employeeDetailRows.filter((row) => !showGraceOnly || row.status === "grace").map((row) => {
+                      const statusStyle = row.status === "on-time" ? "bg-green-50 text-green-700" : row.status === "grace" ? "bg-amber-50 text-amber-700" : row.status === "late" ? "bg-red-50 text-red-700" : row.status === "absent" ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-600";
+                      const statusText = row.status === "on-time" ? "On time" : row.status === "weekly-off" ? "Weekly off" : row.status[0].toUpperCase() + row.status.slice(1);
+                      return <tr key={row.date} className={row.status === "grace" ? "bg-amber-50/70" : "hover:bg-gray-50"}>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-700">{formatAttendanceDetailDate(row.date)}</td>
+                        <td className="px-4 py-3"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyle}`}>{statusText}</span></td>
+                        <td className="px-4 py-3">{formatAttendanceDetailTime(row.record?.clock_in)}</td>
+                        <td className="px-4 py-3">{formatAttendanceDetailTime(row.record?.clock_out)}</td>
+                        <td className="px-4 py-3">{row.lateMinutes ? formatDuration(row.lateMinutes) : "-"}</td>
+                        <td className="px-4 py-3">{row.workingMinutes ? formatAttendanceMinutes(row.workingMinutes) : "-"}</td>
+                      </tr>;
+                    })}
+                    {!detailLoading && employeeDetailRows.filter((row) => !showGraceOnly || row.status === "grace").length === 0 && <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-400">{showGraceOnly ? "No grace-used attendance in this range." : "No attendance records in this range."}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+        </Modal>
 
         <div className="white-box">
           <div className={`grid grid-cols-1 gap-4 md:items-end ${canViewCompanyAttendance ? "md:grid-cols-6" : "md:grid-cols-1"}`}>
@@ -666,7 +908,7 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
                 {filteredRows.map((row) => (
                     <tr key={`${row.employee.id}-${date}`} className="bg-gray-50/60 transition hover:bg-blue-50/60">
                       <td className="rounded-l-lg px-4 py-4">
-                        <div className="font-bold text-[13px] text-gray-800">{row.employee.name}</div>
+                        <button type="button" onClick={() => { setEmployeeDetailPreset("month"); setShowGraceOnly(false); setDetailAttendance([]); setSelectedEmployee(row.employee); }} className="text-left font-bold text-[13px] text-gray-800 hover:text-primary hover:underline">{row.employee.name}</button>
                         <div className="mt-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
                           {row.employee.employee_detail?.designation?.name || row.employee.email || "Staff"}
                         </div>
