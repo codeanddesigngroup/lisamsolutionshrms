@@ -2,12 +2,13 @@
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Button from "@/components/ui/Button";
-import { Plus, Calendar, Check, X, Star, RefreshCw, Clock, Search } from "lucide-react";
+import Modal from "@/components/ui/Modal";
+import { Plus, Calendar, Check, X, Star, RefreshCw, Clock, Search, Download } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
-import { getHolidayDate, getLeaveEmployeeId, isLeaveDateInRange, parseOfficeOpenDays, calculateAttendanceStatus, ShiftDefinition } from "@/lib/hr-utils";
+import { getHolidayDate, getLeaveEmployeeId, isLeaveDateInRange, parseOfficeOpenDays, calculateAttendanceStatus, calculateLateMinutes, calculateLateAfterGraceMinutes, minutesBetween, formatDuration, ShiftDefinition } from "@/lib/hr-utils";
 import { attendanceService } from "@/services/attendance/attendance.service";
 import api from "@/lib/api";
 
@@ -61,6 +62,7 @@ type HolidayRecord = { date?: string; holiday_date?: string; name?: string; occa
 type LeaveRecord = { user_id?: number | string; employee_id?: number | string; user?: { id?: number | string; name?: string }; employee?: { id?: number | string; name?: string }; leave_date?: string; end_date?: string; date?: string; status?: string; reason?: string; leave_type?: { type_name?: string } };
 type SummaryStatus = "present" | "late" | "half-day" | "absent" | "holiday" | "leave" | "closed" | "empty";
 type DayDetail = { employee: EmployeeOption; day: number; date: string; status: SummaryStatus; attendance?: AttendanceRecord; holiday?: HolidayRecord; leave?: LeaveRecord };
+type EmployeeRangeRow = { date: string; status: string; attendance?: AttendanceRecord; lateMinutes: number; workMinutes: number };
 
 const now = new Date();
 const thisYear = now.getFullYear();
@@ -183,6 +185,13 @@ export default function AttendanceSummaryPage() {
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [officeOpenDays, setOfficeOpenDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [selectedDayDetail, setSelectedDayDetail] = useState<DayDetail | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOption | null>(null);
+  const [employeeRangeStart, setEmployeeRangeStart] = useState("");
+  const [employeeRangeEnd, setEmployeeRangeEnd] = useState("");
+  const [employeeRangePreset, setEmployeeRangePreset] = useState("month");
+  const [employeeRangeAttendance, setEmployeeRangeAttendance] = useState<AttendanceRecord[]>([]);
+  const [employeeRangeLoading, setEmployeeRangeLoading] = useState(false);
+  const [graceDaysOnly, setGraceDaysOnly] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employeeStatusFilter, setEmployeeStatusFilter] = useState("all");
   const [month, setMonth] = useState(thisMonth);
@@ -256,6 +265,39 @@ export default function AttendanceSummaryPage() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, year, user?.id, user?.company_id, user?.role, canViewCompanyAttendance]);
+
+  useEffect(() => {
+    if (!selectedEmployee || !employeeRangeStart || !employeeRangeEnd || employeeRangeStart > employeeRangeEnd) return;
+    let cancelled = false;
+    const loadRangeAttendance = async () => {
+      setEmployeeRangeLoading(true);
+      try {
+        const companyId = user?.company_id ? String(user.company_id) : "";
+        const employeeCode = selectedEmployee.employee_detail?.employee_id ?? selectedEmployee.employee_id ?? selectedEmployee.id;
+        const employeeForNormalization = {
+          ...selectedEmployee,
+          employee_id: selectedEmployee.employee_id ?? String(selectedEmployee.id),
+        };
+        const rows = await attendanceService.getRecords({
+          companyId,
+          employeeId: employeeCode,
+          startDate: employeeRangeStart,
+          endDate: employeeRangeEnd,
+          limit: 1000,
+        }, [employeeForNormalization]);
+        if (!cancelled) setEmployeeRangeAttendance(rows as AttendanceRecord[]);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Fetch Employee Attendance Range Error:", error);
+          showToast("Failed to load employee attendance", "error");
+        }
+      } finally {
+        if (!cancelled) setEmployeeRangeLoading(false);
+      }
+    };
+    void loadRangeAttendance();
+    return () => { cancelled = true; };
+  }, [employeeRangeEnd, employeeRangeStart, selectedEmployee, showToast, user?.company_id]);
 
   const resetFilters = () => {
     setEmployeeSearch("");
@@ -378,6 +420,93 @@ export default function AttendanceSummaryPage() {
       if (status === "half-day") return total + 0.5;
       return status === "present" || status === "late" ? total + 1 : total;
     }, 0);
+
+  const setEmployeeRange = (preset: string, employee = selectedEmployee) => {
+    const today = getTodayString();
+    if (preset === "month") {
+      setEmployeeRangeStart(getDateForDay(year, month, 1));
+      setEmployeeRangeEnd(getDateForDay(year, month, new Date(year, month, 0).getDate()));
+    } else if (preset === "last-month") {
+      const previousMonth = new Date(year, month - 2, 1);
+      setEmployeeRangeStart(getDateForDay(previousMonth.getFullYear(), previousMonth.getMonth() + 1, 1));
+      setEmployeeRangeEnd(getDateForDay(previousMonth.getFullYear(), previousMonth.getMonth() + 1, new Date(previousMonth.getFullYear(), previousMonth.getMonth() + 1, 0).getDate()));
+    } else if (preset === "last-7-days") {
+      const start = new Date(`${today}T12:00:00`);
+      start.setDate(start.getDate() - 6);
+      setEmployeeRangeStart(getDateForDay(start.getFullYear(), start.getMonth() + 1, start.getDate()));
+      setEmployeeRangeEnd(today);
+    }
+    setEmployeeRangePreset(preset);
+    if (employee) setGraceDaysOnly(false);
+  };
+
+  const employeeRangeRows = useMemo<EmployeeRangeRow[]>(() => {
+    if (!selectedEmployee || !employeeRangeStart || !employeeRangeEnd || employeeRangeStart > employeeRangeEnd) return [];
+    const dates: string[] = [];
+    for (let date = employeeRangeStart; date <= employeeRangeEnd && dates.length < 400;) {
+      dates.push(date);
+      const next = new Date(`${date}T12:00:00`);
+      next.setDate(next.getDate() + 1);
+      date = getDateForDay(next.getFullYear(), next.getMonth() + 1, next.getDate());
+    }
+    const today = getTodayString();
+
+    return dates.map((date) => {
+      const record = employeeRangeAttendance.find((item) => getAttendanceDate(item.date) === date);
+      const holiday = holidays.some((item) => getHolidayDate(item) === date);
+      const leave = leaves.some((item) => isApprovedLeaveForEmployee(item, selectedEmployee, date));
+      const weekday = new Date(`${date}T12:00:00`).getDay();
+      const lateMinutes = record ? calculateLateMinutes(record.clock_in, (record.shift_type || selectedEmployee.employee_detail?.shift_type) as ShiftDefinition) : 0;
+      const lateAfterGrace = record ? calculateLateAfterGraceMinutes(record.clock_in, (record.shift_type || selectedEmployee.employee_detail?.shift_type) as ShiftDefinition) : 0;
+      let status: string;
+      if (record) {
+        const calculated = normalizeSummaryStatus(calculateAttendanceStatus(record, (record.shift_type || selectedEmployee.employee_detail?.shift_type) as ShiftDefinition));
+        if (calculated === "absent") status = "absent";
+        else if (calculated === "half-day") status = "half-day";
+        else if (lateAfterGrace > 0 && !record.late_waived && !record.lateWaived) status = "late";
+        else if (lateMinutes > 0 && !record.late_waived && !record.lateWaived) status = "grace";
+        else status = "on-time";
+      } else if (holiday) status = "holiday";
+      else if (leave) status = "leave";
+      else if (!officeOpenDays.includes(weekday)) status = "weekly-off";
+      else if (date > today) status = "future";
+      else if (shouldMarkAbsent(date, selectedEmployee)) status = "absent";
+      else status = "future";
+
+      return { date, status, attendance: record, lateMinutes, workMinutes: record ? minutesBetween(record.clock_in, record.clock_out) : 0 };
+    });
+  }, [employeeRangeAttendance, employeeRangeEnd, employeeRangeStart, holidays, leaves, officeOpenDays, selectedEmployee]);
+
+  const employeeRangeStats = useMemo(() => {
+    const elapsed = employeeRangeRows.filter((row) => row.date <= getTodayString());
+    const workingDays = elapsed.filter((row) => !["weekly-off", "holiday", "leave"].includes(row.status));
+    const checkIns = elapsed.map((row) => getTimeParts(row.attendance?.clock_in)).filter((value): value is { hours: number; minutes: number } => Boolean(value));
+    const averageMinutes = checkIns.length ? Math.round(checkIns.reduce((sum, time) => sum + time.hours * 60 + time.minutes, 0) / checkIns.length) : null;
+    const averageCheckIn = averageMinutes === null ? "--" : `${String(Math.floor(averageMinutes / 60) % 24).padStart(2, "0")}:${String(averageMinutes % 60).padStart(2, "0")}`;
+    return {
+      working: workingDays.length,
+      onTime: elapsed.filter((row) => row.status === "on-time").length,
+      grace: elapsed.filter((row) => row.status === "grace").length,
+      late: elapsed.filter((row) => row.status === "late").length,
+      absent: elapsed.filter((row) => row.status === "absent").length,
+      averageCheckIn,
+    };
+  }, [employeeRangeRows]);
+
+  const exportEmployeeRange = () => {
+    if (!selectedEmployee) return;
+    const csvRows = [
+      ["Date", "Status", "Check In", "Check Out", "Late Minutes", "Hours"],
+      ...employeeRangeRows.map((row) => [row.date, row.status, row.attendance?.clock_in || "", row.attendance?.clock_out || "", row.lateMinutes, row.workMinutes ? formatDuration(row.workMinutes) : ""]),
+    ];
+    const csv = csvRows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${selectedEmployee.name.replaceAll(/[^a-z0-9]+/gi, "-").toLowerCase()}-attendance.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <DashboardLayout>
@@ -517,7 +646,12 @@ export default function AttendanceSummaryPage() {
               <tbody>
                 {visibleEmployees.map((employee) => (
                   <tr key={employee.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-[13px] font-bold border-r sticky left-0 z-10 bg-white">{employee.name}</td>
+                    <td className="border-r sticky left-0 z-10 bg-white p-0">
+                      <button type="button" onClick={() => { setSelectedDayDetail(null); setEmployeeRangeAttendance([]); setSelectedEmployee(employee); setEmployeeRange("month", employee); }} className="flex min-h-[58px] w-full cursor-pointer flex-col items-start justify-center px-4 py-3 text-left hover:bg-blue-50/60">
+                        <span className="text-[13px] font-bold text-gray-800 hover:text-primary">{employee.name}</span>
+                        <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">{employee.employee_detail?.designation?.name || employee.email || "Staff"}</span>
+                      </button>
+                    </td>
                     {daysArray.map((day) => {
                       const status = getDayStatus(employee, day);
                       return (
@@ -546,40 +680,126 @@ export default function AttendanceSummaryPage() {
             </table>
           </div>
         </div>
-        {selectedDayDetail && (
-          <div className="white-box">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h4 className="m-0 text-sm font-black uppercase tracking-widest text-gray-800">{selectedDayDetail.employee.name} / {selectedDayDetail.date}</h4>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">Status: {selectedDayDetail.status}</p>
+        <Modal
+          isOpen={Boolean(selectedEmployee)}
+          onClose={() => { setSelectedEmployee(null); setGraceDaysOnly(false); }}
+          title={selectedEmployee ? `${selectedEmployee.name} Attendance` : "Employee Attendance"}
+          size="xl"
+        >
+          {selectedEmployee && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end">
+                <div>
+                  <label htmlFor="summary-employee-picker" className="mb-2 block text-[11px] font-bold text-gray-500">Employee</label>
+                  <select
+                    id="summary-employee-picker"
+                    className="form-control"
+                    value={String(selectedEmployee.id)}
+                    onChange={(event) => {
+                      const nextEmployee = employees.find((item) => String(item.id) === event.target.value);
+                      if (!nextEmployee) return;
+                      setEmployeeRangeAttendance([]);
+                      setSelectedEmployee(nextEmployee);
+                    }}
+                  >
+                    {employees.map((employee) => <option key={employee.id} value={String(employee.id)}>{employee.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="summary-employee-range-from" className="mb-2 block text-[11px] font-bold text-gray-500">From</label>
+                  <input id="summary-employee-range-from" type="date" className="form-control" value={employeeRangeStart} max={employeeRangeEnd || undefined} onChange={(event) => { setEmployeeRangeStart(event.target.value); setEmployeeRangePreset("custom"); setGraceDaysOnly(false); }} />
+                </div>
+                <div>
+                  <label htmlFor="summary-employee-range-to" className="mb-2 block text-[11px] font-bold text-gray-500">To</label>
+                  <input id="summary-employee-range-to" type="date" className="form-control" value={employeeRangeEnd} min={employeeRangeStart || undefined} onChange={(event) => { setEmployeeRangeEnd(event.target.value); setEmployeeRangePreset("custom"); setGraceDaysOnly(false); }} />
+                </div>
+                <Button type="button" onClick={exportEmployeeRange} className="h-[38px] whitespace-nowrap"><Download className="mr-2 h-4 w-4" />Export</Button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Attendance date range">
+                {[["month", "This month"], ["last-month", "Last month"], ["last-7-days", "Last 7 days"], ["custom", "Custom"]].map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => key !== "custom" && setEmployeeRange(key)} aria-pressed={employeeRangePreset === key} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${employeeRangePreset === key ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{label}</button>
+                ))}
+              </div>
+              <p className="text-sm font-semibold text-gray-600">
+                {selectedEmployee.name} · {selectedEmployee.employee_detail?.designation?.name || "Employee"} · Shift {selectedEmployee.employee_detail?.shift_type?.start_time || "--:--"} · Grace {selectedEmployee.employee_detail?.shift_type?.late_grace_minutes ?? 0} min
+              </p>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                {[
+                  ["Working days", employeeRangeStats.working, "text-gray-900"],
+                  ["On time", employeeRangeStats.onTime, "text-green-600"],
+                  ["Grace used", employeeRangeStats.grace, "text-amber-600"],
+                  ["Late", employeeRangeStats.late, "text-red-600"],
+                  ["Absent", employeeRangeStats.absent, "text-gray-900"],
+                  ["Avg check-in", formatPunchTime(employeeRangeStats.averageCheckIn), "text-gray-900"],
+                ].map(([label, value, color]) => (
+                  <div key={String(label)} className="white-box p-3 text-center">
+                    {label === "Grace used" ? <button type="button" onClick={() => setGraceDaysOnly((current) => !current)} aria-pressed={graceDaysOnly} className="w-full">
+                      <div className={`text-2xl font-bold ${color}`}>{value}</div><div className="mt-1 text-xs font-semibold text-gray-500">{label}</div>
+                    </button> : <><div className={`text-2xl font-bold ${color}`}>{value}</div><div className="mt-1 text-xs font-semibold text-gray-500">{label}</div></>}
+                  </div>
+                ))}
+              </div>
+              <div className="overflow-x-auto rounded border border-gray-100">
+                {employeeRangeLoading && <div className="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">Loading attendance...</div>}
+                <table className="w-full min-w-[700px] text-left text-xs">
+                  <thead><tr className="bg-gray-50 text-gray-500"><th className="px-3 py-3">Date</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">In</th><th className="px-3 py-3">Out</th><th className="px-3 py-3">Late</th><th className="px-3 py-3">Hours</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {employeeRangeRows.filter((row) => !graceDaysOnly || row.status === "grace").map((row) => {
+                      const statusStyle = row.status === "on-time" ? "bg-green-50 text-green-700" : row.status === "grace" ? "bg-amber-50 text-amber-700" : row.status === "late" || row.status === "absent" ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-600";
+                      const statusText = row.status === "on-time" ? "On time" : row.status === "weekly-off" ? "Weekly off" : row.status[0].toUpperCase() + row.status.slice(1);
+                      const rowDate = new Date(`${row.date}T12:00:00`);
+                      const hours = row.workMinutes ? `${Math.floor(row.workMinutes / 60)}h ${String(row.workMinutes % 60).padStart(2, "0")}m` : "-";
+                      return <tr key={row.date} className={row.status === "grace" ? "bg-amber-50/60" : "hover:bg-gray-50"}>
+                        <td className="whitespace-nowrap px-3 py-3 font-medium text-gray-700">{rowDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", weekday: "short" })}</td>
+                        <td className="px-3 py-3"><span className={`inline-flex rounded-full px-3 py-1 font-semibold ${statusStyle}`}>{statusText}</span></td>
+                        <td className="px-3 py-3">{formatPunchTime(row.attendance?.clock_in)}</td>
+                        <td className="px-3 py-3">{formatPunchTime(row.attendance?.clock_out)}</td>
+                        <td className="px-3 py-3">{row.lateMinutes ? formatDuration(row.lateMinutes) : "-"}</td>
+                        <td className="px-3 py-3">{hours}</td>
+                      </tr>;
+                    })}
+                    {!employeeRangeLoading && employeeRangeRows.filter((row) => !graceDaysOnly || row.status === "grace").length === 0 && <tr><td colSpan={6} className="px-3 py-10 text-center text-gray-400">{graceDaysOnly ? "No grace-used days in this range." : "No attendance details found."}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </Modal>
+        <Modal
+          isOpen={Boolean(selectedDayDetail)}
+          onClose={() => setSelectedDayDetail(null)}
+          title={selectedDayDetail ? `${selectedDayDetail.employee.name} · ${selectedDayDetail.date}` : "Employee Attendance"}
+          size="md"
+        >
+          {selectedDayDetail && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Status: {selectedDayDetail.status.replace("-", " ")}</p>
                 <Link href={`/attendance/date?date=${selectedDayDetail.date}`}>
                   <Button className="btn-success h-9 text-[10px]">View Full Day</Button>
                 </Link>
-                <Button onClick={() => setSelectedDayDetail(null)} className="btn-default h-9 text-[10px]">Close</Button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Check In</p>
+                  <p className="mt-2 text-sm font-bold text-gray-800">{formatPunchTime(selectedDayDetail.attendance?.clock_in)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Check Out</p>
+                  <p className="mt-2 text-sm font-bold text-gray-800">{formatPunchTime(selectedDayDetail.attendance?.clock_out)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Holiday</p>
+                  <p className="mt-2 text-xs font-bold text-gray-700">{selectedDayDetail.holiday?.name || selectedDayDetail.holiday?.occasion || selectedDayDetail.holiday?.occassion || "No holiday"}</p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Leave</p>
+                  <p className="mt-2 text-xs font-bold text-gray-700">{selectedDayDetail.leave?.leave_type?.type_name || selectedDayDetail.leave?.reason || "No approved leave"}</p>
+                </div>
               </div>
             </div>
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Attendance</p>
-                <p className="mt-2 text-xs font-bold text-gray-700">
-                  {selectedDayDetail.attendance
-                    ? `${selectedDayDetail.attendance.clock_in || "--"} - ${selectedDayDetail.attendance.clock_out || "--"}`
-                    : "No attendance record"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Holiday</p>
-                <p className="mt-2 text-xs font-bold text-gray-700">{selectedDayDetail.holiday?.name || selectedDayDetail.holiday?.occasion || selectedDayDetail.holiday?.occassion || "No holiday"}</p>
-              </div>
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Leave</p>
-                <p className="mt-2 text-xs font-bold text-gray-700">{selectedDayDetail.leave?.leave_type?.type_name || selectedDayDetail.leave?.reason || "No approved leave"}</p>
-              </div>
-            </div>
-          </div>
-        )}
+          )}
+        </Modal>
       </div>
     </DashboardLayout>
   );

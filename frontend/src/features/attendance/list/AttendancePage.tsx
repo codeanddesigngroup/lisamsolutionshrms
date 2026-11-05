@@ -698,8 +698,20 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
             <div className="white-box space-y-4">
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end">
                 <div>
-                  <label className="mb-2 block text-[11px] font-bold text-gray-500">Employee</label>
-                  <div className="form-control flex items-center gap-2 bg-gray-50 text-gray-800"><Users className="h-4 w-4 text-primary" />{selectedEmployee.name}</div>
+                  <label htmlFor="attendance-detail-employee-picker" className="mb-2 block text-[11px] font-bold text-gray-500">Employee</label>
+                  <select
+                    id="attendance-detail-employee-picker"
+                    className="form-control"
+                    value={String(selectedEmployee.id)}
+                    onChange={(event) => {
+                      const nextEmployee = employees.find((item) => String(item.id) === event.target.value);
+                      if (!nextEmployee) return;
+                      setDetailAttendance([]);
+                      setSelectedEmployee(nextEmployee);
+                    }}
+                  >
+                    {employees.map((employee) => <option key={employee.id} value={String(employee.id)}>{employee.name}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label htmlFor="employee-attendance-from" className="mb-2 block text-[11px] font-bold text-gray-500">From</label>
@@ -907,11 +919,11 @@ export default function AttendancePage({ mode = "daily" }: AttendancePageProps) 
               <tbody>
                 {filteredRows.map((row) => (
                     <tr key={`${row.employee.id}-${date}`} className="bg-gray-50/60 transition hover:bg-blue-50/60">
-                      <td className="rounded-l-lg px-4 py-4">
-                        <button type="button" onClick={() => { setEmployeeDetailPreset("month"); setShowGraceOnly(false); setDetailAttendance([]); setSelectedEmployee(row.employee); }} className="text-left font-bold text-[13px] text-gray-800 hover:text-primary hover:underline">{row.employee.name}</button>
-                        <div className="mt-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
-                          {row.employee.employee_detail?.designation?.name || row.employee.email || "Staff"}
-                        </div>
+                      <td className="rounded-l-lg p-0">
+                        <button type="button" onClick={() => { setEmployeeDetailPreset("month"); setShowGraceOnly(false); setDetailAttendance([]); setSelectedEmployee(row.employee); }} className="flex min-h-[76px] w-full cursor-pointer flex-col items-start justify-center px-4 py-4 text-left hover:bg-blue-50/60">
+                          <span className="text-[13px] font-bold text-gray-800 hover:text-primary">{row.employee.name}</span>
+                          <span className="mt-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">{row.employee.employee_detail?.designation?.name || row.employee.email || "Staff"}</span>
+                        </button>
                       </td>
                       <td className="px-4 py-4">
                         <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${getStatusClass(row.status)}`}>
